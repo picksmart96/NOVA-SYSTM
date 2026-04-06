@@ -1,0 +1,60 @@
+import { heroStats } from "../../data/homepageData";
+import { Link } from "wouter";
+
+export default function HeroSection() {
+  return (
+    <section className="relative overflow-hidden border-b border-slate-800 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
+      <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top_right,_rgba(250,204,21,0.25),_transparent_30%),radial-gradient(circle_at_left,_rgba(59,130,246,0.15),_transparent_28%)]" />
+      <div className="relative max-w-7xl mx-auto px-6 py-20 md:py-28">
+        <p className="text-yellow-400 text-sm font-semibold uppercase tracking-[0.24em] mb-5">
+          Built for warehouse selectors by warehouse selectors
+        </p>
+
+        <h1 className="text-5xl md:text-7xl font-black text-white leading-[0.95] max-w-4xl">
+          Pick Faster.
+          <br />
+          Stay Safer.
+          <br />
+          Hit 100%+.
+        </h1>
+
+        <p className="mt-6 max-w-2xl text-lg md:text-xl text-slate-300">
+          Step-by-step training for grocery warehouse order selectors. Go from
+          struggling beginner to confident, high-rate picker — in weeks, not months.
+        </p>
+
+        <div className="mt-8 flex flex-col sm:flex-row gap-4">
+          <Link
+            href="/training"
+            className="inline-flex items-center justify-center rounded-2xl bg-yellow-400 px-6 py-3 text-slate-950 font-bold hover:bg-yellow-300 transition"
+          >
+            Start Free Training
+          </Link>
+          <Link
+            href="/pricing"
+            className="inline-flex items-center justify-center rounded-2xl border border-slate-700 bg-slate-900 px-6 py-3 text-white font-semibold hover:border-yellow-400 transition"
+          >
+            View Plans
+          </Link>
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-300">
+          <span>No experience needed</span>
+          <span>First module free</span>
+          <span>Cancel anytime</span>
+        </div>
+
+        <div className="mt-12 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+          {heroStats.map((item) => (
+            <div
+              key={item}
+              className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-4 text-center text-sm text-slate-200 shadow-lg"
+            >
+              {item}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
