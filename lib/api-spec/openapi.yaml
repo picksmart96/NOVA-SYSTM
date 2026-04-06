@@ -1,22 +1,23 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: PickSmart Academy + NOVA API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: assignments
+  - name: stops
+  - name: warehouse
+  - name: training
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +25,242 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /assignments:
+    get:
+      operationId: listAssignments
+      tags: [assignments]
+      summary: List all assignments
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Assignment"
+    post:
+      operationId: createAssignment
+      tags: [assignments]
+      summary: Create assignment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAssignmentBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assignment"
+
+  /assignments/{id}:
+    get:
+      operationId: getAssignment
+      tags: [assignments]
+      summary: Get assignment by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assignment"
+    patch:
+      operationId: updateAssignment
+      tags: [assignments]
+      summary: Update assignment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAssignmentBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assignment"
+
+  /assignments/{id}/stops:
+    get:
+      operationId: listAssignmentStops
+      tags: [stops]
+      summary: List stops for an assignment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AssignmentStop"
+
+  /assignments/{id}/stops/{stopId}:
+    patch:
+      operationId: updateAssignmentStop
+      tags: [stops]
+      summary: Update stop status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: stopId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStopBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssignmentStop"
+
+  /warehouse/defaults:
+    get:
+      operationId: getSystemDefaults
+      tags: [warehouse]
+      summary: Get system defaults
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemDefaults"
+
+  /warehouse/door-codes:
+    get:
+      operationId: listDoorCodes
+      tags: [warehouse]
+      summary: List door staging codes
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DoorCode"
+
+  /warehouse/slots:
+    get:
+      operationId: listSlots
+      tags: [warehouse]
+      summary: List slot master entries
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SlotEntry"
+
+  /training/modules:
+    get:
+      operationId: listModules
+      tags: [training]
+      summary: List training modules
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrainingModule"
+
+  /training/modules/{id}:
+    get:
+      operationId: getModule
+      tags: [training]
+      summary: Get training module
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainingModule"
+
+  /training/leaderboard:
+    get:
+      operationId: getLeaderboard
+      tags: [training]
+      summary: Get leaderboard
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeaderboardEntry"
+
+  /assignments/summary:
+    get:
+      operationId: getAssignmentSummary
+      tags: [assignments]
+      summary: Get assignment dashboard summary counts
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssignmentSummary"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +268,326 @@ components:
       properties:
         status:
           type: string
+      required: [status]
+
+    Assignment:
+      type: object
+      properties:
+        id:
+          type: string
+        assignmentNumber:
+          type: integer
+        title:
+          type: string
+        selectorUserId:
+          type: string
+        trainerUserId:
+          type: string
+        startAisle:
+          type: integer
+        endAisle:
+          type: integer
+        totalCases:
+          type: integer
+        totalCube:
+          type: number
+        totalPallets:
+          type: integer
+        estimatedGold:
+          type: number
+        goalTimeMinutes:
+          type: integer
+        goalTimeSeconds:
+          type: integer
+        doorNumber:
+          type: integer
+        printerNumber:
+          type: integer
+        alphaLabelNumber:
+          type: integer
+        bravoLabelNumber:
+          type: integer
+        status:
+          type: string
+          enum: [pending, active, paused, completed, archived]
+        voiceMode:
+          type: string
+          enum: [training, production, ultra_fast]
+        startedAt:
+          type: string
+          nullable: true
+        completedAt:
+          type: string
+          nullable: true
+        totalDurationSeconds:
+          type: integer
+          nullable: true
+        performancePercent:
+          type: number
+          nullable: true
+        percentComplete:
+          type: number
       required:
+        - id
+        - assignmentNumber
+        - title
+        - startAisle
+        - endAisle
+        - totalCases
+        - totalCube
+        - totalPallets
+        - doorNumber
+        - printerNumber
+        - alphaLabelNumber
+        - bravoLabelNumber
+        - status
+        - voiceMode
+        - percentComplete
+
+    CreateAssignmentBody:
+      type: object
+      properties:
+        assignmentNumber:
+          type: integer
+        title:
+          type: string
+        selectorUserId:
+          type: string
+        trainerUserId:
+          type: string
+        startAisle:
+          type: integer
+        endAisle:
+          type: integer
+        totalCases:
+          type: integer
+        totalCube:
+          type: number
+        totalPallets:
+          type: integer
+        doorNumber:
+          type: integer
+        goalTimeMinutes:
+          type: integer
+        goalTimeSeconds:
+          type: integer
+        voiceMode:
+          type: string
+      required:
+        - assignmentNumber
+        - title
+        - startAisle
+        - endAisle
+        - totalCases
+        - totalCube
+        - totalPallets
+        - doorNumber
+
+    UpdateAssignmentBody:
+      type: object
+      properties:
+        status:
+          type: string
+        voiceMode:
+          type: string
+        selectorUserId:
+          type: string
+        percentComplete:
+          type: number
+        performancePercent:
+          type: number
+        startedAt:
+          type: string
+        completedAt:
+          type: string
+        totalDurationSeconds:
+          type: integer
+
+    AssignmentStop:
+      type: object
+      properties:
+        id:
+          type: string
+        assignmentId:
+          type: string
+        stopOrder:
+          type: integer
+        aisle:
+          type: integer
+        slot:
+          type: integer
+        level:
+          type: string
+        checkCode:
+          type: string
+        qty:
+          type: integer
+        status:
+          type: string
+          enum: [pending, arrived, verified, picked]
+        arrivedAt:
+          type: string
+          nullable: true
+        verifiedAt:
+          type: string
+          nullable: true
+        pickedAt:
+          type: string
+          nullable: true
+        dwellSeconds:
+          type: integer
+          nullable: true
+      required:
+        - id
+        - assignmentId
+        - stopOrder
+        - aisle
+        - slot
+        - checkCode
+        - qty
         - status
 
+    UpdateStopBody:
+      type: object
+      properties:
+        status:
+          type: string
+        arrivedAt:
+          type: string
+        verifiedAt:
+          type: string
+        pickedAt:
+          type: string
+        dwellSeconds:
+          type: integer
+
+    SystemDefaults:
+      type: object
+      properties:
+        id:
+          type: string
+        printerNumber:
+          type: integer
+        alphaLabelNumber:
+          type: integer
+        bravoLabelNumber:
+          type: integer
+      required: [id, printerNumber, alphaLabelNumber, bravoLabelNumber]
+
+    DoorCode:
+      type: object
+      properties:
+        id:
+          type: string
+        doorNumber:
+          type: integer
+        stagingCode:
+          type: string
+        isActive:
+          type: boolean
+      required: [id, doorNumber, stagingCode, isActive]
+
+    SlotEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        aisle:
+          type: integer
+        slot:
+          type: integer
+        level:
+          type: string
+        checkCode:
+          type: string
+        label:
+          type: string
+        isActive:
+          type: boolean
+      required: [id, aisle, slot, checkCode, label, isActive]
+
+    TrainingModule:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        difficulty:
+          type: string
+          enum: [beginner, intermediate, advanced]
+        duration:
+          type: integer
+        category:
+          type: string
+        image:
+          type: string
+        lessons:
+          type: array
+          items:
+            $ref: "#/components/schemas/Lesson"
+        commonMistakes:
+          type: array
+          items:
+            type: string
+        objectives:
+          type: array
+          items:
+            type: string
+      required: [id, title, slug, description, difficulty, duration, category, image, lessons, commonMistakes, objectives]
+
+    Lesson:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        videoUrl:
+          type: string
+          nullable: true
+        duration:
+          type: integer
+        description:
+          type: string
+      required: [id, title, duration, description]
+
+    LeaderboardEntry:
+      type: object
+      properties:
+        userId:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+        totalAssignments:
+          type: integer
+        avgPerformance:
+          type: number
+        totalCases:
+          type: integer
+        rank:
+          type: integer
+      required: [userId, name, role, totalAssignments, avgPerformance, totalCases, rank]
+
+    AssignmentSummary:
+      type: object
+      properties:
+        total:
+          type: integer
+        active:
+          type: integer
+        pending:
+          type: integer
+        completed:
+          type: integer
+        avgPerformance:
+          type: number
+        totalCasesToday:
+          type: integer
+      required: [total, active, pending, completed, avgPerformance, totalCasesToday]

@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "PickSmart Academy + NOVA"
+version = "1.0.0"
+id = "artifacts/picksmart-nova"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 26043
+
+[services.development]
+run = "pnpm --filter @workspace/picksmart-nova run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/picksmart-nova", "run", "build" ]
+publicDir = "artifacts/picksmart-nova/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "26043"
+BASE_PATH = "/"

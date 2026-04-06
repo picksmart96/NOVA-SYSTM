@@ -1,0 +1,330 @@
+Build a full React + Vite + Tailwind app called PickSmart Academy + NOVA.
+
+The app combines:
+1. Public training website
+2. Role-based internal NOVA warehouse training and assignment system
+
+STYLE
+- dark navy / slate industrial theme
+- safety yellow accents
+- clean modern warehouse look
+- responsive on desktop and mobile
+
+ROLES
+- owner
+- supervisor
+- trainer
+- selector
+
+ROLE NAV RULES
+- Selector sees: Home, Training, Common Mistakes, My Progress, Leaderboard, NOVA, My Assignments
+- Trainer sees everything Selector sees plus Assignment Control, Slot Master, Warehouse Reference, Voice Commands
+- Supervisor sees everything Trainer sees plus Trainer Portal / Live Tracking
+- Owner sees everything including Pricing, Users & Access, System Settings
+
+PUBLIC PAGES
+- Homepage
+- Training Modules
+- Module Detail
+- Common Mistakes
+- Progress Dashboard
+- Pricing
+- Leaderboard
+
+ADMIN / INTERNAL PAGES
+- Admin Video Manager
+- Warehouse Reference
+- Slot Master
+- Assignment Control
+- Assignment Detail
+- My Assignments
+- Live Selector Tracking
+- Voice Commands
+- Users & Access
+- NOVA Voice Session
+
+DATA MODELS
+1. TrainingModule
+- id
+- title
+- slug
+- description
+- difficulty
+- duration
+- category
+- image
+- lessons[]
+- commonMistakes[]
+- objectives[]
+
+2. UserProgress
+- id
+- userId
+- moduleId
+- completedLessons
+- completedModules
+- percentComplete
+- lastViewedLesson
+- score
+
+3. SlotMaster
+- id
+- aisle
+- slot
+- level
+- checkCode
+- label
+- isActive
+- createdAt
+- updatedAt
+
+4. Assignment
+- id
+- assignmentNumber
+- title
+- selectorUserId
+- trainerUserId
+- startAisle
+- endAisle
+- totalCases
+- totalCube
+- totalPallets
+- estimatedGold
+- goalTimeMinutes
+- goalTimeSeconds
+- doorNumber
+- printerNumber
+- alphaLabelNumber
+- bravoLabelNumber
+- status
+- voiceMode
+- startedAt
+- completedAt
+- totalDurationSeconds
+- performancePercent
+- percentComplete
+
+5. AssignmentStop
+- id
+- assignmentId
+- stopOrder
+- slotMasterId
+- aisle
+- slot
+- level
+- checkCode
+- qty
+- status
+- arrivedAt
+- verifiedAt
+- pickedAt
+- dwellSeconds
+
+6. AssignmentProgress
+- id
+- assignmentId
+- selectorUserId
+- currentStopOrder
+- currentAisle
+- currentSlot
+- lastCompletedAisle
+- lastCompletedSlot
+- nextAisle
+- nextSlot
+- lastSlotDwellSeconds
+- currentSlotDwellSeconds
+- startedAt
+- lastActivityAt
+- percentComplete
+- currentPerformancePercent
+- paceStatus
+- isLive
+
+7. DoorStagingCode
+- id
+- doorNumber
+- stagingCode
+- isActive
+
+8. SystemDefaults
+- id
+- printerNumber
+- alphaLabelNumber
+- bravoLabelNumber
+
+9. VoiceCommand
+- id
+- commandPhrase
+- commandType
+- actionType
+- description
+- isActive
+
+10. VoiceCommandLog
+- id
+- assignmentId
+- selectorUserId
+- commandPhrase
+- actionType
+- timestamp
+
+SEED PUBLIC TRAINING CONTENT
+- 6 training modules
+- progress tracker
+- common mistakes guide
+- pricing cards
+- leaderboard
+- admin lesson video manager with YouTube/Vimeo support
+
+SEED NOVA DEFAULTS
+- printer 307
+- alpha label 242
+- bravo label 578
+- door 355 code 641
+- door 370 code 714
+- door 340 code 581
+
+SEED ASSIGNMENTS
+Assignment 251735:
+- start aisle 13
+- end aisle 32
+- total cases 217
+- cube 145
+- pallets 2
+- door 340
+- 38 stops using the provided aisle / slot / check code list
+
+Assignment 251736:
+- start aisle 17
+- end aisle 34
+- total cases 180
+- cube 78
+- pallets 2
+- door 355
+- stops:
+  17/28 code 418 qty 34
+  18/66 code 441 qty 18
+  21/144 code 493 qty 17
+  25/119 code 527 qty 33
+  29/88 code 566 qty 20
+  31/172 code 604 qty 25
+  34/204 code 638 qty 33
+
+Assignment 251737:
+- start aisle 13
+- end aisle 34
+- total cases 180
+- cube 78
+- pallets 2
+- door 370
+- stops:
+  13/44 code 347 qty 32
+  15/91 code 381 qty 18
+  19/133 code 422 qty 16
+  22/156 code 459 qty 34
+  27/205 code 571 qty 20
+  30/74 code 612 qty 26
+  34/211 code 688 qty 34
+
+Assignment 251738:
+- start aisle 13
+- end aisle 32
+- total cases 180
+- cube 78
+- pallets 2
+- door 340
+- stops:
+  13/37 code 332 qty 33
+  14/58 code 356 qty 15
+  18/121 code 417 qty 18
+  21/142 code 476 qty 33
+  24/166 code 528 qty 21
+  29/210 code 589 qty 26
+  32/198 code 621 qty 34
+
+WAREHOUSE REFERENCE PAGE
+- tabs: Slots, Doors, Defaults
+- searchable slot table
+- door cards with primary code
+- defaults cards
+- copy-to-clipboard
+- visible to trainer, supervisor, owner
+
+ASSIGNMENT CONTROL PAGE
+- create, assign, edit, duplicate, archive assignments
+- search selector by NOVA user id
+- show assignment number, status, current slot, next slot, elapsed time, performance percent
+
+MY ASSIGNMENTS PAGE
+- selector only sees assigned work
+- start assignment
+- continue voice mode
+- view current and next stop
+
+NOVA VOICE FLOW
+- when assignment loads, NOVA reads:
+  Start aisle [start aisle]. End aisle [end aisle]. Total case count [total cases]. Total cube [total cube]. Total pallets [total pallets]. Goal time [goal time] minutes. To continue, say ready.
+- then:
+  Position Alpha. Get CHEP.
+  Position Bravo pallet.
+
+STRICT SLOT FLOW
+- NOVA says: [aisle] [slot] check.
+- selector must speak the correct 3-digit code
+- if wrong, NOVA repeats heard input and says invalid
+- system must never freeze
+- loop until correct
+- only after correct code: Confirmed. Grab [qty].
+- then selector says ready and NOVA advances
+
+VOICE COMMANDS
+- ready
+- repeat
+- short
+- slow
+- pause
+- resume
+- help
+- emergency stop
+- back
+- skip
+
+VOICE MODES
+- Training
+- Production
+- Ultra-Fast
+
+COMPLETION FLOW
+- Last case complete. Proceed to printer 307.
+- Apply label 242 to pallet Alpha.
+- Apply label 578 to pallet Bravo.
+- Deliver Bravo pallet to door [door number]. Use shared door code.
+- Deliver Alpha pallet to door [door number]. Use same shared door code.
+- Assignment complete.
+
+TRACKING
+- show current slot
+- show next slot
+- show dwell times
+- show performance percent
+- show pace status
+- show voice mode
+- show repeat / invalid / help counts
+
+TECH
+- React
+- Vite
+- Tailwind
+- React Router
+- Zustand or Context for app state
+- local seed data first
+- structure app for later backend swap to Supabase or Postgres
+
+DELIVER
+- clean file-by-file project scaffold
+- routed pages
+- reusable components
+- seeded data files
+- working role-based nav
+- working local assignment runner simulation
+- polished UI

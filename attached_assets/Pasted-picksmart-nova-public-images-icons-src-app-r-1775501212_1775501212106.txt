@@ -1,0 +1,101 @@
+picksmart-nova/
+├── public/
+│   ├── images/
+│   └── icons/
+├── src/
+│   ├── app/
+│   │   ├── router.jsx
+│   │   ├── providers.jsx
+│   │   └── auth.js
+│   ├── components/
+│   │   ├── layout/
+│   │   │   ├── Layout.jsx
+│   │   │   ├── Sidebar.jsx
+│   │   │   ├── Topbar.jsx
+│   │   │   └── RoleNav.jsx
+│   │   ├── training/
+│   │   │   ├── Hero.jsx
+│   │   │   ├── ModuleCard.jsx
+│   │   │   ├── MistakeCard.jsx
+│   │   │   ├── ProgressTracker.jsx
+│   │   │   ├── PricingCard.jsx
+│   │   │   └── LessonVideoPlayer.jsx
+│   │   ├── nova/
+│   │   │   ├── VoiceSession.jsx
+│   │   │   ├── VoiceIndicator.jsx
+│   │   │   ├── AssignmentCard.jsx
+│   │   │   ├── StopTable.jsx
+│   │   │   ├── CompletionFlowCard.jsx
+│   │   │   ├── CommandLogPanel.jsx
+│   │   │   └── PaceBadge.jsx
+│   │   ├── warehouse/
+│   │   │   ├── SlotTable.jsx
+│   │   │   ├── DoorCard.jsx
+│   │   │   ├── DefaultsCard.jsx
+│   │   │   └── CopyButton.jsx
+│   │   └── ui/
+│   │       ├── Button.jsx
+│   │       ├── Card.jsx
+│   │       ├── Badge.jsx
+│   │       ├── Tabs.jsx
+│   │       ├── Input.jsx
+│   │       └── Modal.jsx
+│   ├── pages/
+│   │   ├── public/
+│   │   │   ├── HomePage.jsx
+│   │   │   ├── ModulesPage.jsx
+│   │   │   ├── ModuleDetailPage.jsx
+│   │   │   ├── CommonMistakesPage.jsx
+│   │   │   ├── ProgressPage.jsx
+│   │   │   ├── PricingPage.jsx
+│   │   │   └── LeaderboardPage.jsx
+│   │   ├── admin/
+│   │   │   ├── AdminVideoManagerPage.jsx
+│   │   │   ├── UsersAccessPage.jsx
+│   │   │   └── SiteSettingsPage.jsx
+│   │   ├── nova/
+│   │   │   ├── AssignmentControlPage.jsx
+│   │   │   ├── AssignmentDetailPage.jsx
+│   │   │   ├── MyAssignmentsPage.jsx
+│   │   │   ├── LiveTrackingPage.jsx
+│   │   │   ├── WarehouseReferencePage.jsx
+│   │   │   ├── SlotMasterPage.jsx
+│   │   │   ├── VoiceCommandsPage.jsx
+│   │   │   └── NovaTrainerPage.jsx
+│   ├── data/
+│   │   ├── modules.js
+│   │   ├── progress.js
+│   │   ├── users.js
+│   │   ├── systemDefaults.js
+│   │   ├── doorCodes.js
+│   │   ├── slotMaster.js
+│   │   ├── assignments.js
+│   │   ├── assignmentStops.js
+│   │   └── voiceCommands.js
+│   ├── hooks/
+│   │   ├── useAuth.js
+│   │   ├── useRoleNav.js
+│   │   ├── useVoiceEngine.js
+│   │   ├── useAssignmentRunner.js
+│   │   ├── useProgressTracker.js
+│   │   └── useClipboard.js
+│   ├── lib/
+│   │   ├── speech.js
+│   │   ├── parser.js
+│   │   ├── scoring.js
+│   │   ├── assignmentHelpers.js
+│   │   ├── youtube.js
+│   │   └── constants.js
+│   ├── store/
+│   │   ├── authStore.js
+│   │   ├── trainingStore.js
+│   │   ├── novaStore.js
+│   │   └── warehouseStore.js
+│   ├── styles/
+│   │   └── globals.css
+│   ├── App.jsx
+│   └── main.jsx
+├── package.json
+├── tailwind.config.js
+├── postcss.config.js
+└── vite.config.js
