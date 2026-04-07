@@ -1,0 +1,221 @@
+import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAccessStore } from "../../store/accessStore";
+import { useTrainerStore } from "../../store/trainerStore";
+
+function formatDate(date) {
+  return new Date(date).toLocaleString();
+}
+
+export default function SupervisorDashboardPage() {
+  const navigate = useNavigate();
+  const { trainerInviteRequests, novaSessions, stopNovaSession } = useAccessStore();
+  const { selectors, sessions } = useTrainerStore();
+
+  const copiedText = useMemo(
+    () => ({
+      trainerUrl: `${window.location.origin}/trainer`,
+      trainerSignupUrl: `${window.location.origin}/trainer-signup`,
+    }),
+    []
+  );
+
+  const handleCopy = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {}
+  };
+
+  const passRate = 0;
+  const activeNovaCount = selectors.filter((s) => s.novaActive).length;
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white px-6 py-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-black">soumaila ouedraogo · NOVA ES3 D2S</h1>
+          </div>
+
+          <div className="flex gap-3 flex-wrap">
+            <button
+              onClick={() => navigate("/warehouse-reference")}
+              className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-yellow-400 transition"
+            >
+              Warehouse Ref
+            </button>
+            <button className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-red-400 transition">
+              Sign out
+            </button>
+          </div>
+        </div>
+
+        {/* Stats row */}
+        <div className="grid sm:grid-cols-5 gap-4">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+            <p className="text-slate-400 text-sm">Open</p>
+            <p className="mt-3 text-4xl font-black">
+              {selectors.filter((s) => s.assignedAssignmentId).length}
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+            <p className="text-slate-400 text-sm">Selectors</p>
+            <p className="mt-3 text-4xl font-black">{selectors.length}</p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+            <p className="text-slate-400 text-sm">NOVA Active</p>
+            <p className="mt-3 text-4xl font-black">{activeNovaCount}</p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+            <p className="text-slate-400 text-sm">Sessions</p>
+            <p className="mt-3 text-4xl font-black">{sessions.length}</p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+            <p className="text-slate-400 text-sm">Pass rate</p>
+            <p className="mt-3 text-4xl font-black">{passRate}%</p>
+          </div>
+        </div>
+
+        {/* Trainer invite */}
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+          <h2 className="text-2xl font-bold mb-6">Send Trainer Invite URL</h2>
+
+          <div className="grid lg:grid-cols-[1fr_1fr_auto] gap-4 items-end">
+            <div>
+              <label className="block text-sm text-slate-400 mb-2">Full Name</label>
+              <input
+                placeholder="Trainer name"
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-yellow-400"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-slate-400 mb-2">Email</label>
+              <input
+                defaultValue="trainer@email.com"
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-yellow-400"
+              />
+            </div>
+
+            <button className="rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition">
+              Send Invite Email
+            </button>
+          </div>
+
+          <div className="mt-5 flex flex-col sm:flex-row gap-3 sm:items-center">
+            <div className="flex-1 rounded-xl bg-slate-950 border border-slate-800 px-4 py-3 text-sm text-slate-300 break-all">
+              {copiedText.trainerUrl}
+            </div>
+            <button
+              onClick={() => handleCopy(copiedText.trainerUrl)}
+              className="rounded-2xl border border-slate-700 px-4 py-3 font-semibold hover:border-yellow-400 transition"
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+
+        {/* Trainer requests */}
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+          <h2 className="text-2xl font-bold mb-6">Trainer Access Requests</h2>
+
+          {trainerInviteRequests.length === 0 ? (
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 text-slate-400">
+              No trainer requests yet.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {trainerInviteRequests.map((req) => (
+                <div
+                  key={req.id}
+                  className="rounded-2xl border border-slate-800 bg-slate-950 p-5"
+                >
+                  <h3 className="text-lg font-bold">{req.fullName}</h3>
+                  <p className="mt-2 text-slate-400">{req.email}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-bold text-yellow-300">
+                      {req.requestedRole}
+                    </span>
+                    <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-bold text-blue-300">
+                      {req.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 sm:items-center">
+            <div className="flex-1 rounded-xl bg-slate-950 border border-slate-800 px-4 py-3 text-sm text-slate-300 break-all">
+              {copiedText.trainerSignupUrl}
+            </div>
+            <button
+              onClick={() => handleCopy(copiedText.trainerSignupUrl)}
+              className="rounded-2xl border border-slate-700 px-4 py-3 font-semibold hover:border-yellow-400 transition"
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs-like section */}
+        <div className="flex flex-wrap gap-3">
+          {["overview", "Activate NOVA", "selectors", "sessions"].map((item) => (
+            <div
+              key={item}
+              className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-300"
+            >
+              {item}
+            </div>
+          ))}
+        </div>
+
+        {/* Active sessions */}
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+          <h2 className="text-2xl font-bold mb-6">Active NOVA Sessions</h2>
+
+          {novaSessions.length === 0 ? (
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 text-slate-400">
+              No active NOVA sessions.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {novaSessions.map((session) => (
+                <div
+                  key={session.id}
+                  className="rounded-2xl border border-slate-800 bg-slate-950 p-5"
+                >
+                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-bold">
+                        {session.selectorName} · {session.novaId}
+                      </h3>
+                      <p className="mt-2 text-slate-300">
+                        {session.assignmentTitle} · by {session.trainerName}
+                      </p>
+                      <p className="mt-2 text-sm text-slate-500">
+                        {formatDate(session.createdAt)}
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => stopNovaSession(session.id)}
+                      className="rounded-2xl border border-red-500/30 px-4 py-2 text-sm font-semibold text-red-300 hover:bg-red-500/10 transition"
+                    >
+                      Stop
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

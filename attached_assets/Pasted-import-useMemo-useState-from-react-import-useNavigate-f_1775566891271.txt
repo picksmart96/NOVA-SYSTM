@@ -1,0 +1,423 @@
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAccessStore } from "../../store/accessStore";
+
+const roleLinks = {
+  Selector: "/modules",
+  Trainer: "/trainer",
+  Supervisor: "/supervisor",
+  Admin: "/users-access",
+  User: "/",
+};
+
+const roleDescriptions = {
+  Selector:
+    "selector access: Training · My Progress · Leaderboard · Common Mistakes · NOVA Trainer · Selector Nation",
+  Trainer:
+    "trainer access: Trainer Dashboard · My Selectors · Assignments · Warehouse Reference · NOVA tools",
+  Supervisor:
+    "supervisor access: Supervisor Dashboard · Live tracking · Warehouse Reference · Trainer oversight",
+  Admin:
+    "admin access: Full analytics · user management · NOVA account management",
+  User: "user access: basic site access",
+};
+
+function maskPassword(password) {
+  return "•".repeat(Math.max(password.length, 8));
+}
+
+export default function UsersAccessPage() {
+  const navigate = useNavigate();
+  const {
+    appUsers,
+    novaAccounts,
+    inviteAppUser,
+    createNovaAccount,
+    deactivateNovaAccount,
+  } = useAccessStore();
+
+  const [inviteForm, setInviteForm] = useState({
+    fullName: "John Smith",
+    email: "someone@example.com",
+    role: "Selector",
+  });
+
+  const [accountForm, setAccountForm] = useState({
+    fullName: "Jane Smith",
+    username: "jane.smith",
+    password: "Secure password",
+    role: "Trainer",
+  });
+
+  const [ownerPassword, setOwnerPassword] = useState("");
+  const [copied, setCopied] = useState("");
+
+  const inviteLink = useMemo(
+    () => roleLinks[inviteForm.role],
+    [inviteForm.role]
+  );
+
+  const handleCopy = async (text, label) => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${text}`);
+      setCopied(label);
+      setTimeout(() => setCopied(""), 1500);
+    } catch {
+      setCopied("");
+    }
+  };
+
+  const handleInviteUser = () => {
+    if (!inviteForm.fullName.trim() || !inviteForm.email.trim()) return;
+
+    inviteAppUser({
+      fullName: inviteForm.fullName,
+      email: inviteForm.email,
+      role: inviteForm.role,
+      inviteLink,
+    });
+
+    setInviteForm({
+      fullName: "",
+      email: "",
+      role: "Selector",
+    });
+  };
+
+  const handleCreateAccount = () => {
+    if (
+      !accountForm.fullName.trim() ||
+      !accountForm.username.trim() ||
+      !accountForm.password.trim()
+    )
+      return;
+
+    createNovaAccount({
+      fullName: accountForm.fullName,
+      username: accountForm.username,
+      password: accountForm.password,
+      role: accountForm.role,
+    });
+
+    setAccountForm({
+      fullName: "",
+      username: "",
+      password: "",
+      role: "Trainer",
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white px-6 py-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-black">Users & Access</h1>
+            <p className="mt-2 text-slate-400">
+              Invite app users and manage NOVA trainer/supervisor credentials.
+            </p>
+          </div>
+        </div>
+
+        {copied ? (
+          <div className="rounded-2xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-green-300 text-sm">
+            Copied: {copied}
+          </div>
+        ) : null}
+
+        <div className="grid xl:grid-cols-2 gap-6">
+          {/* Invite by Role */}
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <h2 className="text-2xl font-bold mb-6">Invite by Role</h2>
+
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">
+                  Full Name
+                </label>
+                <input
+                  value={inviteForm.fullName}
+                  onChange={(e) =>
+                    setInviteForm((prev) => ({
+                      ...prev,
+                      fullName: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-yellow-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">
+                  Email Address
+                </label>
+                <input
+                  value={inviteForm.email}
+                  onChange={(e) =>
+                    setInviteForm((prev) => ({
+                      ...prev,
+                      email: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-yellow-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">Role</label>
+                <select
+                  value={inviteForm.role}
+                  onChange={(e) =>
+                    setInviteForm((prev) => ({
+                      ...prev,
+                      role: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-yellow-400"
+                >
+                  <option>Selector</option>
+                  <option>Trainer</option>
+                  <option>Supervisor</option>
+                  <option>Admin</option>
+                  <option>User</option>
+                </select>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <p className="text-sm text-yellow-300 font-semibold">
+                  {roleDescriptions[inviteForm.role]}
+                </p>
+                <div className="mt-4 flex flex-col sm:flex-row gap-3 sm:items-center">
+                  <div className="flex-1 rounded-xl bg-slate-900 border border-slate-800 px-4 py-3 text-sm text-slate-300 break-all">
+                    {window.location.origin}
+                    {inviteLink}
+                  </div>
+                  <button
+                    onClick={() => handleCopy(inviteLink, "Invite URL")}
+                    className="rounded-2xl border border-slate-700 px-4 py-3 font-semibold hover:border-yellow-400 transition"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <p className="mt-3 text-sm text-slate-400">
+                  Selectors get a platform invite email automatically.
+                </p>
+              </div>
+
+              <button
+                onClick={handleInviteUser}
+                className="rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
+              >
+                Send Invite Email
+              </button>
+            </div>
+          </div>
+
+          {/* App Users */}
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <h2 className="text-2xl font-bold mb-6">App Users</h2>
+
+            <div className="space-y-4">
+              {appUsers.map((user) => (
+                <div
+                  key={user.id}
+                  className="rounded-2xl border border-slate-800 bg-slate-950 p-5"
+                >
+                  <h3 className="text-lg font-bold">{user.fullName}</h3>
+                  <p className="mt-2 text-slate-400">{user.email}</p>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-bold text-blue-300 capitalize">
+                      {user.role}
+                    </span>
+                    <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs font-bold text-green-300 capitalize">
+                      {user.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid xl:grid-cols-2 gap-6">
+          {/* Create new account */}
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <h2 className="text-2xl font-bold mb-6">
+              NOVA Access (Trainers & Supervisors)
+            </h2>
+
+            <div className="space-y-5">
+              <p className="text-lg font-semibold">Create new account</p>
+
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">
+                  Full name
+                </label>
+                <input
+                  value={accountForm.fullName}
+                  onChange={(e) =>
+                    setAccountForm((prev) => ({
+                      ...prev,
+                      fullName: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-yellow-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">
+                  Username
+                </label>
+                <input
+                  value={accountForm.username}
+                  onChange={(e) =>
+                    setAccountForm((prev) => ({
+                      ...prev,
+                      username: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-yellow-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">
+                  Password
+                </label>
+                <input
+                  value={accountForm.password}
+                  onChange={(e) =>
+                    setAccountForm((prev) => ({
+                      ...prev,
+                      password: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-yellow-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">Role</label>
+                <select
+                  value={accountForm.role}
+                  onChange={(e) =>
+                    setAccountForm((prev) => ({
+                      ...prev,
+                      role: e.target.value,
+                    }))
+                  }
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-yellow-400"
+                >
+                  <option>Trainer</option>
+                  <option>Supervisor</option>
+                </select>
+              </div>
+
+              <button
+                onClick={handleCreateAccount}
+                className="rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
+              >
+                Create account
+              </button>
+            </div>
+          </div>
+
+          {/* Active accounts */}
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <h2 className="text-2xl font-bold mb-6">Active accounts</h2>
+
+            <div className="space-y-4">
+              {novaAccounts.map((account) => (
+                <div
+                  key={account.id}
+                  className="rounded-2xl border border-slate-800 bg-slate-950 p-5"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-bold">{account.fullName}</h3>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-bold text-yellow-300 capitalize">
+                          {account.role}
+                        </span>
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${
+                            account.status === "active"
+                              ? "bg-green-500/20 text-green-300"
+                              : "bg-red-500/20 text-red-300"
+                          }`}
+                        >
+                          {account.status}
+                        </span>
+                      </div>
+
+                      <p className="mt-4 text-sm text-slate-400">
+                        Username:{" "}
+                        <span className="text-white font-semibold">
+                          {account.username}
+                        </span>
+                      </p>
+                      <p className="mt-1 text-sm text-slate-400">
+                        Password:{" "}
+                        <span className="text-white font-semibold">
+                          {maskPassword(account.password)}
+                        </span>
+                      </p>
+                    </div>
+
+                    {account.status === "active" ? (
+                      <button
+                        onClick={() => deactivateNovaAccount(account.id)}
+                        className="rounded-2xl border border-red-500/30 px-4 py-2 text-sm font-semibold text-red-300 hover:bg-red-500/10 transition"
+                      >
+                        Deactivate
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <p className="mt-6 text-sm text-slate-400">
+              How it works: Trainers log in at <span className="text-white">/trainer</span> and supervisors at{" "}
+              <span className="text-white">/supervisor</span> using the credentials you create here.
+            </p>
+          </div>
+        </div>
+
+        {/* Owner analytics */}
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+          <h2 className="text-2xl font-bold">Owner Analytics</h2>
+          <div className="mt-5 grid lg:grid-cols-[1fr_auto] gap-6 items-end">
+            <div>
+              <p className="text-lg font-semibold">Owner Access</p>
+              <p className="mt-2 text-slate-400">Analytics & user management</p>
+
+              <div className="mt-5 max-w-md">
+                <label className="block text-sm text-slate-400 mb-2">
+                  Owner password
+                </label>
+                <input
+                  type="password"
+                  value={ownerPassword}
+                  onChange={(e) => setOwnerPassword(e.target.value)}
+                  placeholder="Enter Owner password"
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-yellow-400"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={() => navigate("/supervisor")}
+              className="rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
+            >
+              Enter Supervisor Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

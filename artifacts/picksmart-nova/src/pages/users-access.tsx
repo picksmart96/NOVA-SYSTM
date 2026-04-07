@@ -1,186 +1,346 @@
-import { useState } from "react";
-import { USERS } from "@/data/users";
-import type { UserRole } from "@/data/users";
-import { useAppStore } from "@/lib/store";
-import { Users, Shield, Lock, UserCheck, Activity } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Link } from "wouter";
+import { useAccessStore } from "@/lib/accessStore";
+import { Users, Shield, Key, UserPlus, Copy, Check } from "lucide-react";
 
-const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
-  selector: ["View training modules", "Access My Assignments", "Run NOVA voice session", "View leaderboard", "Access NOVA Help"],
-  trainer: ["All selector permissions", "Assignment Control", "Slot Master & Warehouse Reference", "Voice Commands reference", "Trainer Portal", "View selector progress"],
-  supervisor: ["All trainer permissions", "Live Tracking", "Supervisor Dashboard", "Approve short picks", "Override assignments"],
-  owner: ["All permissions", "Pricing management", "Users & Access control", "System settings", "Billing & reports"],
+type RoleKey = "Selector" | "Trainer" | "Supervisor" | "Admin" | "User";
+
+const roleLinks: Record<RoleKey, string> = {
+  Selector: "/nova",
+  Trainer: "/trainer-portal",
+  Supervisor: "/supervisor",
+  Admin: "/users-access",
+  User: "/",
 };
 
-const ROLE_COLORS: Record<UserRole, string> = {
-  selector: "bg-blue-500/10 text-blue-400 border-blue-500/30",
-  trainer: "bg-yellow-400/10 text-yellow-300 border-yellow-400/30",
-  supervisor: "bg-orange-500/10 text-orange-400 border-orange-500/30",
-  owner: "bg-red-500/10 text-red-400 border-red-500/30",
+const roleDescriptions: Record<RoleKey, string> = {
+  Selector: "selector access: Training · My Progress · Leaderboard · Common Mistakes · NOVA Trainer · Selector Nation",
+  Trainer: "trainer access: Trainer Dashboard · My Selectors · Assignments · Warehouse Reference · NOVA tools",
+  Supervisor: "supervisor access: Supervisor Dashboard · Live tracking · Warehouse Reference · Trainer oversight",
+  Admin: "admin access: Full analytics · user management · NOVA account management",
+  User: "user access: basic site access",
+};
+
+function maskPassword(password: string) {
+  return "•".repeat(Math.max(password.length, 8));
+}
+
+const ROLE_BADGE: Record<string, string> = {
+  Selector: "bg-blue-500/10 text-blue-300 border-blue-500/30",
+  Trainer: "bg-yellow-400/10 text-yellow-300 border-yellow-400/30",
+  Supervisor: "bg-orange-500/10 text-orange-300 border-orange-500/30",
+  Admin: "bg-red-500/10 text-red-300 border-red-500/30",
+  User: "bg-slate-700 text-slate-300 border-slate-600",
 };
 
 export default function UsersAccessPage() {
-  const { userId, role, setRole, setUserId } = useAppStore();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterRole, setFilterRole] = useState<UserRole | "all">("all");
+  const {
+    appUsers, novaAccounts,
+    inviteAppUser, createNovaAccount, deactivateNovaAccount,
+  } = useAccessStore();
 
-  const filteredUsers = USERS.filter(u => {
-    const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.employeeId.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesRole = filterRole === "all" || u.role === filterRole;
-    return matchesSearch && matchesRole;
+  const [inviteForm, setInviteForm] = useState({
+    fullName: "John Smith",
+    email: "someone@example.com",
+    role: "Selector" as RoleKey,
   });
 
+  const [accountForm, setAccountForm] = useState({
+    fullName: "Jane Smith",
+    username: "jane.smith",
+    password: "Secure2024!",
+    role: "Trainer" as "Trainer" | "Supervisor",
+  });
+
+  const [ownerPassword, setOwnerPassword] = useState("");
+  const [copied, setCopied] = useState("");
+
+  const inviteLink = useMemo(() => roleLinks[inviteForm.role], [inviteForm.role]);
+
+  const handleCopy = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${text}`);
+      setCopied(label);
+      setTimeout(() => setCopied(""), 1800);
+    } catch { /* silent */ }
+  };
+
+  const handleInviteUser = () => {
+    if (!inviteForm.fullName.trim() || !inviteForm.email.trim()) return;
+    inviteAppUser({ fullName: inviteForm.fullName, email: inviteForm.email, role: inviteForm.role, inviteLink });
+    setInviteForm({ fullName: "", email: "", role: "Selector" });
+  };
+
+  const handleCreateAccount = () => {
+    if (!accountForm.fullName.trim() || !accountForm.username.trim() || !accountForm.password.trim()) return;
+    createNovaAccount({ fullName: accountForm.fullName, username: accountForm.username, password: accountForm.password, role: accountForm.role });
+    setAccountForm({ fullName: "", username: "", password: "", role: "Trainer" });
+  };
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      {/* Header */}
-      <div className="border-b border-slate-800 bg-slate-950 px-6 py-6">
-        <div className="max-w-7xl mx-auto flex items-center gap-3">
-          <div className="p-2 bg-yellow-400 rounded-xl">
-            <Lock className="h-5 w-5 text-slate-950" />
-          </div>
+    <div className="min-h-screen bg-slate-950 text-white px-6 py-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-black text-white">Users & Access</h1>
-            <p className="text-slate-400 text-sm">Manage user roles and permissions for the PickSmart platform</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-        {/* Active Session */}
-        <div className="rounded-2xl border border-yellow-400/30 bg-yellow-400/5 p-5">
-          <div className="flex items-center gap-3 mb-2">
-            <UserCheck className="h-5 w-5 text-yellow-400" />
-            <h2 className="font-bold text-yellow-300">Current Demo Session</h2>
-          </div>
-          <p className="text-slate-400 text-sm mb-4">
-            You are currently viewing the app as <strong className="text-white capitalize">{role}</strong> ({USERS.find(u => u.id === userId)?.name ?? userId}).
-            Switch your role below to simulate different permission levels.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {(["selector", "trainer", "supervisor", "owner"] as UserRole[]).map(r => (
-              <button
-                key={r}
-                onClick={() => setRole(r)}
-                className={`px-4 py-2 rounded-xl border font-bold text-sm capitalize transition ${
-                  role === r
-                    ? "border-yellow-400 bg-yellow-400 text-slate-950"
-                    : "border-slate-700 text-slate-400 hover:border-slate-600 hover:text-white"
-                }`}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Role Permissions */}
-        <div>
-          <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
-            <Shield className="h-4 w-4 text-yellow-400" /> Role Permissions
-          </h2>
-          <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
-            {(Object.entries(ROLE_PERMISSIONS) as [UserRole, string[]][]).map(([r, perms]) => (
-              <div key={r} className={`rounded-2xl border bg-slate-900 p-5 ${r === role ? "border-yellow-400" : "border-slate-800"}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <span className={`px-3 py-1 rounded-full border text-xs font-bold capitalize ${ROLE_COLORS[r]}`}>{r}</span>
-                  {r === role && <span className="text-xs text-yellow-400 font-bold">Active</span>}
-                </div>
-                <ul className="space-y-2">
-                  {perms.map(p => (
-                    <li key={p} className="text-xs text-slate-300 flex items-start gap-1.5">
-                      <span className="text-yellow-400 mt-0.5 shrink-0">•</span>
-                      {p}
-                    </li>
-                  ))}
-                </ul>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-yellow-400 flex items-center justify-center">
+                <Shield className="h-5 w-5 text-slate-950" />
               </div>
-            ))}
+              <h1 className="text-4xl font-black">Users &amp; Access</h1>
+            </div>
+            <p className="text-slate-400">
+              Invite app users and manage NOVA trainer / supervisor credentials.
+            </p>
           </div>
         </div>
 
-        {/* User Table */}
-        <div>
-          <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2">
-              <Users className="h-4 w-4 text-yellow-400" /> All Users
+        {/* Copy toast */}
+        {copied && (
+          <div className="rounded-2xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-green-300 text-sm font-bold flex items-center gap-2">
+            <Check className="h-4 w-4" /> Copied: {copied}
+          </div>
+        )}
+
+        {/* Row 1 — Invite + App Users */}
+        <div className="grid xl:grid-cols-2 gap-6">
+
+          {/* Invite by Role */}
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <h2 className="text-2xl font-black mb-6 flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-yellow-400" /> Invite by Role
             </h2>
-            <div className="flex gap-2 ml-auto">
-              <input
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search name or ID..."
-                className="px-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:border-yellow-400 transition"
-              />
-              <select
-                value={filterRole}
-                onChange={e => setFilterRole(e.target.value as UserRole | "all")}
-                className="px-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:outline-none focus:border-yellow-400 transition"
+
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">Full Name</label>
+                <input
+                  value={inviteForm.fullName}
+                  onChange={(e) => setInviteForm((p) => ({ ...p, fullName: e.target.value }))}
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">Email Address</label>
+                <input
+                  value={inviteForm.email}
+                  onChange={(e) => setInviteForm((p) => ({ ...p, email: e.target.value }))}
+                  type="email"
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">Role</label>
+                <select
+                  value={inviteForm.role}
+                  onChange={(e) => setInviteForm((p) => ({ ...p, role: e.target.value as RoleKey }))}
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition"
+                >
+                  <option>Selector</option>
+                  <option>Trainer</option>
+                  <option>Supervisor</option>
+                  <option>Admin</option>
+                  <option>User</option>
+                </select>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 space-y-3">
+                <p className="text-sm text-yellow-300 font-semibold leading-snug">
+                  {roleDescriptions[inviteForm.role]}
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                  <div className="flex-1 rounded-xl bg-slate-900 border border-slate-800 px-4 py-3 text-sm text-slate-300 break-all">
+                    {window.location.origin}{inviteLink}
+                  </div>
+                  <button
+                    onClick={() => handleCopy(inviteLink, "Invite URL")}
+                    className="rounded-2xl border border-slate-700 px-4 py-3 font-semibold hover:border-yellow-400 transition flex items-center gap-2 shrink-0"
+                  >
+                    <Copy className="h-4 w-4" /> Copy
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500">Selectors get a platform invite email automatically.</p>
+              </div>
+
+              <button
+                onClick={handleInviteUser}
+                className="rounded-2xl bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300 transition flex items-center gap-2"
               >
-                <option value="all">All Roles</option>
-                <option value="selector">Selector</option>
-                <option value="trainer">Trainer</option>
-                <option value="supervisor">Supervisor</option>
-                <option value="owner">Owner</option>
-              </select>
+                <UserPlus className="h-4 w-4" /> Send Invite Email
+              </button>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-slate-500 text-xs uppercase tracking-wider border-b border-slate-800">
-                  <th className="text-left px-5 py-3">User</th>
-                  <th className="text-left px-5 py-3">Employee ID</th>
-                  <th className="text-left px-5 py-3">Role</th>
-                  <th className="text-right px-5 py-3">Avg Rate</th>
-                  <th className="text-right px-5 py-3">Status</th>
-                  <th className="text-right px-5 py-3">Demo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map(u => (
-                  <tr key={u.id} className={`border-b border-slate-800 hover:bg-slate-800/30 transition ${u.id === userId ? "bg-yellow-400/5" : ""}`}>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-yellow-400 text-slate-950 font-black text-xs flex items-center justify-center shrink-0">
-                          {u.initials}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-white">{u.name}</p>
-                          {u.id === userId && <p className="text-xs text-yellow-400">Current session</p>}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 font-mono text-slate-400">{u.employeeId}</td>
-                    <td className="px-5 py-4">
-                      <span className={`px-2 py-1 rounded-full border text-xs font-bold capitalize ${ROLE_COLORS[u.role]}`}>{u.role}</span>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      {u.avgRate > 0 ? (
-                        <span className={`font-bold ${u.avgRate >= 100 ? "text-green-400" : u.avgRate >= 85 ? "text-yellow-400" : "text-slate-400"}`}>
-                          {u.avgRate}%
-                        </span>
-                      ) : <span className="text-slate-600">—</span>}
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <span className={`px-2 py-1 rounded-md text-xs font-bold ${u.isOnShift ? "bg-green-500/10 text-green-400" : "bg-slate-800 text-slate-500"}`}>
-                        {u.isOnShift ? "On Shift" : "Off"}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <button
-                        onClick={() => { setUserId(u.id); setRole(u.role); }}
-                        className="px-3 py-1.5 rounded-lg border border-slate-700 text-xs text-slate-400 hover:border-yellow-400 hover:text-white transition flex items-center gap-1 ml-auto"
-                      >
-                        <Activity className="h-3 w-3" /> View as
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {/* App Users */}
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <h2 className="text-2xl font-black mb-6 flex items-center gap-2">
+              <Users className="h-5 w-5 text-yellow-400" /> App Users
+            </h2>
+
+            <div className="space-y-4 max-h-[520px] overflow-y-auto pr-1">
+              {appUsers.map((user) => (
+                <div key={user.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                  <h3 className="text-base font-black capitalize">{user.fullName}</h3>
+                  <p className="mt-1 text-slate-400 text-sm">{user.email}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className={`rounded-full px-3 py-1 text-xs font-bold border ${ROLE_BADGE[user.role] ?? "bg-slate-700 text-slate-300 border-slate-600"}`}>
+                      {user.role}
+                    </span>
+                    <span className={`rounded-full px-3 py-1 text-xs font-bold border ${
+                      user.status === "active"
+                        ? "bg-green-500/10 text-green-300 border-green-500/30"
+                        : user.status === "invited"
+                        ? "bg-blue-500/10 text-blue-300 border-blue-500/30"
+                        : "bg-slate-700 text-slate-400 border-slate-600"
+                    }`}>
+                      {user.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* Row 2 — NOVA Accounts */}
+        <div className="grid xl:grid-cols-2 gap-6">
+
+          {/* Create NOVA Account */}
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <h2 className="text-2xl font-black mb-2 flex items-center gap-2">
+              <Key className="h-5 w-5 text-yellow-400" /> NOVA Access
+            </h2>
+            <p className="text-slate-400 text-sm mb-6">Trainers &amp; Supervisors</p>
+
+            <p className="text-base font-bold mb-5">Create new account</p>
+
+            <div className="space-y-5">
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">Full name</label>
+                <input
+                  value={accountForm.fullName}
+                  onChange={(e) => setAccountForm((p) => ({ ...p, fullName: e.target.value }))}
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">Username</label>
+                  <input
+                    value={accountForm.username}
+                    onChange={(e) => setAccountForm((p) => ({ ...p, username: e.target.value }))}
+                    className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">Password</label>
+                  <input
+                    value={accountForm.password}
+                    onChange={(e) => setAccountForm((p) => ({ ...p, password: e.target.value }))}
+                    className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">Role</label>
+                <select
+                  value={accountForm.role}
+                  onChange={(e) => setAccountForm((p) => ({ ...p, role: e.target.value as "Trainer" | "Supervisor" }))}
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition"
+                >
+                  <option>Trainer</option>
+                  <option>Supervisor</option>
+                </select>
+              </div>
+
+              <button
+                onClick={handleCreateAccount}
+                className="rounded-2xl bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300 transition"
+              >
+                Create account
+              </button>
+
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Trainers log in at <span className="text-slate-300">/trainer-portal</span> and supervisors at{" "}
+                <span className="text-slate-300">/supervisor</span> using these credentials.
+              </p>
+            </div>
+          </div>
+
+          {/* Active Accounts */}
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <h2 className="text-2xl font-black mb-6">Active accounts</h2>
+
+            <div className="space-y-4 max-h-[480px] overflow-y-auto pr-1">
+              {novaAccounts.map((account) => (
+                <div key={account.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-base font-black capitalize">{account.fullName}</h3>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <span className={`rounded-full px-3 py-1 text-xs font-bold border ${ROLE_BADGE[account.role] ?? "bg-slate-700 text-slate-300 border-slate-600"}`}>
+                          {account.role}
+                        </span>
+                        <span className={`rounded-full px-3 py-1 text-xs font-bold border ${
+                          account.status === "active"
+                            ? "bg-green-500/10 text-green-300 border-green-500/30"
+                            : "bg-red-500/10 text-red-300 border-red-500/30"
+                        }`}>
+                          {account.status}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm text-slate-400">
+                        Username: <span className="text-white font-semibold">{account.username}</span>
+                      </p>
+                      <p className="mt-1 text-sm text-slate-400">
+                        Password: <span className="text-white font-semibold">{maskPassword(account.password)}</span>
+                      </p>
+                    </div>
+
+                    {account.status === "active" && (
+                      <button
+                        onClick={() => deactivateNovaAccount(account.id)}
+                        className="rounded-2xl border border-red-500/30 px-4 py-2 text-sm font-semibold text-red-300 hover:bg-red-500/10 transition"
+                      >
+                        Deactivate
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Owner Analytics */}
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+          <h2 className="text-2xl font-black mb-2">Owner Analytics</h2>
+          <p className="text-slate-400 text-sm mb-6">Analytics &amp; user management</p>
+
+          <div className="grid lg:grid-cols-[1fr_auto] gap-6 items-end">
+            <div className="max-w-md">
+              <label className="block text-sm text-slate-400 mb-2">Owner password</label>
+              <input
+                type="password"
+                value={ownerPassword}
+                onChange={(e) => setOwnerPassword(e.target.value)}
+                placeholder="Enter Owner password"
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition"
+              />
+            </div>
+            <Link href="/supervisor">
+              <button className="rounded-2xl bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300 transition">
+                Enter Supervisor Dashboard
+              </button>
+            </Link>
+          </div>
+        </div>
+
       </div>
     </div>
   );
