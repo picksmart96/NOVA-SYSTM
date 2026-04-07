@@ -1,0 +1,135 @@
+Redesign the Trainer Dashboard so it matches the Base44 layout and feel.
+
+GOAL
+Make the trainer dashboard look like a clean warehouse operations dashboard.
+
+TOP HEADER
+At the top left show:
+- Trainer Dashboard
+- trainer name below it
+- format example:
+  soumaila ouedraogo · trainer
+
+At the top right show:
+- Warehouse Ref button
+- Sign out button
+
+STATS ROW
+Create 3 stat cards under the header:
+1. My Selectors
+2. Sessions Logged
+3. Open
+
+Style:
+- dark slate cards
+- rounded 2xl or 3xl
+- white main number
+- muted label
+- compact but bold
+
+ACTION SECTION
+Below stats add a section of 4 action buttons:
+- Register Selector
+- Activate NOVA
+- Log Session
+- Assign Assignment
+
+Make them look like control buttons, not plain text links.
+Use:
+- safety yellow accent for primary action
+- dark button backgrounds
+- rounded corners
+- hover states
+
+MAIN CONTENT LAYOUT
+Use a 2-column layout on desktop:
+
+LEFT COLUMN
+Card title:
+Register Selector
+
+Inside the card show a form with:
+- Full name
+- Age
+- Level
+- Notes (optional)
+- Register selector button
+
+Use example defaults:
+- Full name: John Smith
+- Age: 22
+- Level: Beginner
+
+RIGHT COLUMN
+Card title:
+My selectors
+
+Below show selector cards.
+
+SELECTOR CARD STYLE
+Each selector card should show:
+- selector name
+- NOVA ID
+- age
+- selector experience text like:
+  3 weeks selector
+- level badge
+- NOVA Active badge if active
+
+Use layout example:
+soumaila ouedraogo
+NOVA ID: NOVA-25917 · Age 30
+3 weeks selector
+Beginner
+NOVA Active
+
+Style:
+- dark card background
+- rounded corners
+- soft shadow
+- level badge in muted yellow or slate
+- NOVA Active badge in green or yellow accent
+
+DESIGN STYLE
+Match Base44 feeling:
+- dark navy / slate background
+- safety yellow accents
+- clean spacing
+- larger section headers
+- compact warehouse control feel
+- no clutter
+- professional trainer workstation look
+
+RESPONSIVE
+- desktop = 2 columns
+- mobile = stacked cards
+- stat cards collapse cleanly
+- action buttons wrap cleanly
+
+DATA TO SHOW
+Use local data for now.
+Seed:
+Trainer:
+- name: soumaila ouedraogo
+- role: trainer
+
+Stats:
+- My Selectors: 1
+- Sessions Logged: 0
+- Open: 0
+
+Selector:
+- name: soumaila ouedraogo
+- novaId: NOVA-25917
+- age: 30
+- experience: 3 weeks selector
+- level: Beginner
+- novaActive: true
+
+IMPORTANT
+This is a visual/layout redesign first.
+Keep future support for:
+- Warehouse Reference page
+- Activate NOVA
+- Session logging
+- Assignment linking

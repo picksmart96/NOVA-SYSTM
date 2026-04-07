@@ -1,0 +1,95 @@
+import { useState } from "react";
+import { useTrainerStore } from "../../store/trainerStore";
+
+export default function LogSessionModal({ open, onClose }) {
+  const { selectors, logSession } = useTrainerStore();
+  const [selectorId, setSelectorId] = useState("");
+  const [sessionType, setSessionType] = useState("Coaching");
+  const [notes, setNotes] = useState("");
+
+  if (!open) return null;
+
+  const handleSave = () => {
+    const selectedSelector = selectors.find((s) => s.id === Number(selectorId));
+    if (!selectedSelector) return;
+
+    logSession({
+      selectorId: selectedSelector.id,
+      selectorName: selectedSelector.name,
+      sessionType,
+      notes,
+    });
+
+    setSelectorId("");
+    setSessionType("Coaching");
+    setNotes("");
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+      <div className="w-full max-w-lg rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-white">Log Session</h2>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-white text-xl"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="space-y-5">
+          <div>
+            <label className="block text-sm text-slate-400 mb-2">Selector</label>
+            <select
+              value={selectorId}
+              onChange={(e) => setSelectorId(e.target.value)}
+              className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400"
+            >
+              <option value="">Choose selector</option>
+              {selectors.map((selector) => (
+                <option key={selector.id} value={selector.id}>
+                  {selector.name} ({selector.novaId})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-slate-400 mb-2">Session Type</label>
+            <select
+              value={sessionType}
+              onChange={(e) => setSessionType(e.target.value)}
+              className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400"
+            >
+              <option>Coaching</option>
+              <option>NOVA Activation</option>
+              <option>Assignment Review</option>
+              <option>Safety Review</option>
+              <option>Performance Review</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-slate-400 mb-2">Notes</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={4}
+              className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400"
+              placeholder="Optional notes..."
+            />
+          </div>
+
+          <button
+            onClick={handleSave}
+            className="w-full rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
+          >
+            Save Session
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

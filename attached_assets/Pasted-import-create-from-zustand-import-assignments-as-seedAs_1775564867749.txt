@@ -1,0 +1,84 @@
+import { create } from "zustand";
+import { assignments as seedAssignments } from "../data/assignments";
+
+const initialSelectors = [
+  {
+    id: 1,
+    userId: "user-001",
+    name: "soumaila ouedraogo",
+    novaId: "NOVA-25917",
+    age: 30,
+    experience: "3 weeks selector",
+    level: "Beginner",
+    novaActive: true,
+    assignedAssignmentId: null,
+    notes: "",
+  },
+];
+
+export const useTrainerStore = create((set) => ({
+  trainer: {
+    name: "soumaila ouedraogo",
+    role: "trainer",
+  },
+
+  selectors: initialSelectors,
+  assignments: seedAssignments,
+  sessions: [],
+
+  addSelector: (selector) =>
+    set((state) => ({
+      selectors: [
+        {
+          id: Date.now(),
+          userId: `user-${String(state.selectors.length + 1).padStart(3, "0")}`,
+          novaId: `NOVA-${Math.floor(10000 + Math.random() * 89999)}`,
+          novaActive: false,
+          assignedAssignmentId: null,
+          experience: "New selector",
+          ...selector,
+        },
+        ...state.selectors,
+      ],
+    })),
+
+  toggleNova: (selectorId) =>
+    set((state) => ({
+      selectors: state.selectors.map((selector) =>
+        selector.id === selectorId
+          ? { ...selector, novaActive: !selector.novaActive }
+          : selector
+      ),
+    })),
+
+  assignAssignment: (selectorId, assignmentId) =>
+    set((state) => ({
+      selectors: state.selectors.map((selector) =>
+        selector.id === selectorId
+          ? { ...selector, assignedAssignmentId: assignmentId }
+          : selector
+      ),
+      assignments: state.assignments.map((assignment) =>
+        assignment.id === assignmentId
+          ? {
+              ...assignment,
+              selectorUserId:
+                state.selectors.find((s) => s.id === selectorId)?.userId || assignment.selectorUserId,
+            }
+          : assignment
+      ),
+    })),
+
+  logSession: (sessionData) =>
+    set((state) => ({
+      sessions: [
+        {
+          id: Date.now(),
+          createdAt: new Date().toISOString(),
+          trainerName: state.trainer.name,
+          ...sessionData,
+        },
+        ...state.sessions,
+      ],
+    })),
+}));

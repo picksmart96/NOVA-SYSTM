@@ -1,210 +1,334 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { USERS } from "@/data/users";
-import { ASSIGNMENTS } from "@/data/assignments";
-import { MODULES } from "@/data/modules";
-import { Shield, Users, ClipboardList, BookOpen, TrendingUp, Activity, ChevronRight, Clock } from "lucide-react";
+import { useTrainerStore } from "@/lib/trainerStore";
+import { AssignAssignmentModal } from "@/components/nova/AssignAssignmentModal";
+import { ActivateNovaModal } from "@/components/nova/ActivateNovaModal";
+import { LogSessionModal } from "@/components/nova/LogSessionModal";
+import { SessionCard } from "@/components/nova/SessionCard";
+import {
+  Shield, Users, ClipboardList, Zap, BookOpen,
+  MapPin, UserPlus, LogIn, ChevronRight
+} from "lucide-react";
 
-const ACTIVE_SELECTORS = USERS.filter(u => u.role === "selector" && u.isOnShift);
-const TRAINER_NOTES = [
-  { selector: "Deja R.", note: "Running behind on aisle 19. Check pallet build technique — Bravo side may be over capacity.", time: "18 min ago", priority: "high" },
-  { selector: "James R.", note: "On pace. New to ultra-fast mode this week. Monitor but no intervention needed.", time: "32 min ago", priority: "medium" },
-  { selector: "Aaliyah J.", note: "Off shift today. Complete Module 3 review before next assignment session.", time: "2 hrs ago", priority: "low" },
-];
+type SelectorLevel = "Beginner" | "Intermediate" | "Advanced";
 
 export default function TrainerPortalPage() {
-  const [activeTab, setActiveTab] = useState<"overview" | "selectors" | "modules">("overview");
+  const {
+    trainer, selectors, sessions, assignments,
+    addSelector, toggleNova,
+  } = useTrainerStore();
+
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showNovaModal, setShowNovaModal] = useState(false);
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [preselectedSelectorId, setPreselectedSelectorId] = useState<number | null>(null);
+
+  const [form, setForm] = useState({
+    fullName: "John Smith",
+    age: "22",
+    level: "Beginner" as SelectorLevel,
+    notes: "",
+  });
+
+  const handleRegister = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.fullName.trim()) return;
+    addSelector({
+      name: form.fullName,
+      age: Number(form.age),
+      level: form.level,
+      notes: form.notes,
+    });
+    setForm({ fullName: "", age: "", level: "Beginner", notes: "" });
+  };
+
+  const openNovaFor = (id: number) => {
+    setPreselectedSelectorId(id);
+    setShowNovaModal(true);
+  };
+  const openAssignFor = (id: number) => {
+    setPreselectedSelectorId(id);
+    setShowAssignModal(true);
+  };
+  const openLogFor = (id: number) => {
+    setPreselectedSelectorId(id);
+    setShowLogModal(true);
+  };
+
+  const getAssignmentNumber = (assignmentId: string | null) => {
+    if (!assignmentId) return null;
+    return assignments.find((a) => a.id === assignmentId)?.assignmentNumber ?? null;
+  };
+
+  const openAssignmentsCount = selectors.filter((s) => s.assignedAssignmentId).length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      {/* Header */}
-      <div className="border-b border-slate-800 bg-slate-950 px-6 py-6">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-yellow-400 rounded-xl">
-              <Shield className="h-5 w-5 text-slate-950" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black text-white">Trainer Portal</h1>
-              <p className="text-slate-400 text-sm">Manage selectors, assignments, and training progress</p>
-            </div>
-          </div>
-          <Link href="/nova/control" className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-700 text-slate-300 hover:border-yellow-400 hover:text-white text-sm transition">
-            Assignment Control <ChevronRight className="h-4 w-4" />
-          </Link>
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-950 text-white px-6 py-8">
+      <div className="max-w-7xl mx-auto space-y-8">
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Summary Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 text-center">
-            <p className="text-3xl font-black text-yellow-400">{ACTIVE_SELECTORS.length}</p>
-            <p className="text-slate-400 text-sm mt-1">Active Selectors</p>
-          </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 text-center">
-            <p className="text-3xl font-black text-white">{ASSIGNMENTS.filter(a => a.status === "active" || a.status === "pending").length}</p>
-            <p className="text-slate-400 text-sm mt-1">Open Assignments</p>
-          </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 text-center">
-            <p className="text-3xl font-black text-green-400">
-              {ACTIVE_SELECTORS.filter(s => (s.performancePercent ?? 0) >= 100).length}
+        {/* ── Header ── */}
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-yellow-400 flex items-center justify-center">
+                <Shield className="h-5 w-5 text-slate-950" />
+              </div>
+              <h1 className="text-4xl font-black">Trainer Dashboard</h1>
+            </div>
+            <p className="text-slate-400 capitalize">
+              {trainer.name} · {trainer.role}
             </p>
-            <p className="text-slate-400 text-sm mt-1">On / Above Rate</p>
           </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 text-center">
-            <p className="text-3xl font-black text-red-400">
-              {ACTIVE_SELECTORS.filter(s => s.paceStatus === "behind").length}
-            </p>
-            <p className="text-slate-400 text-sm mt-1">Behind Pace</p>
-          </div>
-        </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6">
-          {(["overview", "selectors", "modules"] as const).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-5 py-2 rounded-xl font-semibold text-sm transition capitalize ${
-                activeTab === tab
-                  ? "bg-yellow-400 text-slate-950"
-                  : "bg-slate-900 border border-slate-700 text-slate-400 hover:border-slate-600 hover:text-white"
-              }`}
-            >
-              {tab}
+          <div className="flex gap-3 flex-wrap">
+            <Link href="/nova/warehouse">
+              <button className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-yellow-400 transition flex items-center gap-2">
+                <MapPin className="h-4 w-4" /> Warehouse Ref
+              </button>
+            </Link>
+            <button className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-red-400 transition flex items-center gap-2">
+              <LogIn className="h-4 w-4" /> Sign out
             </button>
-          ))}
+          </div>
         </div>
 
-        {activeTab === "overview" && (
-          <div className="grid lg:grid-cols-2 gap-6">
-            {/* Trainer Notes */}
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-              <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
-                <ClipboardList className="h-4 w-4 text-yellow-400" /> Trainer Notes
-              </h2>
-              <div className="space-y-4">
-                {TRAINER_NOTES.map((note, i) => (
-                  <div key={i} className={`rounded-xl p-4 border ${
-                    note.priority === "high" ? "border-red-500/30 bg-red-500/5" :
-                    note.priority === "medium" ? "border-yellow-400/30 bg-yellow-400/5" :
-                    "border-slate-700 bg-slate-950"
-                  }`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-bold text-white text-sm">{note.selector}</span>
-                      <span className="text-slate-500 text-xs flex items-center gap-1"><Clock className="h-3 w-3" />{note.time}</span>
-                    </div>
-                    <p className="text-slate-300 text-sm">{note.note}</p>
-                  </div>
-                ))}
-              </div>
+        {/* ── Stats ── */}
+        <div className="grid sm:grid-cols-3 gap-4">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <div className="flex items-center gap-2 mb-3">
+              <Users className="h-4 w-4 text-slate-500" />
+              <p className="text-slate-400 text-sm font-medium">My Selectors</p>
             </div>
-
-            {/* Live Floor Overview */}
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-              <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
-                <Activity className="h-4 w-4 text-yellow-400" /> Floor Status
-              </h2>
-              <div className="space-y-3">
-                {ACTIVE_SELECTORS.map(sel => (
-                  <div key={sel.id} className="rounded-xl bg-slate-950 border border-slate-800 p-4 flex items-center gap-4">
-                    <div className="w-9 h-9 rounded-full bg-yellow-400 text-slate-950 font-black text-sm flex items-center justify-center shrink-0">
-                      {sel.initials}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-white text-sm">{sel.name}</p>
-                      <p className="text-slate-500 text-xs">
-                        {sel.currentAisle ? `Aisle ${sel.currentAisle} · Slot ${sel.currentSlot}` : "Not assigned"}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className={`font-black text-sm ${
-                        (sel.performancePercent ?? 0) >= 100 ? "text-green-400" :
-                        (sel.performancePercent ?? 0) >= 85 ? "text-yellow-400" : "text-red-400"
-                      }`}>
-                        {sel.performancePercent ?? 0}%
-                      </p>
-                      <p className={`text-xs capitalize ${
-                        sel.paceStatus === "ahead" ? "text-green-500" :
-                        sel.paceStatus === "behind" ? "text-red-500" :
-                        sel.paceStatus === "on_pace" ? "text-yellow-500" : "text-slate-500"
-                      }`}>
-                        {sel.paceStatus?.replace("_", " ") ?? "idle"}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4">
-                <Link href="/nova/tracking" className="text-sm text-yellow-400 hover:text-yellow-300 transition flex items-center gap-1">
-                  View full live tracking <ChevronRight className="h-4 w-4" />
-                </Link>
-              </div>
-            </div>
+            <p className="text-5xl font-black text-white">{selectors.length}</p>
           </div>
-        )}
 
-        {activeTab === "selectors" && (
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
-                  <th className="text-left px-5 py-3">Selector</th>
-                  <th className="text-left px-5 py-3">Employee ID</th>
-                  <th className="text-left px-5 py-3">Role</th>
-                  <th className="text-right px-5 py-3">Avg Rate</th>
-                  <th className="text-right px-5 py-3">Shifts</th>
-                  <th className="text-right px-5 py-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {USERS.filter(u => u.role === "selector").map(u => (
-                  <tr key={u.id} className="border-b border-slate-800 hover:bg-slate-800/50 transition">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-yellow-400 text-slate-950 font-black text-xs flex items-center justify-center">
-                          {u.initials}
-                        </div>
-                        <span className="font-semibold text-white">{u.name}</span>
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <div className="flex items-center gap-2 mb-3">
+              <BookOpen className="h-4 w-4 text-slate-500" />
+              <p className="text-slate-400 text-sm font-medium">Sessions Logged</p>
+            </div>
+            <p className="text-5xl font-black text-white">{sessions.length}</p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <div className="flex items-center gap-2 mb-3">
+              <ClipboardList className="h-4 w-4 text-slate-500" />
+              <p className="text-slate-400 text-sm font-medium">Open Assignments</p>
+            </div>
+            <p className="text-5xl font-black text-white">{openAssignmentsCount}</p>
+          </div>
+        </div>
+
+        {/* ── Action Buttons ── */}
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => document.getElementById("register-form")?.scrollIntoView({ behavior: "smooth" })}
+            className="rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition flex items-center gap-2"
+          >
+            <UserPlus className="h-4 w-4" /> Register Selector
+          </button>
+          <button
+            onClick={() => { setPreselectedSelectorId(null); setShowNovaModal(true); }}
+            className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-yellow-400 transition flex items-center gap-2"
+          >
+            <Zap className="h-4 w-4" /> Activate NOVA
+          </button>
+          <button
+            onClick={() => { setPreselectedSelectorId(null); setShowLogModal(true); }}
+            className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-yellow-400 transition flex items-center gap-2"
+          >
+            <BookOpen className="h-4 w-4" /> Log Session
+          </button>
+          <button
+            onClick={() => { setPreselectedSelectorId(null); setShowAssignModal(true); }}
+            className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-yellow-400 transition flex items-center gap-2"
+          >
+            <ClipboardList className="h-4 w-4" /> Assign Assignment
+          </button>
+        </div>
+
+        {/* ── Main two-column layout ── */}
+        <div className="grid lg:grid-cols-2 gap-6">
+
+          {/* Register Selector */}
+          <div id="register-form" className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <h2 className="text-2xl font-black mb-6 flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-yellow-400" /> Register Selector
+            </h2>
+
+            <form onSubmit={handleRegister} className="space-y-5">
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">Full name</label>
+                <input
+                  value={form.fullName}
+                  onChange={(e) => setForm((p) => ({ ...p, fullName: e.target.value }))}
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">Age</label>
+                  <input
+                    value={form.age}
+                    onChange={(e) => setForm((p) => ({ ...p, age: e.target.value }))}
+                    type="number"
+                    min="16"
+                    max="70"
+                    className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">Level</label>
+                  <select
+                    value={form.level}
+                    onChange={(e) => setForm((p) => ({ ...p, level: e.target.value as SelectorLevel }))}
+                    className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition"
+                  >
+                    <option>Beginner</option>
+                    <option>Intermediate</option>
+                    <option>Advanced</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">Notes (optional)</label>
+                <textarea
+                  value={form.notes}
+                  onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+                  rows={3}
+                  placeholder="Any relevant background..."
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition resize-none placeholder:text-slate-600"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="rounded-2xl bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300 transition flex items-center gap-2"
+              >
+                <UserPlus className="h-4 w-4" /> Register selector
+              </button>
+            </form>
+          </div>
+
+          {/* My Selectors */}
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <h2 className="text-2xl font-black mb-6 flex items-center gap-2">
+              <Users className="h-5 w-5 text-yellow-400" /> My Selectors
+            </h2>
+
+            {selectors.length === 0 ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-8 text-center text-slate-500">
+                No selectors registered yet.
+              </div>
+            ) : (
+              <div className="space-y-4 max-h-[560px] overflow-y-auto pr-1">
+                {selectors.map((selector) => {
+                  const assignedNum = getAssignmentNumber(selector.assignedAssignmentId);
+                  return (
+                    <div
+                      key={selector.id}
+                      className="rounded-2xl border border-slate-800 bg-slate-950 p-5"
+                    >
+                      <h3 className="text-lg font-black capitalize">{selector.name}</h3>
+                      <p className="mt-1 text-slate-400 text-sm">
+                        NOVA ID: <span className="text-slate-300">{selector.novaId}</span> · Age {selector.age}
+                      </p>
+                      <p className="mt-1 text-slate-400 text-sm">{selector.experience}</p>
+
+                      {/* Badges */}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className={`rounded-full px-3 py-1 text-xs font-bold border ${
+                          selector.level === "Advanced"
+                            ? "bg-red-500/10 text-red-300 border-red-500/30"
+                            : selector.level === "Intermediate"
+                            ? "bg-blue-500/10 text-blue-300 border-blue-500/30"
+                            : "bg-yellow-500/10 text-yellow-300 border-yellow-500/30"
+                        }`}>
+                          {selector.level}
+                        </span>
+
+                        {selector.novaActive && (
+                          <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs font-bold text-green-300 border border-green-500/30">
+                            NOVA Active
+                          </span>
+                        )}
+
+                        {assignedNum && (
+                          <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-bold text-blue-300 border border-blue-500/30">
+                            Assigned: #{assignedNum}
+                          </span>
+                        )}
                       </div>
-                    </td>
-                    <td className="px-5 py-4 font-mono text-slate-400">{u.employeeId}</td>
-                    <td className="px-5 py-4 capitalize text-slate-300">{u.role}</td>
-                    <td className="px-5 py-4 text-right font-bold text-yellow-400">{u.avgRate}%</td>
-                    <td className="px-5 py-4 text-right text-slate-400">{u.shiftsCompleted}</td>
-                    <td className="px-5 py-4 text-right">
-                      <span className={`px-2 py-1 rounded-md text-xs font-bold ${u.isOnShift ? "bg-green-500/10 text-green-400" : "bg-slate-800 text-slate-500"}`}>
-                        {u.isOnShift ? "On Shift" : "Off"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
 
-        {activeTab === "modules" && (
-          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {MODULES.map(mod => (
-              <div key={mod.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Module {mod.number}</span>
-                  {mod.isFree && <span className="px-2 py-0.5 rounded-full bg-yellow-400 text-slate-950 text-xs font-black">FREE</span>}
-                </div>
-                <h3 className="text-lg font-black text-white mb-2">{mod.title}</h3>
-                <p className="text-slate-400 text-sm mb-4">{mod.description}</p>
-                <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" />{mod.lessons} lessons</span>
-                  <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{mod.durationMinutes} min</span>
-                  <span className="capitalize px-2 py-0.5 rounded-md bg-slate-800">{mod.difficulty}</span>
-                </div>
+                      {/* Quick actions */}
+                      <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-800 pt-4">
+                        <button
+                          onClick={() => openNovaFor(selector.id)}
+                          className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold hover:border-yellow-400 hover:text-yellow-400 transition flex items-center gap-1"
+                        >
+                          <Zap className="h-3 w-3" />
+                          {selector.novaActive ? "Deactivate" : "Activate"} NOVA
+                        </button>
+                        <button
+                          onClick={() => openAssignFor(selector.id)}
+                          className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold hover:border-yellow-400 hover:text-yellow-400 transition flex items-center gap-1"
+                        >
+                          <ClipboardList className="h-3 w-3" /> Assign
+                        </button>
+                        <button
+                          onClick={() => openLogFor(selector.id)}
+                          className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold hover:border-yellow-400 hover:text-yellow-400 transition flex items-center gap-1"
+                        >
+                          <BookOpen className="h-3 w-3" /> Log Session
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
+            )}
           </div>
-        )}
+        </div>
+
+        {/* ── Sessions Panel ── */}
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+          <h2 className="text-2xl font-black mb-6 flex items-center gap-2">
+            <BookOpen className="h-5 w-5 text-yellow-400" /> Recent Sessions
+          </h2>
+
+          {sessions.length === 0 ? (
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-8 text-center text-slate-500">
+              No sessions logged yet. Click <strong>Log Session</strong> to record your first.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {sessions.map((session) => (
+                <SessionCard key={session.id} session={session} />
+              ))}
+            </div>
+          )}
+        </div>
+
       </div>
+
+      {/* ── Modals ── */}
+      <AssignAssignmentModal
+        open={showAssignModal}
+        onClose={() => { setShowAssignModal(false); setPreselectedSelectorId(null); }}
+        preselectedSelectorId={preselectedSelectorId}
+      />
+      <ActivateNovaModal
+        open={showNovaModal}
+        onClose={() => { setShowNovaModal(false); setPreselectedSelectorId(null); }}
+      />
+      <LogSessionModal
+        open={showLogModal}
+        onClose={() => { setShowLogModal(false); setPreselectedSelectorId(null); }}
+        preselectedSelectorId={preselectedSelectorId}
+      />
     </div>
   );
 }

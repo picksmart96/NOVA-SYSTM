@@ -1,0 +1,216 @@
+Connect the Trainer Dashboard so all action buttons work.
+
+GOAL
+Make the Trainer Dashboard fully functional with:
+- Assign Assignment opens assignment picker
+- Activate NOVA toggles selector NOVA status on/off
+- Warehouse Ref opens the Warehouse Reference page
+- Log Session saves training sessions live
+
+APP CONTEXT
+This app already has:
+- dark navy / slate industrial UI
+- trainer dashboard
+- selector cards
+- local seed data
+- assignment data for 251735, 251736, 251737, 251738
+- warehouse reference page
+- role-based navigation
+
+DATA MODELS
+Use local state or store first.
+
+1. selectors
+Fields:
+- id
+- name
+- novaId
+- age
+- experience
+- level
+- novaActive
+- assignedAssignmentId
+- notes
+
+2. assignments
+Fields:
+- id
+- assignmentNumber
+- status
+- type
+- title
+- totalCases
+- startAisle
+- endAisle
+- selectorUserId
+- pallets
+- goalTimeMinutes
+- stops
+- archived
+
+3. sessions
+Fields:
+- id
+- selectorId
+- selectorName
+- trainerName
+- sessionType
+- notes
+- createdAt
+
+ROUTES / PAGES
+Ensure these routes exist:
+- /trainer-dashboard
+- /warehouse-reference
+- /my-assignments
+- /assignment-control
+
+TRAINER DASHBOARD BUTTON BEHAVIOR
+
+1. Warehouse Ref button
+When clicked:
+- navigate to /warehouse-reference
+
+2. Activate NOVA button
+When clicked:
+- open a modal or selector picker
+- allow trainer to choose one selector
+- toggle that selector's novaActive status
+- if turned on, show "NOVA Active" badge on selector card
+- if turned off, remove the badge
+- show a success toast:
+  - "NOVA activated for [selector name]"
+  - or "NOVA deactivated for [selector name]"
+
+3. Assign Assignment button
+When clicked:
+- open a modal
+- choose selector
+- choose one of these assignments:
+  - 251735
+  - 251736
+  - 251737
+  - 251738
+- assign selected assignment to selector
+- save selected assignment id to selector.assignedAssignmentId
+- update assignment.selectorUserId to that selector's user id if needed
+- show success toast:
+  "Assignment [assignment number] assigned to [selector name]"
+
+In selector card UI:
+- show assigned assignment if present
+Example:
+Assigned: #251736
+
+4. Log Session button
+When clicked:
+- open a modal or small form
+- choose selector
+- choose session type:
+  - Coaching
+  - NOVA Activation
+  - Assignment Review
+  - Safety Review
+  - Performance Review
+- optional notes
+- save session to sessions state/store
+- increase Sessions Logged stat count
+- show latest sessions list below the dashboard
+
+REGISTER SELECTOR FORM
+Keep existing form working.
+When selector is added:
+- generate novaId automatically
+- add to selector list immediately
+- default novaActive = false
+- default assignedAssignmentId = null
+
+DASHBOARD LAYOUT
+Keep the same Base44-like layout:
+- header with trainer name + role
+- Warehouse Ref and Sign out in top right
+- stat cards
+- action buttons
+- left column register selector form
+- right column my selectors cards
+
+ADD THESE UI IMPROVEMENTS
+
+SELECTOR CARD
+Each selector card should show:
+- name
+- NOVA ID
+- age
+- experience
+- level badge
+- NOVA Active badge if active
+- assigned assignment badge if assigned
+- quick action row:
+  - Activate NOVA
+  - Assign
+  - Log Session
+
+SESSIONS PANEL
+Below the main 2-column layout add:
+Section title:
+Recent Sessions
+
+Show session cards with:
+- selector name
+- session type
+- trainer name
+- created date/time
+- notes if present
+
+STATS
+Update stat cards dynamically:
+- My Selectors = selectors.length
+- Sessions Logged = sessions.length
+- Open = number of selectors with assignedAssignmentId not null
+
+STATE MANAGEMENT
+Use a local Context or Zustand store for:
+- selectors
+- assignments
+- sessions
+
+Create actions:
+- addSelector
+- toggleNova(selectorId)
+- assignAssignment(selectorId, assignmentId)
+- logSession(sessionData)
+
+FILES TO CREATE OR UPDATE
+- src/pages/nova/TrainerDashboardPage.jsx
+- src/store/trainerStore.js
+- src/components/nova/AssignAssignmentModal.jsx
+- src/components/nova/ActivateNovaModal.jsx
+- src/components/nova/LogSessionModal.jsx
+- src/components/nova/SessionCard.jsx
+
+ROUTING
+Make Warehouse Ref button navigate to /warehouse-reference
+Do not leave it as a dead button.
+
+SEED DATA
+Trainer:
+- soumaila ouedraogo · trainer
+
+Selector seed:
+- name: soumaila ouedraogo
+- novaId: NOVA-25917
+- age: 30
+- experience: 3 weeks selector
+- level: Beginner
+- novaActive: true
+
+Assignment options:
+- 251735
+- 251736
+- 251737
+- 251738
+
+IMPORTANT
+Build this as a connected working dashboard, not just a visual layout.
+Use modal dialogs for action flows.
+Keep dark navy / slate style with safety yellow accents.
