@@ -12,6 +12,7 @@ import {
 import { useVoiceEngine, UseVoiceEngineReturn } from "@/hooks/useVoiceEngine";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "@/lib/authStore";
+import { useTrainerStore, type TrainerSelector } from "@/lib/trainerStore";
 
 const SYSTEM_DEFAULTS = {
   printerNumber: "307",
@@ -121,8 +122,17 @@ export default function NovaTrainerPage() {
       : "user-001";
 
   const [selectorUsername, setSelectorUsername] = useState(defaultUsername);
+
+  // NOVA ID gate — must be set before full dashboard renders
+  const { selectors: trainerSelectors } = useTrainerStore();
+  const [novaIdInput, setNovaIdInput] = useState("");
+  const [matchedSelector, setMatchedSelector] = useState<TrainerSelector | null>(null);
+  const [entryError, setEntryError] = useState("");
+
   // The underlying demo user-ID used to filter ASSIGNMENTS data
-  const selectorUserId = usernameToId[selectorUsername] ?? "user-001";
+  // Prefer the trainer-store userId when a selector logged in via NOVA ID gate
+  const selectorUserId =
+    matchedSelector?.userId ?? (usernameToId[selectorUsername] ?? "user-001");
   const [phase, setPhase] = useState(PHASES.IDLE);
   const [promptText, setPromptText] = useState(p("startNova"));
   const [commandLog, setCommandLog] = useState<{ id: number; type: string; text: string; at: string }[]>([]);
@@ -508,6 +518,80 @@ export default function NovaTrainerPage() {
     idle: t("novaTrainer.idle"),
   };
 
+  // ── NOVA ID handler ──────────────────────────────────────────────────────────
+  const handleEnterNova = () => {
+    const cleaned = novaIdInput.trim().toUpperCase();
+    if (!cleaned) {
+      setEntryError("Please enter your NOVA ID.");
+      return;
+    }
+    const found = trainerSelectors.find(
+      (s) => (s.novaId ?? "").toUpperCase() === cleaned
+    );
+    if (!found) {
+      setEntryError("Invalid NOVA ID. Please check with your trainer.");
+      return;
+    }
+    setEntryError("");
+    setMatchedSelector(found);
+  };
+
+  // ── NOVA ID entry screen ─────────────────────────────────────────────────────
+  if (!matchedSelector) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6 py-10">
+        <div className="w-full max-w-xl">
+          <div className="rounded-[28px] border border-slate-800 bg-slate-900 p-8 md:p-10 shadow-2xl text-center">
+
+            {/* Brand mark */}
+            <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-yellow-400 mx-auto mb-6">
+              <svg className="h-7 w-7 text-slate-950" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="22" />
+              </svg>
+            </div>
+
+            <p className="text-yellow-400 text-xs font-semibold uppercase tracking-[0.24em]">
+              NOVA Trainer
+            </p>
+
+            <h1 className="mt-3 text-2xl md:text-3xl font-black leading-tight">
+              Enter your NOVA ID to access your session
+            </h1>
+
+            <div className="mt-8">
+              <input
+                value={novaIdInput}
+                onChange={(e) => { setNovaIdInput(e.target.value); setEntryError(""); }}
+                onKeyDown={(e) => e.key === "Enter" && handleEnterNova()}
+                placeholder="NOVA-XXXXX"
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-5 py-4 text-center text-lg font-semibold tracking-widest uppercase outline-none focus:border-yellow-400 transition placeholder-slate-600"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </div>
+
+            {entryError && (
+              <p className="mt-4 text-sm font-semibold text-red-300">{entryError}</p>
+            )}
+
+            <button
+              onClick={handleEnterNova}
+              className="mt-6 w-full rounded-2xl bg-yellow-400 px-6 py-4 text-lg font-bold text-slate-950 hover:bg-yellow-300 active:scale-[0.98] transition"
+            >
+              Enter NOVA
+            </button>
+
+            <p className="mt-6 text-sm text-slate-500">
+              Your NOVA ID is given to you by your trainer after registration.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-white px-3 py-5 sm:px-6 sm:py-8">
       <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
@@ -520,6 +604,25 @@ export default function NovaTrainerPage() {
             <p className="mt-1 sm:mt-2 text-slate-400 text-sm sm:text-base max-w-3xl">
               {t("novaTrainer.subtitle")}
             </p>
+            {/* Active session pill */}
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-4 py-1.5">
+              <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+              <span className="text-sm font-bold text-white">{matchedSelector.novaId}</span>
+              <span className="text-slate-400 text-sm">·</span>
+              <span className="text-sm text-slate-300 capitalize">{matchedSelector.name}</span>
+              <button
+                onClick={() => {
+                  setMatchedSelector(null);
+                  setNovaIdInput("");
+                  setEntryError("");
+                  resetSession();
+                }}
+                className="ml-1 text-xs text-slate-500 hover:text-red-300 font-semibold transition"
+                title="Change session"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-3">

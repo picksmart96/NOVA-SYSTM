@@ -1,0 +1,170 @@
+import { useMemo, useState } from "react";
+import { assignments } from "../../data/assignments";
+import { useTrainerStore } from "../../store/trainerStore";
+
+// import your existing full trainer component here if you split it out
+// Example:
+// import NovaTrainerSession from "../../components/nova/NovaTrainerSession";
+
+function NovaTrainerSessionMock({ selector }) {
+  const myAssignments = assignments.filter(
+    (a) => a.selectorUserId === selector.userId && !a.archived
+  );
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <p className="text-yellow-400 text-sm font-semibold uppercase tracking-[0.22em]">
+          NOVA Trainer
+        </p>
+        <h1 className="mt-2 text-4xl font-black">ES3 Script Mode</h1>
+        <p className="mt-2 text-slate-400">
+          Hands-free voice workflow after one tap. Selector can talk to NOVA without touching the screen again.
+        </p>
+      </div>
+
+      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+          <p className="text-sm text-slate-400">Selector</p>
+          <p className="mt-3 text-2xl font-black">{selector.novaId}</p>
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+          <p className="text-sm text-slate-400">Full Name</p>
+          <p className="mt-3 text-2xl font-black">{selector.name}</p>
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+          <p className="text-sm text-slate-400">Assignments</p>
+          <p className="mt-3 text-2xl font-black">{myAssignments.length}</p>
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+          <p className="text-sm text-slate-400">NOVA Status</p>
+          <p className="mt-3 text-2xl font-black text-green-300">Ready</p>
+        </div>
+      </div>
+
+      <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+        <h2 className="text-2xl font-bold">Assigned Work</h2>
+        <div className="mt-5 space-y-4">
+          {myAssignments.length === 0 ? (
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-slate-400">
+              No assignments available for this NOVA ID.
+            </div>
+          ) : (
+            myAssignments.map((assignment) => (
+              <div
+                key={assignment.id}
+                className="rounded-2xl border border-slate-800 bg-slate-950 p-5"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-bold text-yellow-300">
+                    {assignment.type}
+                  </span>
+                  <span className="rounded-full bg-amber-500/20 px-3 py-1 text-xs font-bold text-amber-300">
+                    {assignment.status}
+                  </span>
+                </div>
+
+                <h3 className="mt-3 text-xl font-bold">
+                  Assignment {assignment.assignmentNumber}
+                </h3>
+
+                <p className="mt-2 text-slate-300">
+                  {assignment.totalCases} Cases · Aisles {assignment.startAisle}–{assignment.endAisle}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function NovaTrainerPage() {
+  const { selectors = [] } = useTrainerStore();
+
+  const [novaIdInput, setNovaIdInput] = useState("");
+  const [activeNovaId, setActiveNovaId] = useState("");
+  const [error, setError] = useState("");
+
+  const matchedSelector = useMemo(() => {
+    if (!activeNovaId) return null;
+    return selectors.find(
+      (selector) => selector.novaId?.toLowerCase() === activeNovaId.toLowerCase()
+    );
+  }, [activeNovaId, selectors]);
+
+  const handleEnterNova = () => {
+    const cleaned = novaIdInput.trim();
+
+    if (!cleaned) {
+      setError("Please enter your NOVA ID.");
+      return;
+    }
+
+    const found = selectors.find(
+      (selector) => selector.novaId?.toLowerCase() === cleaned.toLowerCase()
+    );
+
+    if (!found) {
+      setError("Invalid NOVA ID. Please check with your trainer.");
+      return;
+    }
+
+    setError("");
+    setActiveNovaId(cleaned);
+  };
+
+  if (matchedSelector) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white px-6 py-8">
+        <div className="max-w-7xl mx-auto">
+          <NovaTrainerSessionMock selector={matchedSelector} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6 py-10">
+      <div className="w-full max-w-xl">
+        <div className="rounded-[28px] border border-slate-800 bg-slate-900 p-8 md:p-10 shadow-2xl text-center">
+          <p className="text-yellow-400 text-sm font-semibold uppercase tracking-[0.24em]">
+            NOVA Trainer
+          </p>
+
+          <h1 className="mt-4 text-3xl md:text-4xl font-black leading-tight">
+            Enter your NOVA ID to access your session
+          </h1>
+
+          <div className="mt-8">
+            <input
+              value={novaIdInput}
+              onChange={(e) => setNovaIdInput(e.target.value)}
+              placeholder="NOVA-XXXXX"
+              className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-5 py-4 text-center text-lg font-semibold tracking-wide outline-none focus:border-yellow-400"
+            />
+          </div>
+
+          {error ? (
+            <p className="mt-4 text-red-300 font-semibold">{error}</p>
+          ) : null}
+
+          <button
+            onClick={handleEnterNova}
+            className="mt-8 w-full rounded-2xl bg-yellow-400 px-6 py-4 text-lg font-bold text-slate-950 hover:bg-yellow-300 transition"
+          >
+            Enter NOVA
+          </button>
+
+          <p className="mt-6 text-sm text-slate-400">
+            Your NOVA ID is given to you by your trainer after registration.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
