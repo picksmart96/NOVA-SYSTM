@@ -15,16 +15,11 @@ import { Button } from "@/components/ui/button";
 import { UserCircle, Menu, X, Activity } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
-
-const GROUP_LABELS: Record<string, string> = {
-  public: "Academy",
-  nova: "NOVA",
-  trainer: "Trainer",
-  supervisor: "Supervisor",
-  owner: "Admin",
-};
+import { useTranslation } from "react-i18next";
+import LanguageSwitcher from "@/components/layout/LanguageSwitcher";
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation();
   const { role, setRole } = useAppStore();
   const { currentUser, logout } = useAuthStore();
   const [location, navigate] = useLocation();
@@ -36,15 +31,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const isActive = (href: string) =>
     href === "/" ? location === "/" : location.startsWith(href);
 
-  // Group links for display
   const groups = links.reduce<Record<string, typeof links>>((acc, link) => {
     if (!acc[link.group]) acc[link.group] = [];
     acc[link.group].push(link);
     return acc;
   }, {});
 
-  // Desktop: show first 6 links inline, rest in overflow
   const desktopLinks = links.slice(0, 7);
+
+  const groupLabel = (group: string) =>
+    t(`nav.groupLabels.${group}`, { defaultValue: group });
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground">
@@ -80,7 +76,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground px-3">
-                      More ▾
+                      {t("nav.more")} ▾
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-52 bg-card border-border">
@@ -90,7 +86,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       return (
                         <div key={group}>
                           <DropdownMenuLabel className="text-xs uppercase tracking-widest text-muted-foreground">
-                            {GROUP_LABELS[group] ?? group}
+                            {groupLabel(group)}
                           </DropdownMenuLabel>
                           {overflow.map(link => (
                             <DropdownMenuItem key={link.href} asChild>
@@ -109,8 +105,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {/* Right: role badge / user info + mobile menu */}
+          {/* Right: language switcher + role badge / user info + mobile menu */}
           <div className="flex items-center gap-2">
+            <LanguageSwitcher />
+
             {currentUser ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -127,7 +125,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     onClick={() => { logout(); navigate("/login"); }}
                     className="text-red-400 focus:text-red-400 focus:bg-red-500/10"
                   >
-                    Sign out
+                    {t("nav.signOut")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -144,7 +142,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48 bg-card border-border">
-                    <DropdownMenuLabel>Demo Role</DropdownMenuLabel>
+                    <DropdownMenuLabel>{t("nav.demoRole")}</DropdownMenuLabel>
                     <DropdownMenuSeparator className="bg-border" />
                     {(["selector", "trainer", "supervisor", "owner"] as UserRole[]).map(r => (
                       <DropdownMenuItem
@@ -177,7 +175,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {Object.entries(groups).map(([group, groupLinks]) => (
               <div key={group}>
                 <p className="px-4 pt-4 pb-1 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                  {GROUP_LABELS[group] ?? group}
+                  {groupLabel(group)}
                 </p>
                 <nav className="flex flex-col px-2 space-y-0.5">
                   {groupLinks.map(link => (

@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useAccessStore } from "@/lib/accessStore";
 import { useAuthStore } from "@/lib/authStore";
 import type { AuthRole } from "@/lib/authStore";
+import { useTranslation } from "react-i18next";
 import { Users, Shield, Key, UserPlus, Copy, Check, LogOut } from "lucide-react";
 
 type RoleKey = "Selector" | "Trainer" | "Supervisor" | "Admin" | "User";
@@ -44,6 +45,7 @@ const AUTH_ROLES: Record<RoleKey, AuthRole | null> = {
 };
 
 export default function UsersAccessPage() {
+  const { t } = useTranslation();
   const [, navigate] = useLocation();
   const { currentUser, logout, addInvite } = useAuthStore();
   const {
@@ -120,10 +122,10 @@ export default function UsersAccessPage() {
               <div className="w-10 h-10 rounded-xl bg-yellow-400 flex items-center justify-center">
                 <Shield className="h-5 w-5 text-slate-950" />
               </div>
-              <h1 className="text-4xl font-black">Users &amp; Access</h1>
+              <h1 className="text-4xl font-black">{t("usersAccess.heading")}</h1>
             </div>
             <p className="text-slate-400">
-              Invite app users and manage NOVA trainer / supervisor credentials.
+              {t("usersAccess.subtitle")}
             </p>
           </div>
         </div>

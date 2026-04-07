@@ -1,6 +1,7 @@
 import { useProgressStore } from "@/lib/progressStore";
 import { SEEDED_LEADERBOARD } from "@/data/scoringRules";
 import { Trophy, Medal, Star, Zap } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface LeaderboardEntry {
   userId: string;
@@ -24,11 +25,12 @@ const MEDAL_CONFIG = [
 ];
 
 export default function LeaderboardPage() {
+  const { t } = useTranslation();
   const { getTotalPoints, getLessonsCompleted, getMistakesCompleted, simulationCompleted, lastSimulationScore, getAvgLessonScore } = useProgressStore();
 
   const myEntry: LeaderboardEntry = {
     userId: "u-001",
-    name: "You",
+    name: t("leaderboard.you"),
     role: "selector",
     totalPoints: getTotalPoints(),
     lessonsCompleted: getLessonsCompleted(),
@@ -43,7 +45,6 @@ export default function LeaderboardPage() {
 
   const allEntries: LeaderboardEntry[] = [...SEEDED_LEADERBOARD.map(e => ({ ...e, isYou: false })), myEntry];
 
-  // Sort by points desc, then lessons, then modules
   const sorted = [...allEntries].sort((a, b) => {
     if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
     if (b.lessonsCompleted !== a.lessonsCompleted) return b.lessonsCompleted - a.lessonsCompleted;
@@ -59,14 +60,16 @@ export default function LeaderboardPage() {
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-yellow-400 mb-5">
           <Trophy className="h-8 w-8 text-slate-950" />
         </div>
-        <h1 className="text-4xl font-black text-white mb-3">Selector Leaderboard</h1>
+        <h1 className="text-4xl font-black text-white mb-3">{t("leaderboard.heading")}</h1>
         <p className="text-slate-400 text-lg max-w-xl mx-auto">
-          Top performers ranked by total training points. Earn points by passing lessons, completing mistake coaching, and finishing the NOVA simulation.
+          {t("leaderboard.subtitle")}
         </p>
         {myEntry.totalPoints > 0 && (
           <div className="mt-5 inline-flex items-center gap-3 px-5 py-3 rounded-full bg-yellow-400/10 border border-yellow-400/30">
             <Trophy className="h-4 w-4 text-yellow-400" />
-            <span className="text-yellow-300 font-bold text-sm">You are ranked #{myRank} with {myEntry.totalPoints.toLocaleString()} points</span>
+            <span className="text-yellow-300 font-bold text-sm">
+              {t("leaderboard.yourRank", { rank: myRank, points: myEntry.totalPoints.toLocaleString() })}
+            </span>
           </div>
         )}
       </div>
@@ -75,14 +78,14 @@ export default function LeaderboardPage() {
         {/* Points legend */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
           {[
-            { label: "Lesson Pass", pts: "+100 pts" },
-            { label: "Perfect Score", pts: "+25 pts" },
-            { label: "Mistake Coaching", pts: "+60 pts" },
-            { label: "Simulation", pts: "+150 pts" },
+            { key: "lessonPass", pts: "+100 pts" },
+            { key: "perfectScore", pts: "+25 pts" },
+            { key: "mistakeCoaching", pts: "+60 pts" },
+            { key: "simulation", pts: "+150 pts" },
           ].map(item => (
-            <div key={item.label} className="rounded-xl border border-slate-800 bg-slate-900 p-3 text-center">
+            <div key={item.key} className="rounded-xl border border-slate-800 bg-slate-900 p-3 text-center">
               <p className="text-yellow-400 font-black text-sm">{item.pts}</p>
-              <p className="text-slate-500 text-xs mt-0.5">{item.label}</p>
+              <p className="text-slate-500 text-xs mt-0.5">{t(`leaderboard.${item.key}`)}</p>
             </div>
           ))}
         </div>
@@ -121,11 +124,15 @@ export default function LeaderboardPage() {
                   <div className="flex items-center gap-2 mb-0.5">
                     <p className={`font-black text-base truncate ${entry.isYou ? "text-yellow-300" : "text-white"}`}>
                       {entry.name}
-                      {entry.isYou && <span className="ml-2 text-xs font-bold bg-yellow-400 text-slate-950 px-2 py-0.5 rounded-full">You</span>}
+                      {entry.isYou && (
+                        <span className="ml-2 text-xs font-bold bg-yellow-400 text-slate-950 px-2 py-0.5 rounded-full">
+                          {t("leaderboard.you")}
+                        </span>
+                      )}
                     </p>
                   </div>
                   <p className="text-xs text-slate-500 capitalize">
-                    {entry.lessonsCompleted} lessons · {entry.mistakesCompleted} coaching · {entry.simulationScore > 0 ? `${entry.simulationScore}% sim` : "no sim"}
+                    {entry.lessonsCompleted} {t("leaderboard.lessons")} · {entry.mistakesCompleted} {t("leaderboard.coaching")} · {entry.simulationScore > 0 ? `${entry.simulationScore}% ${t("leaderboard.sim")}` : t("leaderboard.noSim")}
                   </p>
                 </div>
 
@@ -134,7 +141,7 @@ export default function LeaderboardPage() {
                   <p className={`text-xl font-black ${rank === 1 ? "text-yellow-400" : entry.isYou ? "text-yellow-300" : "text-white"}`}>
                     {entry.totalPoints.toLocaleString()}
                   </p>
-                  <p className="text-xs text-slate-500">points</p>
+                  <p className="text-xs text-slate-500">{t("leaderboard.points")}</p>
                 </div>
 
                 {/* Avg score */}
@@ -142,7 +149,7 @@ export default function LeaderboardPage() {
                   <p className={`text-lg font-black ${entry.avgLessonScore >= 90 ? "text-green-400" : entry.avgLessonScore >= 75 ? "text-yellow-400" : "text-slate-400"}`}>
                     {entry.avgLessonScore > 0 ? `${entry.avgLessonScore}%` : "—"}
                   </p>
-                  <p className="text-xs text-slate-500">avg score</p>
+                  <p className="text-xs text-slate-500">{t("leaderboard.avgScore")}</p>
                 </div>
               </div>
             );
@@ -152,9 +159,9 @@ export default function LeaderboardPage() {
         {myEntry.totalPoints === 0 && (
           <div className="mt-8 rounded-2xl border border-yellow-400/20 bg-yellow-400/5 p-6 text-center">
             <Zap className="h-8 w-8 text-yellow-400 mx-auto mb-3" />
-            <p className="font-black text-white text-lg mb-2">You haven't scored yet</p>
+            <p className="font-black text-white text-lg mb-2">{t("leaderboard.youHaventScored")}</p>
             <p className="text-slate-400 text-sm mb-4">
-              Complete training lessons and mistake coaching sessions to earn points and climb the leaderboard.
+              {t("leaderboard.earnPoints")}
             </p>
           </div>
         )}

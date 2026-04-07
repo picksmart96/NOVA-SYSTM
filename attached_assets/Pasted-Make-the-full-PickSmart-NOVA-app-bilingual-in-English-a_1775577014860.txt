@@ -1,0 +1,90 @@
+Make the full PickSmart NOVA app bilingual in English and Spanish.
+
+GOAL
+Add a language switcher so the whole website and app can be used in:
+- English
+- Español
+
+IMPORTANT
+Translate:
+- Homepage
+- Training
+- Common Mistakes
+- My Progress
+- Leaderboard
+- NOVA Help
+- NOVA Trainer
+- Trainer Dashboard
+- Supervisor Dashboard
+- Users & Access
+- Warehouse Reference
+- My Assignments
+- Assignment Detail
+- all buttons
+- all labels
+- all headings
+- all helper text
+- all form text
+- all stat cards
+- all voice prompts used by NOVA
+
+USE
+- i18next
+- react-i18next
+- i18next-browser-languagedetector
+
+FILES TO CREATE
+- src/i18n.js
+- src/locales/en/common.json
+- src/locales/es/common.json
+- src/components/layout/LanguageSwitcher.jsx
+
+BEHAVIOR
+- add language toggle in navbar/topbar
+- options:
+  English
+  Español
+- save selected language
+- app should switch instantly without reload
+- default to detected browser language if available
+- fallback to English
+
+NOVA HELP
+- if app language is English, NOVA Help answers in English
+- if app language is Spanish, NOVA Help answers in Spanish
+- support wake phrases:
+  - hey nova
+  - hola nova
+- support stop phrases:
+  - stop
+  - parar
+
+NOVA TRAINER
+Translate all NOVA prompts into both languages.
+Example:
+English:
+- Enter equipment ID.
+- Confirm equipment.
+- Say load picks.
+- Position alpha pallet get chep.
+- Batch complete.
+Spanish:
+- Ingrese el ID del equipo.
+- Confirme el equipo.
+- Diga cargar pedidos.
+- Coloque la tarima alfa y tome un CHEP.
+- Lote completado.
+
+WAREHOUSE AI AGENT
+Update NOVA Help server route so it answers in the current selected language.
+Pass current language to the backend request.
+If language is es, system prompt should answer in Spanish.
+If language is en, system prompt should answer in English.
+
+UI
+Language switch should be visible on all major pages.
+Use a compact segmented toggle or dropdown.
+
+IMPORTANT
+Do not leave mixed-language text.
+Move text into translation keys and use useTranslation() across the app.

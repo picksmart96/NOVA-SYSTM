@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { LESSON_CONTENT } from "@/data/lessonContent";
 import { useProgressStore } from "@/lib/progressStore";
 import { Clock, BookOpen, Headphones, CheckCircle2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 const DIFFICULTY_COLORS = {
   beginner: "bg-green-500/10 text-green-400 border-green-500/30",
@@ -10,6 +11,7 @@ const DIFFICULTY_COLORS = {
 };
 
 export default function ModulesPage() {
+  const { t } = useTranslation();
   const { progress } = useProgressStore();
 
   return (
@@ -19,21 +21,21 @@ export default function ModulesPage() {
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-yellow-400 mb-5">
           <BookOpen className="h-8 w-8 text-slate-950" />
         </div>
-        <h1 className="text-4xl font-black text-white mb-3">Training Academy</h1>
+        <h1 className="text-4xl font-black text-white mb-3">{t("training.heading")}</h1>
         <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-          Six NOVA-guided lessons built for warehouse order selectors. Each lesson ends with a short test — pass 80%+ to earn your completion badge.
+          {t("training.subtitle")}
         </p>
         <div className="mt-5 flex gap-4 justify-center text-sm">
           <div className="px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
-            <span className="text-yellow-400 font-black">6</span> Modules
+            <span className="text-yellow-400 font-black">6</span> {t("training.modulesCount")}
           </div>
           <div className="px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
             <span className="text-yellow-400 font-black">
               {Object.values(progress).filter(p => p.passed).length}
-            </span> Passed
+            </span> {t("training.passed")}
           </div>
           <div className="px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
-            NOVA Voice Guided
+            {t("training.novaGuided")}
           </div>
         </div>
       </div>
@@ -57,7 +59,7 @@ export default function ModulesPage() {
                 <div className="bg-gradient-to-br from-slate-800 to-slate-950 px-6 py-8 flex items-center justify-between border-b border-slate-800">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">
-                      Module {index + 1}
+                      {t("training.module")} {index + 1}
                     </p>
                     <span
                       className={`px-2 py-0.5 rounded-full border text-xs font-bold capitalize ${
@@ -70,7 +72,7 @@ export default function ModulesPage() {
                   <div className="flex items-center gap-2">
                     {lesson.isFree && (
                       <span className="px-3 py-1 rounded-full bg-yellow-400 text-slate-950 text-xs font-black">
-                        FREE
+                        {t("training.free")}
                       </span>
                     )}
                     {isPassed && (
@@ -85,13 +87,13 @@ export default function ModulesPage() {
 
                   <div className="flex items-center gap-4 text-xs text-slate-500 mb-4">
                     <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" /> {lesson.durationMinutes} min
+                      <Clock className="h-3 w-3" /> {lesson.durationMinutes} {t("training.min")}
                     </span>
                     <span className="flex items-center gap-1">
-                      <BookOpen className="h-3 w-3" /> {lesson.steps.length} steps
+                      <BookOpen className="h-3 w-3" /> {lesson.steps.length} {t("training.steps")}
                     </span>
                     <span className="flex items-center gap-1">
-                      <Headphones className="h-3 w-3" /> NOVA guided
+                      <Headphones className="h-3 w-3" /> NOVA
                     </span>
                   </div>
 
@@ -101,10 +103,10 @@ export default function ModulesPage() {
                       {isPassed ? (
                         <div className="flex items-center gap-2 text-sm text-green-400 font-semibold">
                           <CheckCircle2 className="h-4 w-4" />
-                          Passed — {p.testScore}/{p.totalQuestions} correct
+                          {t("training.passedScore", { score: p.testScore, total: p.totalQuestions })}
                         </div>
                       ) : isStarted ? (
-                        <div className="text-sm text-yellow-400 font-semibold">In progress</div>
+                        <div className="text-sm text-yellow-400 font-semibold">{t("training.inProgress")}</div>
                       ) : null}
                     </div>
                   )}
@@ -116,10 +118,10 @@ export default function ModulesPage() {
                     >
                       <Headphones className="h-4 w-4" />
                       {isPassed
-                        ? "Replay NOVA Lesson"
+                        ? t("training.replayLesson")
                         : isStarted
-                        ? "Continue NOVA Lesson"
-                        : "Start NOVA Lesson"}
+                        ? t("training.continueLesson")
+                        : t("training.startLesson")}
                     </Link>
                   </div>
                 </div>

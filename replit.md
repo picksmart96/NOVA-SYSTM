@@ -70,13 +70,24 @@ Full-stack warehouse training and assignment management platform combining a pub
 - `pnpm --filter @workspace/api-server run dev` — run API server
 - `pnpm --filter @workspace/picksmart-nova run dev` — run frontend
 
+## Bilingual Support (i18n)
+- **Library**: `i18next` + `react-i18next` + `i18next-browser-languagedetector`
+- **Config**: `src/i18n.ts` — default namespace `common`, browser language detection via localStorage
+- **Locales**: `src/locales/en/common.json` + `src/locales/es/common.json`
+- **Switcher**: `src/components/layout/LanguageSwitcher.tsx` — 🇪🇸/🇺🇸 flag toggle in header
+- **Coverage**: All pages (Hero, Training, Mistakes, Progress, Leaderboard, Supervisor, Trainer, Users)
+- **NOVA Trainer**: Safety items array + all voice prompts fully translated (EN/ES)
+- **NOVA Help**: Wake words "Hey NOVA"/"Hola NOVA", stop words "stop"/"parar"
+- **API**: NOVA Help backend sends Spanish system prompt when `language.startsWith("es")`
+
 ## NOVA Help AI Coach
 - **Page**: `/nova-help` — Voice AI Coach section at top, Voice Commands reference, FAQ, Quick Reference cards
 - **Backend**: `artifacts/api-server/src/routes/novaHelp.ts` — `POST /api/nova-help`
 - **AI model**: `gpt-4o-mini` via Replit AI Integrations proxy (`@workspace/integrations-openai-ai-server`)
-- **System prompt**: Warehouse-selecting coach, 1–4 sentence answers, practical trainer tone
+- **System prompt**: Warehouse-selecting coach, 1–4 sentence answers, practical trainer tone (EN + ES)
+- **Language param**: `{ question, language }` — API returns Spanish when `language.startsWith("es")`
 - **Fallback**: `src/lib/novaHelpMatcher.ts` — keyword scorer over 20 local knowledge entries
-- **Wake word**: "Hey NOVA" activates listening; "stop" silences
+- **Wake word**: "Hey NOVA" / "Hola NOVA" activates listening; "stop" / "parar" silences
 - **Voice engine**: `useVoiceEngine` (named export) — Web Speech API for listen/speak cycle
 
 ## Architecture Notes

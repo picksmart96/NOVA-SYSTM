@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useTrainerStore } from "@/lib/trainerStore";
 import { useAuthStore } from "@/lib/authStore";
+import { useTranslation } from "react-i18next";
 import { AssignAssignmentModal } from "@/components/nova/AssignAssignmentModal";
 import { ActivateNovaModal } from "@/components/nova/ActivateNovaModal";
 import { LogSessionModal } from "@/components/nova/LogSessionModal";
@@ -14,6 +15,7 @@ import {
 type SelectorLevel = "Beginner" | "Intermediate" | "Advanced";
 
 export default function TrainerPortalPage() {
+  const { t } = useTranslation();
   const [, navigate] = useLocation();
   const { currentUser, logout, addInvite } = useAuthStore();
   const {
@@ -103,7 +105,7 @@ export default function TrainerPortalPage() {
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-yellow-400 flex items-center justify-center shrink-0">
                 <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-slate-950" />
               </div>
-              <h1 className="text-2xl sm:text-4xl font-black">Trainer Dashboard</h1>
+              <h1 className="text-2xl sm:text-4xl font-black">{t("trainerPortal.heading")}</h1>
             </div>
             <p className="text-slate-400 text-sm capitalize">
               {trainer.name} · {trainer.role}
@@ -120,7 +122,7 @@ export default function TrainerPortalPage() {
               onClick={handleSignOut}
               className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-red-400 hover:text-red-400 transition flex items-center gap-2"
             >
-              <LogOut className="h-4 w-4" /> Sign out
+              <LogOut className="h-4 w-4" /> {t("trainerPortal.signOut")}
             </button>
           </div>
         </div>

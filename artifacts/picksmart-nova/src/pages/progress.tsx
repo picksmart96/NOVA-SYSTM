@@ -2,9 +2,11 @@ import { Link } from "wouter";
 import { useProgressStore } from "@/lib/progressStore";
 import { LESSON_CONTENT } from "@/data/lessonContent";
 import { MISTAKES } from "@/data/mistakesData";
-import { Activity, Trophy, Target, BookOpen, AlertTriangle, Zap, CheckCircle2, Clock } from "lucide-react";
+import { Activity, Trophy, Target, BookOpen, AlertTriangle, Zap, CheckCircle2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export default function ProgressPage() {
+  const { t } = useTranslation();
   const {
     progress,
     mistakeProgress,
@@ -14,14 +16,12 @@ export default function ProgressPage() {
     getLessonsCompleted,
     getMistakesCompleted,
     getAvgLessonScore,
-    getAvgMistakeScore,
   } = useProgressStore();
 
   const totalPoints = getTotalPoints();
   const lessonsCompleted = getLessonsCompleted();
   const mistakesCompleted = getMistakesCompleted();
   const avgLessonScore = getAvgLessonScore();
-  const avgMistakeScore = getAvgMistakeScore();
 
   const totalLessons = LESSON_CONTENT.length;
   const totalMistakes = MISTAKES.length;
@@ -32,28 +32,28 @@ export default function ProgressPage() {
   const STAT_TILES = [
     {
       icon: Trophy,
-      label: "Total Points",
+      label: t("progress.totalPoints"),
       value: totalPoints.toLocaleString(),
       color: "text-yellow-400",
       bg: "bg-yellow-400/10",
     },
     {
       icon: BookOpen,
-      label: "Lessons Passed",
+      label: t("progress.lessonsPassed"),
       value: `${lessonsCompleted} / ${totalLessons}`,
       color: "text-blue-400",
       bg: "bg-blue-400/10",
     },
     {
       icon: AlertTriangle,
-      label: "Mistakes Coached",
+      label: t("progress.mistakesCoached"),
       value: `${mistakesCompleted} / ${totalMistakes}`,
       color: "text-orange-400",
       bg: "bg-orange-400/10",
     },
     {
       icon: Target,
-      label: "Avg Lesson Score",
+      label: t("progress.avgLessonScore"),
       value: avgLessonScore ? `${avgLessonScore}%` : "—",
       color: "text-green-400",
       bg: "bg-green-400/10",
@@ -70,8 +70,8 @@ export default function ProgressPage() {
               <Activity className="h-6 w-6 text-slate-950" />
             </div>
             <div>
-              <h1 className="text-3xl font-black text-white">My Progress</h1>
-              <p className="text-slate-400">Training completions, scores, and points</p>
+              <h1 className="text-3xl font-black text-white">{t("progress.heading")}</h1>
+              <p className="text-slate-400">{t("progress.subtitle")}</p>
             </div>
           </div>
         </div>
@@ -98,20 +98,22 @@ export default function ProgressPage() {
               <Zap className="h-6 w-6 text-purple-400" />
             </div>
             <div>
-              <p className="font-black text-white text-lg">NOVA Simulation</p>
+              <p className="font-black text-white text-lg">{t("progress.novaSimulation")}</p>
               <p className="text-slate-400 text-sm">
-                {simulationCompleted ? `Completed — ${lastSimulationScore}% performance` : "Not yet completed"}
+                {simulationCompleted
+                  ? t("progress.simulationCompleted", { score: lastSimulationScore })
+                  : t("progress.notYetCompleted")}
               </p>
             </div>
           </div>
           {simulationCompleted ? (
             <div className="text-right">
               <p className="text-purple-400 font-black text-xl">+150 pts</p>
-              {lastSimulationScore >= 100 && <p className="text-yellow-400 text-xs font-bold">+50 Gold Bonus</p>}
+              {lastSimulationScore >= 100 && <p className="text-yellow-400 text-xs font-bold">{t("progress.goldBonus")}</p>}
             </div>
           ) : (
             <Link href="/nova-trainer" className="px-4 py-2 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-400 font-bold text-sm hover:bg-purple-500/20 transition">
-              Start Simulation
+              {t("progress.startSimulation")}
             </Link>
           )}
         </div>
@@ -120,9 +122,9 @@ export default function ProgressPage() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-black text-white flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-blue-400" /> Training Lessons
+              <BookOpen className="h-5 w-5 text-blue-400" /> {t("progress.trainingLessons")}
             </h2>
-            <span className="text-sm font-bold text-slate-400">{lessonPercent}% complete</span>
+            <span className="text-sm font-bold text-slate-400">{lessonPercent}% {t("progress.complete")}</span>
           </div>
           <div className="h-2 rounded-full bg-slate-800 mb-5 overflow-hidden">
             <div className="h-full bg-blue-400 rounded-full transition-all" style={{ width: `${lessonPercent}%` }} />
@@ -151,14 +153,14 @@ export default function ProgressPage() {
                     {isPassed && (
                       <div className="text-right">
                         <p className="text-green-400 font-bold text-sm">{score}/{total}</p>
-                        {perfect && <p className="text-yellow-400 text-xs font-bold">Perfect!</p>}
+                        {perfect && <p className="text-yellow-400 text-xs font-bold">{t("progress.perfect")}</p>}
                       </div>
                     )}
                     <span className={`px-2 py-1 rounded-lg text-xs font-bold ${isPassed ? "bg-green-500/20 text-green-400" : isStarted ? "bg-yellow-400/20 text-yellow-400" : "bg-slate-800 text-slate-500"}`}>
-                      {isPassed ? "Passed" : isStarted ? "Started" : "Not started"}
+                      {isPassed ? t("progress.passed") : isStarted ? t("progress.started") : t("progress.notStarted")}
                     </span>
                     <Link href={`/training/lesson/${lesson.moduleId}`} className="text-xs text-slate-500 hover:text-yellow-400 transition">
-                      {isPassed ? "Replay" : "Start"}
+                      {isPassed ? t("progress.replay") : t("progress.start")}
                     </Link>
                   </div>
                 </div>
@@ -171,9 +173,9 @@ export default function ProgressPage() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-black text-white flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-orange-400" /> Mistake Coaching
+              <AlertTriangle className="h-5 w-5 text-orange-400" /> {t("progress.mistakeCoaching")}
             </h2>
-            <span className="text-sm font-bold text-slate-400">{mistakePercent}% complete</span>
+            <span className="text-sm font-bold text-slate-400">{mistakePercent}% {t("progress.complete")}</span>
           </div>
           <div className="h-2 rounded-full bg-slate-800 mb-5 overflow-hidden">
             <div className="h-full bg-orange-400 rounded-full transition-all" style={{ width: `${mistakePercent}%` }} />
@@ -194,16 +196,16 @@ export default function ProgressPage() {
                     </div>
                     <div>
                       <p className="font-bold text-white text-sm">{mistake.title}</p>
-                      <p className="text-xs text-slate-500">{mistake.category} · {mistake.riskLevel} risk</p>
+                      <p className="text-xs text-slate-500">{mistake.category} · {mistake.riskLevel} {t("mistakes.risk")}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     {isPassed && <p className="text-green-400 font-bold text-sm">{score}/{total}</p>}
                     <span className={`px-2 py-1 rounded-lg text-xs font-bold ${isPassed ? "bg-green-500/20 text-green-400" : isStarted ? "bg-orange-400/20 text-orange-400" : "bg-slate-800 text-slate-500"}`}>
-                      {isPassed ? "Passed" : isStarted ? "Started" : "Not started"}
+                      {isPassed ? t("progress.passed") : isStarted ? t("progress.started") : t("progress.notStarted")}
                     </span>
                     <Link href={`/mistakes/coaching/${mistake.id}`} className="text-xs text-slate-500 hover:text-yellow-400 transition">
-                      {isPassed ? "Replay" : "Start"}
+                      {isPassed ? t("progress.replay") : t("progress.start")}
                     </Link>
                   </div>
                 </div>

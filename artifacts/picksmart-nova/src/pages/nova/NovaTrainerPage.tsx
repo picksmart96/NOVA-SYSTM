@@ -10,24 +10,13 @@ import {
   extractDigits,
 } from "@/lib/parser";
 import { useVoiceEngine, UseVoiceEngineReturn } from "@/hooks/useVoiceEngine";
+import { useTranslation } from "react-i18next";
 
 const SYSTEM_DEFAULTS = {
   printerNumber: "307",
   alphaLabelNumber: "242",
   bravoLabelNumber: "578",
 };
-
-const SAFETY_ITEMS = [
-  "Brakes okay?",
-  "Battery guard okay?",
-  "Horn okay?",
-  "Wheels okay?",
-  "Hydraulics okay?",
-  "Controls okay?",
-  "Steering okay?",
-  "Welds okay?",
-  "Electric wiring okay?",
-];
 
 const PHASES = {
   IDLE: "IDLE",
@@ -77,21 +66,21 @@ function PhaseBadge({ phase }: { phase: string }) {
   );
 }
 
-function VoiceStateBadge({ voice }: { voice: UseVoiceEngineReturn }) {
-  let label = "Idle";
+function VoiceStateBadge({ voice, labels }: { voice: UseVoiceEngineReturn; labels: { listening: string; speaking: string; processing: string; error: string; idle: string } }) {
+  let label = labels.idle;
   let className = "bg-slate-500/20 text-slate-300";
 
   if (voice.listening) {
-    label = "Listening";
+    label = labels.listening;
     className = "bg-green-500/20 text-green-300";
   } else if (voice.speaking) {
-    label = "Speaking";
+    label = labels.speaking;
     className = "bg-yellow-500/20 text-yellow-300";
   } else if (voice.processing) {
-    label = "Processing";
+    label = labels.processing;
     className = "bg-blue-500/20 text-blue-300";
   } else if (voice.error) {
-    label = "Error";
+    label = labels.error;
     className = "bg-red-500/20 text-red-300";
   }
 
@@ -103,9 +92,16 @@ function VoiceStateBadge({ voice }: { voice: UseVoiceEngineReturn }) {
 }
 
 export default function NovaTrainerPage() {
+  const { t } = useTranslation();
+
+  const SAFETY_ITEMS = t("novaTrainer.safetyItems", { returnObjects: true }) as string[];
+
+  const p = (key: string, vars?: Record<string, string | number>) =>
+    t(`novaTrainer.prompt.${key}`, vars);
+
   const [selectorUserId, setSelectorUserId] = useState("user-001");
   const [phase, setPhase] = useState(PHASES.IDLE);
-  const [promptText, setPromptText] = useState("Start NOVA to begin.");
+  const [promptText, setPromptText] = useState(p("startNova"));
   const [commandLog, setCommandLog] = useState<{ id: number; type: string; text: string; at: string }[]>([]);
 
   const [equipmentId, setEquipmentId] = useState("");
@@ -137,12 +133,7 @@ export default function NovaTrainerPage() {
 
   const addLog = (type: string, text: string) => {
     setCommandLog((prev) => [
-      {
-        id: Date.now() + Math.random(),
-        type,
-        text,
-        at: new Date().toLocaleTimeString(),
-      },
+      { id: Date.now() + Math.random(), type, text, at: new Date().toLocaleTimeString() },
       ...prev,
     ]);
   };
@@ -153,7 +144,7 @@ export default function NovaTrainerPage() {
       handleVoiceInput(heard);
     },
     autoRestart: true,
-    silencePrompt: "No input received.",
+    silencePrompt: p("noInputReceived"),
   });
 
   const speakPrompt = (text: string) => {
@@ -171,7 +162,7 @@ export default function NovaTrainerPage() {
   const startAssignedBatch = () => {
     const assignment = myAssignments[0];
     if (!assignment) {
-      speakPrompt("No assignment assigned to your ID.");
+      speakPrompt(p("noAssignment"));
       return;
     }
 
@@ -179,14 +170,21 @@ export default function NovaTrainerPage() {
     setCurrentStopIndex(0);
     setPhase(PHASES.LOAD_SUMMARY);
 
-    const summary = `Start aisle ${assignment.startAisle} end aisle ${assignment.endAisle}. Slots ${assignment.stops}. Total cases ${assignment.totalCases}. Pallets ${assignment.totalPallets}. Estimated goal ${assignment.goalTimeMinutes}. To continue say ready.`;
+    const summary = p("loadSummary", {
+      startAisle: assignment.startAisle,
+      endAisle: assignment.endAisle,
+      stops: assignment.stops,
+      cases: assignment.totalCases,
+      pallets: assignment.totalPallets,
+      goal: assignment.goalTimeMinutes,
+    });
     speakPrompt(summary);
   };
 
   const beginPickFlow = () => {
     if (!currentStop) return;
     setPhase(PHASES.PICK_WAIT_CHECK);
-    speakPrompt(`New aisle ${currentStop.aisle} slot ${currentStop.slot}`);
+    speakPrompt(p("newAisle", { aisle: currentStop.aisle, slot: currentStop.slot }));
   };
 
   const moveToNextStop = () => {
@@ -195,50 +193,48 @@ export default function NovaTrainerPage() {
       setCurrentStopIndex(nextIndex);
       const next = stops[nextIndex];
       setPhase(PHASES.PICK_WAIT_CHECK);
-      speakPrompt(`New aisle ${next.aisle} slot ${next.slot}`);
+      speakPrompt(p("newAisle", { aisle: next.aisle, slot: next.slot }));
       return;
     }
 
     setPhase(PHASES.BATCH_COMPLETE_DOOR_BRAVO);
-    speakPrompt(
-      `Batch complete deliver pallet bravo to door ${activeAssignment?.doorNumber}`
-    );
+    speakPrompt(p("batchCompleteDoor", { door: activeAssignment?.doorNumber ?? "" }));
   };
 
-  const helpCountSetter = () => {
-    setHelpCount((prev) => prev + 1);
-  };
+  const helpCountSetter = () => setHelpCount((prev) => prev + 1);
 
   const handleQuickCommand = (input: string): boolean => {
     const value = normalizeSpeech(input);
 
     if (!value) {
-      speakPrompt("No input received.");
+      speakPrompt(p("noInputReceived"));
       return true;
     }
 
-    if (value === "repeat labels") { helpCountSetter(); speakPrompt("Repeating label instructions."); return true; }
-    if (value === "makeup skips") { helpCountSetter(); speakPrompt("Makeup skips requested."); return true; }
-    if (value === "get drops") { helpCountSetter(); speakPrompt("Get drops requested."); return true; }
+    if (value === "repeat labels") { helpCountSetter(); speakPrompt(p("repeatLabels")); return true; }
+    if (value === "makeup skips") { helpCountSetter(); speakPrompt(p("makeupSkips")); return true; }
+    if (value === "get drops") { helpCountSetter(); speakPrompt(p("getDrops")); return true; }
     if (value === "close batch") {
       helpCountSetter();
       setPhase(PHASES.BATCH_COMPLETE_DOOR_BRAVO);
-      speakPrompt(activeAssignment ? `Batch complete deliver pallet bravo to door ${activeAssignment.doorNumber}` : "Close batch.");
+      speakPrompt(activeAssignment
+        ? p("batchClose", { door: activeAssignment.doorNumber })
+        : p("closeBatch"));
       return true;
     }
-    if (value.startsWith("go to aisle")) { helpCountSetter(); speakPrompt("Go to aisle command received."); return true; }
-    if (value === "base items") { helpCountSetter(); speakPrompt("Base items review."); return true; }
-    if (value === "previous") { helpCountSetter(); speakPrompt("Previous item."); return true; }
-    if (value === "base complete") { helpCountSetter(); speakPrompt("Base complete."); return true; }
-    if (value === "remove pallet") { helpCountSetter(); speakPrompt("Remove pallet noted."); return true; }
-    if (value === "skip slot") { helpCountSetter(); speakPrompt("Skip slot noted."); return true; }
-    if (value === "report damage") { helpCountSetter(); speakPrompt("Damage flow started."); return true; }
-    if (value.startsWith("damage")) { helpCountSetter(); speakPrompt("Damage quantity recorded."); return true; }
-    if (value === "slot empty") { helpCountSetter(); speakPrompt("Slot empty recorded."); return true; }
-    if (value === "recap weights") { helpCountSetter(); speakPrompt("Recapping weights."); return true; }
-    if (value === "next") { helpCountSetter(); speakPrompt("Next item."); return true; }
-    if (value === "exit list") { helpCountSetter(); speakPrompt("Exit list."); return true; }
-    if (value === "no labels") { helpCountSetter(); speakPrompt("No labels recorded."); return true; }
+    if (value.startsWith("go to aisle")) { helpCountSetter(); speakPrompt(p("goToAisle")); return true; }
+    if (value === "base items") { helpCountSetter(); speakPrompt(p("baseItems")); return true; }
+    if (value === "previous") { helpCountSetter(); speakPrompt(p("previous")); return true; }
+    if (value === "base complete") { helpCountSetter(); speakPrompt(p("baseComplete")); return true; }
+    if (value === "remove pallet") { helpCountSetter(); speakPrompt(p("removePallet")); return true; }
+    if (value === "skip slot") { helpCountSetter(); speakPrompt(p("skipSlot")); return true; }
+    if (value === "report damage") { helpCountSetter(); speakPrompt(p("reportDamage")); return true; }
+    if (value.startsWith("damage")) { helpCountSetter(); speakPrompt(p("damageQty")); return true; }
+    if (value === "slot empty") { helpCountSetter(); speakPrompt(p("slotEmpty")); return true; }
+    if (value === "recap weights") { helpCountSetter(); speakPrompt(p("recapWeights")); return true; }
+    if (value === "next") { helpCountSetter(); speakPrompt(p("next")); return true; }
+    if (value === "exit list") { helpCountSetter(); speakPrompt(p("exitList")); return true; }
+    if (value === "no labels") { helpCountSetter(); speakPrompt(p("noLabels")); return true; }
 
     return false;
   };
@@ -250,35 +246,35 @@ export default function NovaTrainerPage() {
 
     if (phase === PHASES.SIGN_ON_EQUIPMENT) {
       const digits = extractDigits(input);
-      if (!digits) { speakPrompt("Enter equipment ID."); return; }
+      if (!digits) { speakPrompt(p("enterEquipmentId")); return; }
       setEquipmentId(digits);
       setPhase(PHASES.SIGN_ON_CONFIRM_EQUIPMENT);
-      speakPrompt(`Confirm equipment ${digits}.`);
+      speakPrompt(p("confirmEquipment", { id: digits }));
       return;
     }
 
     if (phase === PHASES.SIGN_ON_CONFIRM_EQUIPMENT) {
       if (isConfirm(input)) {
         setPhase(PHASES.SIGN_ON_PALLET_COUNT);
-        speakPrompt(`Enter maximum pallet count for jack ${equipmentId}.`);
+        speakPrompt(p("enterMaxPallets", { id: equipmentId }));
         return;
       }
       if (isDeny(input)) {
         setEquipmentId("");
         setPhase(PHASES.SIGN_ON_EQUIPMENT);
-        speakPrompt("Enter equipment ID.");
+        speakPrompt(p("enterEquipmentId"));
         return;
       }
-      speakPrompt(`Confirm equipment ${equipmentId}.`);
+      speakPrompt(p("confirmEquipment", { id: equipmentId }));
       return;
     }
 
     if (phase === PHASES.SIGN_ON_PALLET_COUNT) {
       const digits = extractDigits(input);
-      if (!digits) { speakPrompt("Enter maximum pallet count."); return; }
+      if (!digits) { speakPrompt(p("enterMaxPallets", { id: equipmentId })); return; }
       setMaxPalletCount(digits);
       setPhase(PHASES.SIGN_ON_CONFIRM_PALLET_COUNT);
-      speakPrompt("Confirm maximum pallet count.");
+      speakPrompt(p("confirmMaxPallets"));
       return;
     }
 
@@ -291,10 +287,10 @@ export default function NovaTrainerPage() {
       }
       if (isDeny(input)) {
         setPhase(PHASES.SIGN_ON_PALLET_COUNT);
-        speakPrompt(`Enter maximum pallet count for jack ${equipmentId}.`);
+        speakPrompt(p("enterMaxPallets", { id: equipmentId }));
         return;
       }
-      speakPrompt("Confirm maximum pallet count.");
+      speakPrompt(p("confirmMaxPallets"));
       return;
     }
 
@@ -307,7 +303,7 @@ export default function NovaTrainerPage() {
           speakPrompt(SAFETY_ITEMS[nextIndex]);
         } else {
           setPhase(PHASES.WAIT_LOAD_PICKS);
-          speakPrompt("Say load picks.");
+          speakPrompt(p("sayLoadPicks"));
         }
         return;
       }
@@ -315,9 +311,10 @@ export default function NovaTrainerPage() {
         setFailedSafetyItem(item);
         setPhase(PHASES.SAFETY_FAILED);
         voice.stopListening();
-        setPromptText(`Safety failed. ${item} Session stopped.`);
-        addLog("NOVA", `Safety failed. ${item} Session stopped.`);
-        voice.speak(`Safety failed. ${item} Session stopped.`, { restartAfterSpeak: false });
+        const failMsg = p("safetyFailed", { item });
+        setPromptText(failMsg);
+        addLog("NOVA", failMsg);
+        voice.speak(failMsg, { restartAfterSpeak: false });
         return;
       }
       speakPrompt(item);
@@ -326,33 +323,33 @@ export default function NovaTrainerPage() {
 
     if (phase === PHASES.WAIT_LOAD_PICKS) {
       if (isLoadPicks(input)) { startAssignedBatch(); return; }
-      speakPrompt("Say load picks.");
+      speakPrompt(p("sayLoadPicks"));
       return;
     }
 
     if (phase === PHASES.LOAD_SUMMARY) {
       if (input === "ready") {
         setPhase(PHASES.SETUP_ALPHA);
-        speakPrompt("Position alpha pallet get chep.");
+        speakPrompt(p("positionAlpha"));
         return;
       }
-      speakPrompt("To continue say ready.");
+      speakPrompt(p("toContinue"));
       return;
     }
 
     if (phase === PHASES.SETUP_ALPHA) {
       if (input === "ready") {
         setPhase(PHASES.SETUP_BRAVO);
-        speakPrompt("Position bravo pallet get chep.");
+        speakPrompt(p("positionBravo"));
         return;
       }
-      speakPrompt("Position alpha pallet get chep.");
+      speakPrompt(p("positionAlpha"));
       return;
     }
 
     if (phase === PHASES.SETUP_BRAVO) {
       if (input === "ready") { beginPickFlow(); return; }
-      speakPrompt("Position bravo pallet get chep.");
+      speakPrompt(p("positionBravo"));
       return;
     }
 
@@ -361,23 +358,23 @@ export default function NovaTrainerPage() {
       const digits = extractDigits(input);
       if (!digits) {
         setInvalidCount((prev) => prev + 1);
-        speakPrompt(`You said ${input || "nothing"}. Invalid.`);
+        speakPrompt(p("invalidInput", { input: input || "nothing" }));
         return;
       }
       if (digits !== currentStop.checkCode) {
         setInvalidCount((prev) => prev + 1);
-        speakPrompt(`You said ${digits}. Invalid.`);
+        speakPrompt(p("invalidInput", { input: digits }));
         return;
       }
-      const side = currentStopIndex % 2 === 0 ? "Alpha" : "Bravo";
+      const side = currentStopIndex % 2 === 0 ? p("alphaSide") : p("bravaSide");
       setPhase(PHASES.PICK_WAIT_READY);
-      speakPrompt(`Grab ${currentStop.qty} ${side}`);
+      speakPrompt(p("grab", { qty: currentStop.qty, side }));
       return;
     }
 
     if (phase === PHASES.PICK_WAIT_READY) {
       if (input === "ready" || input === "grab" || isConfirm(input)) { moveToNextStop(); return; }
-      speakPrompt("Ready.");
+      speakPrompt(p("ready"));
       return;
     }
 
@@ -385,21 +382,21 @@ export default function NovaTrainerPage() {
       const digits = extractDigits(input);
       if (digits === String(activeAssignment?.doorCode || "")) {
         setPhase(PHASES.BATCH_COMPLETE_ALPHA_LABEL);
-        speakPrompt("Apply labels to pallet alpha");
+        speakPrompt(p("applyAlphaLabels"));
         return;
       }
-      speakPrompt(`Batch complete deliver pallet bravo to door ${activeAssignment?.doorNumber || ""}`);
+      speakPrompt(p("batchCompleteDoor", { door: activeAssignment?.doorNumber || "" }));
       return;
     }
 
     if (phase === PHASES.BATCH_COMPLETE_ALPHA_LABEL) {
       const digits = extractDigits(input);
-      if (input.includes("alpha") || digits === SYSTEM_DEFAULTS.alphaLabelNumber) {
+      if (input.includes("alpha") || input.includes("alfa") || digits === SYSTEM_DEFAULTS.alphaLabelNumber) {
         setPhase(PHASES.BATCH_COMPLETE_BRAVO_LABEL);
-        speakPrompt("Apply labels to pallet bravo");
+        speakPrompt(p("applyBravoLabels"));
         return;
       }
-      speakPrompt("Apply labels to pallet alpha");
+      speakPrompt(p("applyAlphaLabels"));
       return;
     }
 
@@ -407,10 +404,10 @@ export default function NovaTrainerPage() {
       const digits = extractDigits(input);
       if (input.includes("bravo") || digits === SYSTEM_DEFAULTS.bravoLabelNumber) {
         setPhase(PHASES.BATCH_COMPLETE_STAGE_BRAVO);
-        speakPrompt(`Deliver bravo pallet to door ${activeAssignment?.doorNumber || ""}`);
+        speakPrompt(p("deliverBravo", { door: activeAssignment?.doorNumber || "" }));
         return;
       }
-      speakPrompt("Apply labels to pallet bravo");
+      speakPrompt(p("applyBravoLabels"));
       return;
     }
 
@@ -418,10 +415,10 @@ export default function NovaTrainerPage() {
       const digits = extractDigits(input);
       if (digits === String(activeAssignment?.doorCode || "")) {
         setPhase(PHASES.BATCH_COMPLETE_STAGE_ALPHA);
-        speakPrompt(`Deliver alpha pallet to door ${activeAssignment?.doorNumber || ""}`);
+        speakPrompt(p("deliverAlpha", { door: activeAssignment?.doorNumber || "" }));
         return;
       }
-      speakPrompt(`Deliver bravo pallet to door ${activeAssignment?.doorNumber || ""}`);
+      speakPrompt(p("deliverBravo", { door: activeAssignment?.doorNumber || "" }));
       return;
     }
 
@@ -429,16 +426,16 @@ export default function NovaTrainerPage() {
       const digits = extractDigits(input);
       if (digits === String(activeAssignment?.doorCode || "")) {
         setPhase(PHASES.NEXT_BATCH_WAIT);
-        speakPrompt("Say load picks.");
+        speakPrompt(p("sayLoadPicks"));
         return;
       }
-      speakPrompt(`Deliver alpha pallet to door ${activeAssignment?.doorNumber || ""}`);
+      speakPrompt(p("deliverAlpha", { door: activeAssignment?.doorNumber || "" }));
       return;
     }
 
     if (phase === PHASES.NEXT_BATCH_WAIT) {
       if (isLoadPicks(input)) { startAssignedBatch(); return; }
-      speakPrompt("Say load picks.");
+      speakPrompt(p("sayLoadPicks"));
     }
   };
 
@@ -447,22 +444,23 @@ export default function NovaTrainerPage() {
     if (!ok) return;
     setSessionStarted(true);
     setPhase(PHASES.SIGN_ON_EQUIPMENT);
-    setPromptText("Enter equipment ID.");
-    addLog("NOVA", "Enter equipment ID.");
-    voice.askAndListen("Enter equipment ID.");
+    const enterEq = p("enterEquipmentId");
+    setPromptText(enterEq);
+    addLog("NOVA", enterEq);
+    voice.askAndListen(enterEq);
   };
 
   const retryMic = async () => {
     const ok = await voice.retryMic();
     if (!ok) return;
-    voice.askAndListen(promptText || "Enter equipment ID.");
+    voice.askAndListen(promptText || p("enterEquipmentId"));
   };
 
   const resetSession = () => {
     voice.stopListening();
     setSessionStarted(false);
     setPhase(PHASES.IDLE);
-    setPromptText("Start NOVA to begin.");
+    setPromptText(p("startNova"));
     setCommandLog([]);
     setEquipmentId("");
     setMaxPalletCount("2");
@@ -479,6 +477,14 @@ export default function NovaTrainerPage() {
     setPromptText(voice.currentPrompt);
   }, [voice.currentPrompt]);
 
+  const voiceLabels = {
+    listening: t("novaTrainer.listening"),
+    speaking: t("novaTrainer.speaking"),
+    processing: t("novaTrainer.processing"),
+    error: t("novaTrainer.error"),
+    idle: t("novaTrainer.idle"),
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-white px-3 py-5 sm:px-6 sm:py-8">
       <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
@@ -486,10 +492,10 @@ export default function NovaTrainerPage() {
         {/* Header */}
         <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
           <div>
-            <p className="text-yellow-400 text-xs sm:text-sm font-semibold uppercase tracking-[0.22em]">NOVA Trainer</p>
-            <h1 className="mt-1 sm:mt-2 text-2xl sm:text-4xl font-black">ES3 Script Mode</h1>
+            <p className="text-yellow-400 text-xs sm:text-sm font-semibold uppercase tracking-[0.22em]">{t("novaTrainer.label")}</p>
+            <h1 className="mt-1 sm:mt-2 text-2xl sm:text-4xl font-black">{t("novaTrainer.heading")}</h1>
             <p className="mt-1 sm:mt-2 text-slate-400 text-sm sm:text-base max-w-3xl">
-              Hands-free voice workflow after one tap. Selector can talk to NOVA without touching the screen again.
+              {t("novaTrainer.subtitle")}
             </p>
           </div>
 
@@ -499,7 +505,7 @@ export default function NovaTrainerPage() {
                 onClick={startNova}
                 className="rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
               >
-                Start NOVA
+                {t("novaTrainer.startNova")}
               </button>
             ) : (
               <>
@@ -507,13 +513,13 @@ export default function NovaTrainerPage() {
                   onClick={() => voice.startListening()}
                   className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-yellow-400 transition"
                 >
-                  Listen Now
+                  {t("novaTrainer.listenNow")}
                 </button>
                 <button
                   onClick={resetSession}
                   className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-red-400 transition"
                 >
-                  Reset Session
+                  {t("novaTrainer.resetSession")}
                 </button>
               </>
             )}
@@ -523,20 +529,20 @@ export default function NovaTrainerPage() {
         {/* Mic error */}
         {voice.error ? (
           <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-5">
-            <p className="font-bold text-red-300">Microphone / Voice Error</p>
+            <p className="font-bold text-red-300">{t("novaTrainer.micError")}</p>
             <p className="mt-2 text-red-200">{voice.error}</p>
             <button
               onClick={retryMic}
               className="mt-4 rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
             >
-              Retry Mic
+              {t("novaTrainer.retryMic")}
             </button>
           </div>
         ) : null}
 
         {/* Selector switcher */}
         <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-lg flex flex-wrap items-center gap-4">
-          <p className="text-sm text-slate-400 font-semibold">Selector ID:</p>
+          <p className="text-sm text-slate-400 font-semibold">{t("novaTrainer.selectorId")}</p>
           <select
             value={selectorUserId}
             onChange={(e) => setSelectorUserId(e.target.value)}
@@ -550,16 +556,16 @@ export default function NovaTrainerPage() {
 
         {/* Top stats */}
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
-          <StatCard label="Phase" value={phase} tone="accent" />
-          <StatCard label="Selector" value={selectorUserId} />
-          <StatCard label="Assignment" value={activeAssignment ? `#${activeAssignment.assignmentNumber}` : "—"} />
-          <StatCard label="Current Stop" value={currentStop ? `${currentStop.stopOrder}` : "—"} />
+          <StatCard label={t("novaTrainer.phase")} value={phase} tone="accent" />
+          <StatCard label={t("novaTrainer.selector")} value={selectorUserId} />
+          <StatCard label={t("novaTrainer.assignment")} value={activeAssignment ? `#${activeAssignment.assignmentNumber}` : "—"} />
+          <StatCard label={t("novaTrainer.currentStop")} value={currentStop ? `${currentStop.stopOrder}` : "—"} />
           <StatCard
-            label="Voice State"
-            value={voice.listening ? "Listening" : voice.speaking ? "Speaking" : voice.processing ? "Processing" : "Idle"}
+            label={t("novaTrainer.voiceState")}
+            value={voice.listening ? t("novaTrainer.listening") : voice.speaking ? t("novaTrainer.speaking") : voice.processing ? t("novaTrainer.processing") : t("novaTrainer.idle")}
             tone={voice.listening ? "success" : voice.error ? "danger" : "accent"}
           />
-          <StatCard label="Invalid Count" value={invalidCount} tone={invalidCount > 0 ? "danger" : "default"} />
+          <StatCard label={t("novaTrainer.invalidCount")} value={invalidCount} tone={invalidCount > 0 ? "danger" : "default"} />
         </div>
 
         {/* Main layout */}
@@ -569,8 +575,8 @@ export default function NovaTrainerPage() {
           <div className="space-y-5 sm:space-y-6">
             <div className="rounded-3xl border border-slate-800 bg-slate-900 p-4 sm:p-6 shadow-lg">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="text-xl sm:text-2xl font-bold">Current Prompt</h2>
-                <VoiceStateBadge voice={voice} />
+                <h2 className="text-xl sm:text-2xl font-bold">{t("novaTrainer.currentPrompt")}</h2>
+                <VoiceStateBadge voice={voice} labels={voiceLabels} />
               </div>
 
               <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950 p-5">
@@ -579,37 +585,37 @@ export default function NovaTrainerPage() {
 
               <div className="mt-5 grid md:grid-cols-2 gap-4">
                 <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <p className="text-sm text-slate-400">Heard Response</p>
+                  <p className="text-sm text-slate-400">{t("novaTrainer.heardResponse")}</p>
                   <p className="mt-2 font-semibold text-white">{voice.lastHeard || "—"}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <p className="text-sm text-slate-400">Microphone Permission</p>
+                  <p className="text-sm text-slate-400">{t("novaTrainer.micPermission")}</p>
                   <p className="mt-2 font-semibold text-white capitalize">{voice.micPermission}</p>
                 </div>
               </div>
             </div>
 
             <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-              <h2 className="text-2xl font-bold">Live Session Data</h2>
+              <h2 className="text-2xl font-bold">{t("novaTrainer.liveSessionData")}</h2>
               <div className="mt-5 grid md:grid-cols-2 gap-4">
                 <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <p className="text-sm text-slate-400">Equipment ID</p>
+                  <p className="text-sm text-slate-400">{t("novaTrainer.equipmentId")}</p>
                   <p className="mt-2 font-semibold">{equipmentId || "—"}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <p className="text-sm text-slate-400">Max Pallet Count</p>
+                  <p className="text-sm text-slate-400">{t("novaTrainer.maxPalletCount")}</p>
                   <p className="mt-2 font-semibold">{maxPalletCount || "—"}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <p className="text-sm text-slate-400">Current Aisle</p>
+                  <p className="text-sm text-slate-400">{t("novaTrainer.currentAisle")}</p>
                   <p className="mt-2 font-semibold">{currentStop?.aisle ?? "—"}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <p className="text-sm text-slate-400">Current Slot</p>
+                  <p className="text-sm text-slate-400">{t("novaTrainer.currentSlot")}</p>
                   <p className="mt-2 font-semibold">{currentStop?.slot ?? "—"}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <p className="text-sm text-slate-400">Next Stop</p>
+                  <p className="text-sm text-slate-400">{t("novaTrainer.nextStop")}</p>
                   <p className="mt-2 font-semibold">{nextStop ? `${nextStop.aisle}/${nextStop.slot}` : "—"}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
@@ -636,10 +642,10 @@ export default function NovaTrainerPage() {
             </div>
 
             <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-              <h2 className="text-2xl font-bold">Command Log</h2>
+              <h2 className="text-2xl font-bold">{t("novaTrainer.commandLog")}</h2>
               <div className="mt-5 max-h-[420px] overflow-auto space-y-3">
                 {commandLog.length === 0 ? (
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-slate-400">No activity yet.</div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-slate-400">{t("novaTrainer.noCommands")}</div>
                 ) : (
                   commandLog.map((entry) => (
                     <div key={entry.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
@@ -717,6 +723,7 @@ export default function NovaTrainerPage() {
             </div>
           </div>
         </div>
+
       </div>
     </div>
   );

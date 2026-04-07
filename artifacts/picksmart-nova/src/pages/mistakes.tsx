@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { MISTAKES } from "@/data/mistakesData";
 import { useProgressStore } from "@/lib/progressStore";
 import { Headphones, CheckCircle2, AlertTriangle, ShieldAlert } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 const RISK_COLORS = {
   critical: "bg-red-500/10 text-red-400 border-red-500/30",
@@ -27,6 +28,7 @@ const CATEGORY_ICONS: Record<string, typeof AlertTriangle> = {
 };
 
 export default function CommonMistakesPage() {
+  const { t } = useTranslation();
   const { mistakeProgress } = useProgressStore();
 
   const totalPassed = Object.values(mistakeProgress).filter(m => m.passed).length;
@@ -38,19 +40,19 @@ export default function CommonMistakesPage() {
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-red-500 mb-5">
           <AlertTriangle className="h-8 w-8 text-white" />
         </div>
-        <h1 className="text-4xl font-black text-white mb-3">Common Mistakes</h1>
+        <h1 className="text-4xl font-black text-white mb-3">{t("mistakes.heading")}</h1>
         <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-          14 real warehouse selector mistakes — each with a NOVA coaching session, fix steps, and a short quiz. Learn what goes wrong and how to fix it permanently.
+          {t("mistakes.subtitle")}
         </p>
         <div className="mt-5 flex flex-wrap gap-3 justify-center text-sm">
           <div className="px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
-            <span className="text-yellow-400 font-black">14</span> Mistakes
+            <span className="text-yellow-400 font-black">14</span> {t("mistakes.count").replace("14 ", "")}
           </div>
           <div className="px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
-            <span className="text-yellow-400 font-black">{totalPassed}</span> Coached
+            <span className="text-yellow-400 font-black">{totalPassed}</span> {t("mistakes.coached")}
           </div>
           <div className="px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
-            NOVA Voice Coaching
+            {t("mistakes.novaCoaching")}
           </div>
         </div>
       </div>
@@ -78,7 +80,7 @@ export default function CommonMistakesPage() {
                       {index + 1}
                     </div>
                     <span className={`text-xs font-bold uppercase tracking-widest capitalize border px-2 py-0.5 rounded-full ${RISK_COLORS[mistake.riskLevel]}`}>
-                      {mistake.riskLevel} risk
+                      {mistake.riskLevel} {t("mistakes.risk")}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -97,11 +99,11 @@ export default function CommonMistakesPage() {
                   </h3>
 
                   <div className="flex items-center gap-3 text-xs text-slate-500 mb-3">
-                    <span>{mistake.fixSteps.length} fix steps</span>
+                    <span>{mistake.fixSteps.length} {t("mistakes.fixSteps")}</span>
                     <span>·</span>
-                    <span>{mistake.questions.length} questions</span>
+                    <span>{mistake.questions.length} {t("mistakes.questions")}</span>
                     <span>·</span>
-                    <span className="flex items-center gap-1"><Headphones className="h-3 w-3" /> NOVA coached</span>
+                    <span className="flex items-center gap-1"><Headphones className="h-3 w-3" /> {t("mistakes.novaCoached")}</span>
                   </div>
 
                   {mp && (
@@ -109,10 +111,10 @@ export default function CommonMistakesPage() {
                       {isPassed ? (
                         <div className="flex items-center gap-2 text-sm text-green-400 font-semibold">
                           <CheckCircle2 className="h-4 w-4" />
-                          Passed — {mp.testScore}/{mp.totalQuestions} correct
+                          {t("mistakes.passedScore", { score: mp.testScore, total: mp.totalQuestions })}
                         </div>
                       ) : isStarted ? (
-                        <div className="text-sm text-yellow-400 font-semibold">In progress</div>
+                        <div className="text-sm text-yellow-400 font-semibold">{t("mistakes.inProgress")}</div>
                       ) : null}
                     </div>
                   )}
@@ -124,10 +126,10 @@ export default function CommonMistakesPage() {
                     >
                       <Headphones className="h-4 w-4" />
                       {isPassed
-                        ? "Replay NOVA Coaching"
+                        ? t("mistakes.replayCoaching")
                         : isStarted
-                        ? "Continue Coaching"
-                        : "Start NOVA Coaching"}
+                        ? t("mistakes.continueCoaching")
+                        : t("mistakes.startCoaching")}
                     </Link>
                   </div>
                 </div>
