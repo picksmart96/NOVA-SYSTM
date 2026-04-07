@@ -19,7 +19,7 @@ interface NovaState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  role: 'trainer',
+  role: 'owner',
   setRole: (role) => set({ role }),
   userId: 'user-1',
   setUserId: (userId) => set({ userId }),
