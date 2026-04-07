@@ -1,93 +1,133 @@
-import { useListModules } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Clock, BookOpen, AlertTriangle } from "lucide-react";
+import { LESSON_CONTENT } from "@/data/lessonContent";
+import { useProgressStore } from "@/lib/progressStore";
+import { Clock, BookOpen, Headphones, CheckCircle2 } from "lucide-react";
+
+const DIFFICULTY_COLORS = {
+  beginner: "bg-green-500/10 text-green-400 border-green-500/30",
+  intermediate: "bg-yellow-400/10 text-yellow-300 border-yellow-400/30",
+  advanced: "bg-red-500/10 text-red-400 border-red-500/30",
+};
 
 export default function ModulesPage() {
-  const { data: modules, isLoading } = useListModules();
+  const { progress } = useProgressStore();
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-6xl">
-      <div className="flex justify-between items-end mb-8">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Training Academy</h1>
-          <p className="text-muted-foreground mt-1">Master warehouse operations with interactive modules.</p>
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      {/* Header */}
+      <div className="border-b border-slate-800 bg-gradient-to-b from-slate-900 to-slate-950 px-6 py-14 text-center">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-yellow-400 mb-5">
+          <BookOpen className="h-8 w-8 text-slate-950" />
+        </div>
+        <h1 className="text-4xl font-black text-white mb-3">Training Academy</h1>
+        <p className="text-slate-400 text-lg max-w-2xl mx-auto">
+          Six NOVA-guided lessons built for warehouse order selectors. Each lesson ends with a short test — pass 80%+ to earn your completion badge.
+        </p>
+        <div className="mt-5 flex gap-4 justify-center text-sm">
+          <div className="px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
+            <span className="text-yellow-400 font-black">6</span> Modules
+          </div>
+          <div className="px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
+            <span className="text-yellow-400 font-black">
+              {Object.values(progress).filter(p => p.passed).length}
+            </span> Passed
+          </div>
+          <div className="px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
+            NOVA Voice Guided
+          </div>
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[...Array(6)].map((_, i) => (
-            <Card key={i} className="overflow-hidden">
-              <Skeleton className="h-48 w-full rounded-none" />
-              <CardHeader>
-                <Skeleton className="h-6 w-3/4 mb-2" />
-                <Skeleton className="h-4 w-full" />
-              </CardHeader>
-              <CardContent>
-                <div className="flex gap-2">
-                  <Skeleton className="h-5 w-16" />
-                  <Skeleton className="h-5 w-16" />
+      {/* Module Grid */}
+      <div className="max-w-6xl mx-auto px-6 py-12">
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {LESSON_CONTENT.map((lesson, index) => {
+            const p = progress[lesson.moduleId];
+            const isPassed = p?.passed ?? false;
+            const isStarted = p?.started ?? false;
+
+            return (
+              <div
+                key={lesson.moduleId}
+                className={`rounded-3xl border bg-slate-900 flex flex-col overflow-hidden transition-all hover:border-slate-700 ${
+                  isPassed ? "border-green-500/30" : "border-slate-800"
+                }`}
+              >
+                {/* Card header band */}
+                <div className="bg-gradient-to-br from-slate-800 to-slate-950 px-6 py-8 flex items-center justify-between border-b border-slate-800">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">
+                      Module {index + 1}
+                    </p>
+                    <span
+                      className={`px-2 py-0.5 rounded-full border text-xs font-bold capitalize ${
+                        DIFFICULTY_COLORS[lesson.difficulty]
+                      }`}
+                    >
+                      {lesson.difficulty}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {lesson.isFree && (
+                      <span className="px-3 py-1 rounded-full bg-yellow-400 text-slate-950 text-xs font-black">
+                        FREE
+                      </span>
+                    )}
+                    {isPassed && (
+                      <CheckCircle2 className="h-6 w-6 text-green-400" />
+                    )}
+                  </div>
                 </div>
-              </CardContent>
-              <CardFooter>
-                <Skeleton className="h-10 w-full" />
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      ) : modules?.length === 0 ? (
-        <div className="text-center py-20 bg-card border border-border rounded-lg">
-          <BookOpen className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium">No training modules found</h3>
-          <p className="text-muted-foreground">Check back later for new content.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {modules?.map((module) => (
-            <Card key={module.id} className="flex flex-col overflow-hidden border-border bg-card hover:border-primary/50 transition-colors">
-              <div className="aspect-video bg-secondary relative overflow-hidden flex items-center justify-center border-b border-border">
-                {/* Fallback image if undefined, using gradient pattern for industrial feel */}
-                <div className="absolute inset-0 bg-gradient-to-br from-background to-secondary opacity-50" />
-                <BookOpen className="h-16 w-16 text-muted-foreground relative z-10" />
-                <Badge className="absolute top-3 right-3 z-20 bg-background/80 backdrop-blur border-border text-foreground">
-                  {module.category}
-                </Badge>
+
+                {/* Card body */}
+                <div className="p-6 flex-1 flex flex-col">
+                  <h3 className="text-xl font-black text-white mb-2">{lesson.moduleTitle}</h3>
+
+                  <div className="flex items-center gap-4 text-xs text-slate-500 mb-4">
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" /> {lesson.durationMinutes} min
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <BookOpen className="h-3 w-3" /> {lesson.steps.length} steps
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Headphones className="h-3 w-3" /> NOVA guided
+                    </span>
+                  </div>
+
+                  {/* Progress indicator */}
+                  {p && (
+                    <div className="mb-4">
+                      {isPassed ? (
+                        <div className="flex items-center gap-2 text-sm text-green-400 font-semibold">
+                          <CheckCircle2 className="h-4 w-4" />
+                          Passed — {p.testScore}/{p.totalQuestions} correct
+                        </div>
+                      ) : isStarted ? (
+                        <div className="text-sm text-yellow-400 font-semibold">In progress</div>
+                      ) : null}
+                    </div>
+                  )}
+
+                  <div className="mt-auto">
+                    <Link
+                      href={`/training/lesson/${lesson.moduleId}`}
+                      className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl bg-yellow-400 text-slate-950 font-black hover:bg-yellow-300 transition-all active:scale-[0.98]"
+                    >
+                      <Headphones className="h-4 w-4" />
+                      {isPassed
+                        ? "Replay NOVA Lesson"
+                        : isStarted
+                        ? "Continue NOVA Lesson"
+                        : "Start NOVA Lesson"}
+                    </Link>
+                  </div>
+                </div>
               </div>
-              <CardHeader className="flex-1">
-                <CardTitle className="text-xl line-clamp-1">{module.title}</CardTitle>
-                <CardDescription className="line-clamp-2 mt-2">{module.description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-4 w-4" />
-                    <span>{module.duration} min</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <AlertTriangle className="h-4 w-4" />
-                    <span className="capitalize">{module.difficulty}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <BookOpen className="h-4 w-4" />
-                    <span>{module.lessons.length} lessons</span>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="pt-0">
-                <Link href={`/training/${module.id}`} className="w-full">
-                  <Button className="w-full font-bold" data-testid={`btn-start-${module.id}`}>
-                    Start Module
-                  </Button>
-                </Link>
-              </CardFooter>
-            </Card>
-          ))}
+            );
+          })}
         </div>
-      )}
+      </div>
     </div>
   );
 }

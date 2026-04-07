@@ -1,0 +1,247 @@
+want the Training Academy modules in Replit to work more like NOVA-guided lessons, where:
+
+user clicks a lesson
+NOVA welcomes them
+NOVA asks if they’re ready
+user clicks Ready
+NOVA starts the lesson step by step
+when the lesson ends, NOVA gives a yes/no test
+user answers in the app
+progress gets saved
+
+That is a strong setup because it turns the training modules into interactive voice lessons, not just pages.
+
+Use this Replit Agent prompt
+Upgrade the Training Academy modules so each module lesson works like a NOVA guided lesson.
+
+GOAL
+When a user clicks Start Module, open an interactive NOVA lesson experience instead of just a static module page.
+
+MODULES TO SUPPORT
+- Door Staging and Delivery
+- NOVA Voice System Basics
+- Pallet Building Standards
+- Performance and Pace Tracking
+- Pick Path Optimization
+- Warehouse Safety Fundamentals
+
+NEW LESSON FLOW
+For every lesson:
+
+1. User clicks Start Module
+2. Open a Lesson Session page
+3. NOVA welcomes the user by module title
+4. NOVA says:
+   "Welcome to [lesson title]. When you are ready, click Ready."
+5. Show a large Ready button
+6. When user clicks Ready:
+   - NOVA starts the lesson
+   - show lesson content step by step
+   - optionally speak each lesson section using browser text-to-speech
+
+LESSON STRUCTURE
+Each lesson should have:
+- lesson title
+- lesson intro
+- lesson steps
+- lesson summary
+- short test at the end
+
+VOICE / GUIDE STYLE
+NOVA should speak in a short, direct, trainer-style tone.
+
+Example:
+- "Welcome to NOVA Voice System Basics."
+- "When you are ready, click Ready."
+- "Lesson starting."
+- "First, learn the basic command flow."
+- "Next, learn how to respond correctly."
+- "Lesson complete. Start test."
+
+TEST FLOW
+At the end of each lesson:
+- NOVA says:
+  "Lesson complete. Start test."
+- Show 3 to 5 yes/no questions in the app
+- user answers by clicking Yes or No buttons
+- after test is submitted, show:
+  - score
+  - pass/fail
+  - retry lesson button
+  - next lesson button
+
+EXAMPLE TEST QUESTIONS
+Use yes/no style questions based on the lesson content.
+
+Example for NOVA Voice System Basics:
+- "Should you confirm the correct slot before moving on?"
+- "Can you skip a wrong check code and continue?"
+- "Should NOVA continue if the code is invalid?"
+
+PROGRESS TRACKING
+Save per user:
+- lesson started
+- lesson completed
+- test score
+- passed true/false
+- completed at timestamp
+
+UI REQUIREMENTS
+Create a Lesson Session page with:
+- module title
+- lesson title
+- NOVA status card
+- Ready button
+- lesson progress bar
+- lesson content panel
+- test panel at the end
+- yes/no answer buttons
+- Next Lesson button
+- Retry Lesson button
+
+COMPONENTS TO CREATE
+- LessonSession
+- NovaLessonGuide
+- LessonStepCard
+- LessonTest
+- YesNoQuestion
+- LessonResultCard
+
+DATA MODEL UPDATE
+Add lesson test data to each module lesson.
+
+For each lesson:
+- id
+- title
+- intro
+- steps[]
+- summary
+- questions[] with:
+  - question
+  - correctAnswer (yes or no)
+
+VOICE SUPPORT
+Use browser speech synthesis for NOVA voice.
+When lesson starts, NOVA should speak the intro text.
+When each new step appears, NOVA should speak that step.
+When test begins, NOVA should speak:
+"Lesson complete. Start test."
+
+MOBILE SUPPORT
+Make Ready, Yes, and No buttons large and touch friendly.
+
+IMPORTANT
+Do not remove the existing Training Academy layout.
+Upgrade each module so clicking Start Module opens the new NOVA-guided lesson session.
+Best page behavior
+When user clicks:
+
+NOVA Voice System Basics → Start Module
+
+Open a page like this:
+
+Top
+
+Lesson title
+progress bar
+NOVA status
+
+Middle
+
+NOVA says:
+“Welcome to NOVA Voice System Basics. When you are ready, click Ready.”
+
+Button
+
+Ready
+
+After clicking Ready:
+
+Step 1 appears
+NOVA reads it
+Next Step button appears
+
+At the end:
+
+NOVA says:
+“Lesson complete. Start test.”
+
+Then show:
+
+Yes / No questions
+Submit Test button
+Example lesson script
+Lesson: NOVA Voice System Basics
+
+NOVA welcome
+
+Welcome to NOVA Voice System Basics. When you are ready, click Ready.
+
+After Ready
+
+Lesson starting.
+
+Step 1
+
+NOVA gives short, direct commands during picking.
+
+Step 2
+
+The selector must respond correctly to keep the flow moving.
+
+Step 3
+
+If the selector gives an invalid code, NOVA should repeat it back and say invalid.
+
+Step 4
+
+NOVA should not continue until the correct confirmation is given.
+
+Lesson end
+
+Lesson complete. Start test.
+
+Example yes/no test
+
+Question 1
+Should NOVA continue if the slot code is wrong?
+
+Yes
+No
+
+Question 2
+Should the selector confirm readiness before starting?
+
+Yes
+No
+
+Question 3
+Can NOVA skip confirmation and still count the pick?
+
+Yes
+No
+Recommended component files
+
+Use these in Replit:
+
+src/components/training/LessonSession.jsx
+src/components/training/NovaLessonGuide.jsx
+src/components/training/LessonStepCard.jsx
+src/components/training/LessonTest.jsx
+src/components/training/YesNoQuestion.jsx
+src/components/training/LessonResultCard.jsx
+
+And add lesson content inside:
+
+src/data/modules.js
+Small upgrade I recommend
+
+For each module card, change button text from:
+
+Start Module
+
+to:
+
+Start NOVA Lesson
+
+That makes it feel more interactive.

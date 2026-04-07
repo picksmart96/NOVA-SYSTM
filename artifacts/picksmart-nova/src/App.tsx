@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 
 import HomePage from "@/pages/home";
 import ModulesPage from "@/pages/modules";
+import LessonSessionPage from "@/pages/lesson-session";
 import ModuleDetailPage from "@/pages/module-detail";
 import CommonMistakesPage from "@/pages/mistakes";
 import ProgressPage from "@/pages/progress";
@@ -40,6 +41,10 @@ function Router() {
       </Route>
       <Route path="/training">
         <Layout><ModulesPage /></Layout>
+      </Route>
+      {/* Lesson session is full-screen — no layout wrapper */}
+      <Route path="/training/lesson/:id">
+        <LessonSessionPage />
       </Route>
       <Route path="/training/:id">
         <Layout><ModuleDetailPage /></Layout>
