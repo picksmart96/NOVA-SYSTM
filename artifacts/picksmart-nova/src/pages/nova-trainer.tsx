@@ -1,428 +1,1147 @@
-import { useState, useEffect, useRef } from "react";
-import { Link } from "wouter";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ASSIGNMENTS } from "@/data/assignments";
-import { getStopsForAssignment } from "@/data/assignmentStops";
-import { SYSTEM_DEFAULTS } from "@/data/systemDefaults";
-import { useVoiceEngine } from "@/hooks/useVoiceEngine";
-import { useAssignmentRunner } from "@/hooks/useAssignmentRunner";
-import { useAppStore } from "@/lib/store";
+import { ASSIGNMENT_STOPS } from "@/data/assignmentStops";
+import { voiceCommands } from "@/data/voiceCommands";
 import { useTrainerStore } from "@/lib/trainerStore";
+import { useAuthStore } from "@/lib/authStore";
 import {
-  Headphones, Play, RotateCcw, ChevronRight, Mic,
-  Clock, Activity, Package, AlertTriangle, CheckCircle2, Box, User, Lock
+  normalizeSpeech, isConfirm, isDeny, isLoadPicks, isReady, extractNumber,
+} from "@/lib/parser";
+import {
+  Headphones, Mic, MicOff, Volume2, RotateCcw, Shield,
+  CheckCircle2, AlertTriangle, Package, DoorOpen,
+  ChevronRight, Activity, User, List, Play, BookOpen,
 } from "lucide-react";
 
-type VoiceModeOption = "training" | "production" | "ultra_fast";
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+type Phase =
+  | "IDLE"
+  | "SIGN_ON"
+  | "SIGN_ON_CONFIRM"
+  | "PALLET_COUNT"
+  | "PALLET_COUNT_CONFIRM"
+  | "SAFETY"
+  | "SAFETY_FAILED"
+  | "LOAD_PICKS_WAIT"
+  | "LOAD_PICKS_SUMMARY"
+  | "ALPHA_SETUP"
+  | "BRAVO_SETUP"
+  | "PICKING"
+  | "BATCH_COMPLETE"
+  | "DONE";
+
+interface LogEntry {
+  id: number;
+  type: "NOVA" | "USER" | "SYSTEM";
+  text: string;
+  time: string;
+}
+
+// ─── Safety checklist ───────────────────────────────────────────────────────
+
+const SAFETY_ITEMS = [
+  "Brakes okay?",
+  "Battery guard okay?",
+  "Horn okay?",
+  "Wheels okay?",
+  "Hydraulics okay?",
+  "Controls okay?",
+  "Steering okay?",
+  "Welds okay?",
+  "Electric wiring okay?",
+];
+
+// ─── TTS helper ─────────────────────────────────────────────────────────────
+
+function speakText(text: string, onEnd?: () => void) {
+  if (!("speechSynthesis" in window)) {
+    onEnd?.();
+    return;
+  }
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  utterance.lang = "en-US";
+
+  const load = () => {
+    const voices = window.speechSynthesis.getVoices();
+    const pref =
+      voices.find((v) => /samantha|zira|karen|female|aria|ava/i.test(v.name)) ||
+      voices[0];
+    if (pref) utterance.voice = pref;
+    utterance.onend = () => onEnd?.();
+    utterance.onerror = () => onEnd?.();
+    window.speechSynthesis.speak(utterance);
+  };
+
+  if (window.speechSynthesis.getVoices().length > 0) {
+    load();
+  } else {
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.speechSynthesis.onvoiceschanged = null;
+      load();
+    };
+  }
+}
+
+// ─── Phase label map ─────────────────────────────────────────────────────────
+
+const PHASE_LABEL: Record<Phase, string> = {
+  IDLE: "Idle",
+  SIGN_ON: "Sign On",
+  SIGN_ON_CONFIRM: "Sign On",
+  PALLET_COUNT: "Sign On",
+  PALLET_COUNT_CONFIRM: "Sign On",
+  SAFETY: "Safety Check",
+  SAFETY_FAILED: "Safety FAILED",
+  LOAD_PICKS_WAIT: "Load Picks",
+  LOAD_PICKS_SUMMARY: "Load Picks",
+  ALPHA_SETUP: "Pallet Setup",
+  BRAVO_SETUP: "Pallet Setup",
+  PICKING: "Picking",
+  BATCH_COMPLETE: "Batch Complete",
+  DONE: "Done",
+};
+
+const PHASE_COLOR: Record<Phase, string> = {
+  IDLE: "text-slate-400",
+  SIGN_ON: "text-blue-400",
+  SIGN_ON_CONFIRM: "text-blue-400",
+  PALLET_COUNT: "text-blue-400",
+  PALLET_COUNT_CONFIRM: "text-blue-400",
+  SAFETY: "text-yellow-400",
+  SAFETY_FAILED: "text-red-400",
+  LOAD_PICKS_WAIT: "text-purple-400",
+  LOAD_PICKS_SUMMARY: "text-purple-400",
+  ALPHA_SETUP: "text-cyan-400",
+  BRAVO_SETUP: "text-cyan-400",
+  PICKING: "text-green-400",
+  BATCH_COMPLETE: "text-orange-400",
+  DONE: "text-green-400",
+};
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function NovaTrainerPage() {
-  const { userId } = useAppStore();
   const { selectors } = useTrainerStore();
+  const { currentUser } = useAuthStore();
 
+  // Selector selection (logged-in selectors auto-select their own assignment)
   const [selectedSelectorId, setSelectedSelectorId] = useState<string>("");
-  const selectedSelector = selectors.find(s => String(s.id) === selectedSelectorId) ?? null;
-  const selectedAssignmentId = selectedSelector?.assignedAssignmentId ?? null;
-  const hasAssignment = !!selectedAssignmentId;
-  const [voiceMode, setVoiceMode] = useState<VoiceModeOption>("training");
+
+  const selectedSelector = selectors.find((s) => String(s.id) === selectedSelectorId) ?? null;
+  const selectorAssignmentId = selectedSelector?.assignedAssignmentId ?? null;
+  const assignment = selectorAssignmentId ? ASSIGNMENTS.find((a) => a.id === selectorAssignmentId) : null;
+  const stops = useMemo(
+    () => (selectorAssignmentId ? ASSIGNMENT_STOPS.filter((s) => s.assignmentId === selectorAssignmentId) : []),
+    [selectorAssignmentId]
+  );
+
+  // ── ES3 state machine ──
+  const [phase, setPhase] = useState<Phase>("IDLE");
+  const [promptText, setPromptText] = useState("NOVA ready. Select a selector to begin.");
+  const [heardText, setHeardText] = useState("");
+  const [commandLog, setCommandLog] = useState<LogEntry[]>([]);
+  const [speaking, setSpeaking] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [micMode, setMicMode] = useState<"browser" | "button">("button");
+
+  // Sign-on state
+  const [equipmentId, setEquipmentId] = useState("");
+  const [maxPallets, setMaxPallets] = useState("2");
+  const [safetyIndex, setSafetyIndex] = useState(0);
+  const [failedSafetyItem, setFailedSafetyItem] = useState("");
+
+  // Pick state
+  const [currentStopIndex, setCurrentStopIndex] = useState(0);
+  const [pickedCount, setPickedCount] = useState(0);
   const [codeInput, setCodeInput] = useState("");
-  const [codeError, setCodeError] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [lastCodeWrong, setLastCodeWrong] = useState(false);
 
-  const assignment = (selectedAssignmentId ? ASSIGNMENTS.find(a => a.id === selectedAssignmentId) : null) ?? ASSIGNMENTS[0];
-  const allStops = selectedAssignmentId ? getStopsForAssignment(selectedAssignmentId) : [];
+  // Batch complete sub-steps
+  const [batchStep, setBatchStep] = useState(0);
 
-  const { transcript, isSpeaking, speak, stop } = useVoiceEngine();
-  const runner = useAssignmentRunner();
+  // Refs
+  const recognitionRef = useRef<any>(null);
+  const shouldKeepListeningRef = useRef(false);
+  const phaseRef = useRef<Phase>("IDLE");
+  const safetyIndexRef = useRef(0);
+  const equipmentIdRef = useRef("");
+  const maxPalletsRef = useRef("2");
+  const currentStopIndexRef = useRef(0);
+  const batchStepRef = useRef(0);
+  const codeInputRef = useRef<HTMLInputElement>(null);
+  const logContainerRef = useRef<HTMLDivElement>(null);
 
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  // Keep refs in sync
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+  useEffect(() => { safetyIndexRef.current = safetyIndex; }, [safetyIndex]);
+  useEffect(() => { equipmentIdRef.current = equipmentId; }, [equipmentId]);
+  useEffect(() => { maxPalletsRef.current = maxPallets; }, [maxPallets]);
+  useEffect(() => { currentStopIndexRef.current = currentStopIndex; }, [currentStopIndex]);
+  useEffect(() => { batchStepRef.current = batchStep; }, [batchStep]);
 
+  // Auto-scroll command log
   useEffect(() => {
-    if (runner.runnerState !== 'idle' && runner.runnerState !== 'completed') {
-      timerRef.current = setInterval(() => {
-        runner.setElapsedSeconds(s => s + 1);
-      }, 1000);
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
     }
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [runner.runnerState]);
+  }, [commandLog]);
 
-  const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
+  const addLog = useCallback((type: LogEntry["type"], text: string) => {
+    setCommandLog((prev) => [
+      ...prev,
+      { id: Date.now() + Math.random(), type, text, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) },
+    ]);
+  }, []);
 
-  const currentStop = allStops[runner.currentStopIndex];
-  const nextStop = allStops[runner.currentStopIndex + 1];
-  const progress = runner.progressPercent(allStops);
+  const setPromptAndSpeak = useCallback(
+    (text: string) => {
+      setPromptText(text);
+      setSpeaking(true);
+      addLog("NOVA", text);
+      speakText(text, () => setSpeaking(false));
+    },
+    [addLog]
+  );
 
-  const handleStart = () => {
-    runner.start(assignment, allStops);
-    speak(
-      `Assignment ${assignment.assignmentNumber}. Start aisle ${assignment.startAisle}. End aisle ${assignment.endAisle}. ` +
-      `Total cases ${assignment.totalCases}. Total pallets ${assignment.totalPallets}. ` +
-      `Goal time ${assignment.goalTimeMinutes} minutes. Say ready to begin.`
-    );
+  // ── Speech recognition ──────────────────────────────────────────────────
+
+  const startListening = useCallback(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    if (!recognitionRef.current) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = "en-US";
+
+      recognition.onstart = () => setListening(true);
+
+      recognition.onend = () => {
+        setListening(false);
+        if (shouldKeepListeningRef.current) {
+          setTimeout(() => {
+            try { recognition.start(); } catch {}
+          }, 300);
+        }
+      };
+
+      recognition.onerror = () => {
+        setListening(false);
+        if (shouldKeepListeningRef.current) {
+          setTimeout(() => {
+            try { recognition.start(); } catch {}
+          }, 500);
+        }
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = normalizeSpeech(event.results?.[0]?.[0]?.transcript || "");
+        setHeardText(transcript);
+        addLog("USER", transcript || "[no input]");
+        handleVoiceInput(transcript);
+      };
+
+      recognitionRef.current = recognition;
+    }
+
+    shouldKeepListeningRef.current = true;
+    try { recognitionRef.current.start(); } catch {}
+  }, [addLog]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const stopListening = useCallback(() => {
+    shouldKeepListeningRef.current = false;
+    setListening(false);
+    try { recognitionRef.current?.stop(); } catch {}
+  }, []);
+
+  // ── Command shortcuts (global during session) ───────────────────────────
+
+  const handleCommandShortcuts = (input: string): boolean => {
+    if (!input) {
+      setPromptAndSpeak("No input received.");
+      return true;
+    }
+    if (input === "repeat labels") { setPromptAndSpeak("Repeating label instructions."); return true; }
+    if (input === "makeup skips") { setPromptAndSpeak("Makeup skips requested."); return true; }
+    if (input === "get drops") { setPromptAndSpeak("Get drops requested."); return true; }
+    if (input === "close batch") { setPromptAndSpeak("Closing batch."); return true; }
+    if (input.startsWith("go to aisle")) { setPromptAndSpeak("Go to aisle command received."); return true; }
+    if (input === "base items") { setPromptAndSpeak("Base items review not yet loaded."); return true; }
+    if (input === "previous") { setPromptAndSpeak("Previous item requested."); return true; }
+    if (input === "base complete") { setPromptAndSpeak("Base complete confirmed."); return true; }
+    if (input === "remove pallet") { setPromptAndSpeak("Remove pallet noted."); return true; }
+    if (input === "skip slot") { setPromptAndSpeak("Skip slot noted."); return true; }
+    if (input === "report damage") { setPromptAndSpeak("Damage flow started."); return true; }
+    if (input.startsWith("damage")) { setPromptAndSpeak("Damage quantity recorded."); return true; }
+    if (input === "slot empty") { setPromptAndSpeak("Slot empty recorded."); return true; }
+    if (input === "recap weights") { setPromptAndSpeak("Recapping weights."); return true; }
+    if (input === "next") { setPromptAndSpeak("Next item."); return true; }
+    if (input === "exit list") { setPromptAndSpeak("Exit list."); return true; }
+    if (input === "no labels") { setPromptAndSpeak("No labels recorded."); return true; }
+    return false;
   };
 
-  const handleAdvance = () => {
-    if (isSpeaking) return;
-    if (runner.runnerState === 'intro') {
-      runner.advance(assignment, allStops);
-      speak("Position Alpha pallet. Get CHEP pallet from stack. Say ready when set.");
-    } else if (runner.runnerState === 'pallet_alpha') {
-      runner.advance(assignment, allStops);
-      if (assignment.totalPallets > 1) {
-        speak("Position Bravo pallet. Say ready when set.");
-      } else {
-        speak(`${allStops[0]?.aisle ?? ''} ${allStops[0]?.slot ?? ''} check.`);
+  // ── Pick flow helpers (use refs to avoid stale closure) ─────────────────
+
+  const beginStop = useCallback((idx: number, stopsArr: typeof stops) => {
+    const stop = stopsArr[idx];
+    if (!stop) return;
+    setPhase("PICKING");
+    setCurrentStopIndex(idx);
+    setLastCodeWrong(false);
+    setCodeInput("");
+    setTimeout(() => codeInputRef.current?.focus(), 100);
+    setPromptAndSpeak(`New aisle ${stop.aisle} slot ${stop.slot}`);
+  }, [setPromptAndSpeak]);
+
+  const startAssignedBatch = useCallback((asgn: typeof assignment, stopsArr: typeof stops) => {
+    if (!asgn) { setPromptAndSpeak("No assignment assigned to your ID."); return; }
+
+    setCurrentStopIndex(0);
+    setPickedCount(0);
+
+    const summary =
+      `Start aisle ${asgn.startAisle} end aisle ${asgn.endAisle}. ` +
+      `Slots ${stopsArr.length}. Total cases ${asgn.totalCases}. ` +
+      `Pallets ${asgn.totalPallets}. Estimated goal ${asgn.goalTimeMinutes} minutes. ` +
+      `To continue say ready.`;
+    setPhase("LOAD_PICKS_SUMMARY");
+    setPromptAndSpeak(summary);
+  }, [setPromptAndSpeak]);
+
+  // ── Main voice input handler ─────────────────────────────────────────────
+
+  const handleVoiceInput = useCallback((rawInput: string) => {
+    const input = normalizeSpeech(rawInput);
+    const phase = phaseRef.current;
+
+    // Global shortcuts (not during SIGN_ON flow)
+    if (!["IDLE", "SIGN_ON", "SIGN_ON_CONFIRM", "PALLET_COUNT", "PALLET_COUNT_CONFIRM", "SAFETY"].includes(phase)) {
+      if (handleCommandShortcuts(input)) return;
+    }
+
+    // ── Sign on ──
+    if (phase === "SIGN_ON") {
+      const digits = extractNumber(input);
+      if (!digits) { setPromptAndSpeak("Enter equipment ID."); return; }
+      setEquipmentId(digits);
+      equipmentIdRef.current = digits;
+      setPhase("SIGN_ON_CONFIRM");
+      setPromptAndSpeak(`Confirm equipment ${digits}.`);
+      return;
+    }
+
+    if (phase === "SIGN_ON_CONFIRM") {
+      if (isConfirm(input)) {
+        setPhase("PALLET_COUNT");
+        setPromptAndSpeak(`Enter maximum pallet count for jack ${equipmentIdRef.current}.`);
+        return;
       }
-    } else if (runner.runnerState === 'pallet_bravo') {
-      runner.advance(assignment, allStops);
-      if (allStops[0]) speak(`${allStops[0].aisle} ${allStops[0].slot} check.`);
-    } else if (runner.runnerState === 'outro') {
-      runner.advance(assignment, allStops);
-      speak("Assignment complete. Good work.");
+      if (isDeny(input)) {
+        setEquipmentId("");
+        equipmentIdRef.current = "";
+        setPhase("SIGN_ON");
+        setPromptAndSpeak("Enter equipment ID.");
+        return;
+      }
+      setPromptAndSpeak(`Confirm equipment ${equipmentIdRef.current}.`);
+      return;
     }
-  };
 
-  const handleCheckCode = () => {
-    if (!currentStop || isSpeaking) return;
-    const result = runner.submitCode(codeInput, currentStop, allStops);
+    if (phase === "PALLET_COUNT") {
+      const digits = extractNumber(input);
+      if (!digits) { setPromptAndSpeak("Enter maximum pallet count."); return; }
+      setMaxPallets(digits);
+      maxPalletsRef.current = digits;
+      setPhase("PALLET_COUNT_CONFIRM");
+      setPromptAndSpeak("Confirm maximum pallet count.");
+      return;
+    }
+
+    if (phase === "PALLET_COUNT_CONFIRM") {
+      if (isConfirm(input)) {
+        setPhase("SAFETY");
+        setSafetyIndex(0);
+        safetyIndexRef.current = 0;
+        setPromptAndSpeak(SAFETY_ITEMS[0]);
+        return;
+      }
+      if (isDeny(input)) {
+        setPhase("PALLET_COUNT");
+        setPromptAndSpeak(`Enter maximum pallet count for jack ${equipmentIdRef.current}.`);
+        return;
+      }
+      setPromptAndSpeak("Confirm maximum pallet count.");
+      return;
+    }
+
+    // ── Safety ──
+    if (phase === "SAFETY") {
+      const idx = safetyIndexRef.current;
+      const item = SAFETY_ITEMS[idx];
+      if (isConfirm(input)) {
+        if (idx < SAFETY_ITEMS.length - 1) {
+          const next = idx + 1;
+          setSafetyIndex(next);
+          safetyIndexRef.current = next;
+          setPromptAndSpeak(SAFETY_ITEMS[next]);
+        } else {
+          setPhase("LOAD_PICKS_WAIT");
+          setPromptAndSpeak("Say load picks.");
+        }
+        return;
+      }
+      if (isDeny(input)) {
+        setFailedSafetyItem(item);
+        setPhase("SAFETY_FAILED");
+        setPromptAndSpeak(`Safety check failed. ${item} Session stopped. Contact your supervisor.`);
+        stopListening();
+        return;
+      }
+      setPromptAndSpeak(item);
+      return;
+    }
+
+    // ── Load picks wait ──
+    if (phase === "LOAD_PICKS_WAIT") {
+      if (isLoadPicks(input)) {
+        startAssignedBatch(assignment, stops);
+        return;
+      }
+      setPromptAndSpeak("Say load picks.");
+      return;
+    }
+
+    // ── Load picks summary ──
+    if (phase === "LOAD_PICKS_SUMMARY") {
+      if (isReady(input)) {
+        setPhase("ALPHA_SETUP");
+        setPromptAndSpeak("Position alpha pallet. Get chep.");
+        return;
+      }
+      setPromptAndSpeak("To continue say ready.");
+      return;
+    }
+
+    // ── Pallet setup ──
+    if (phase === "ALPHA_SETUP") {
+      if (isReady(input) || isConfirm(input)) {
+        setPhase("BRAVO_SETUP");
+        setPromptAndSpeak("Position bravo pallet. Get chep.");
+        return;
+      }
+      setPromptAndSpeak("Position alpha pallet. Say ready when set.");
+      return;
+    }
+
+    if (phase === "BRAVO_SETUP") {
+      if (isReady(input) || isConfirm(input)) {
+        beginStop(0, stops);
+        return;
+      }
+      setPromptAndSpeak("Position bravo pallet. Say ready when set.");
+      return;
+    }
+
+    // ── Picking — voice only check code ──
+    if (phase === "PICKING") {
+      const stop = stops[currentStopIndexRef.current];
+      if (!stop) return;
+
+      const digits = extractNumber(input);
+      if (!digits) {
+        setPromptAndSpeak(`You said ${input}. Invalid. New aisle ${stop.aisle} slot ${stop.slot}`);
+        setLastCodeWrong(true);
+        return;
+      }
+
+      if (digits === stop.checkCode) {
+        setLastCodeWrong(false);
+        const pallet = (currentStopIndexRef.current % 2 === 0) ? "Alpha" : "Bravo";
+        setPickedCount((c) => c + 1);
+        setPromptAndSpeak(`Grab ${stop.qty} ${pallet}.`);
+        // after short delay, advance or complete
+        setTimeout(() => {
+          const nextIdx = currentStopIndexRef.current + 1;
+          if (nextIdx < stops.length) {
+            beginStop(nextIdx, stops);
+          } else {
+            startBatchComplete(assignment);
+          }
+        }, 3500);
+      } else {
+        setLastCodeWrong(true);
+        setPromptAndSpeak(`You said ${digits}. Invalid. New aisle ${stop.aisle} slot ${stop.slot}`);
+      }
+      return;
+    }
+
+    // ── Batch complete ──
+    if (phase === "BATCH_COMPLETE") {
+      handleBatchCompleteInput(input);
+      return;
+    }
+  }, [assignment, stops, beginStop, startAssignedBatch, stopListening, setPromptAndSpeak]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Batch complete flow ──────────────────────────────────────────────────
+
+  const startBatchComplete = useCallback((asgn: typeof assignment) => {
+    if (!asgn) return;
+    setBatchStep(0);
+    batchStepRef.current = 0;
+    setPhase("BATCH_COMPLETE");
+    setPromptAndSpeak(`Batch complete. Deliver pallet bravo to door ${asgn.doorNumber}.`);
+  }, [setPromptAndSpeak]);
+
+  const handleBatchCompleteInput = useCallback((input: string) => {
+    const asgn = assignment;
+    if (!asgn) return;
+    const step = batchStepRef.current;
+
+    const advance = (next: number, prompt: string) => {
+      setBatchStep(next);
+      batchStepRef.current = next;
+      setPromptAndSpeak(prompt);
+    };
+
+    if (step === 0) {
+      // Confirm door code
+      const digits = extractNumber(input);
+      if (digits === asgn.doorCode || isConfirm(input)) {
+        advance(1, `Apply labels to pallet alpha. Label number ${asgn.alphaLabelNumber}.`);
+      } else {
+        setPromptAndSpeak(`Deliver pallet bravo to door ${asgn.doorNumber}. Confirm door code.`);
+      }
+      return;
+    }
+
+    if (step === 1) {
+      if (isConfirm(input) || normalizeSpeech(input) === "alpha" || extractNumber(input) === String(asgn.alphaLabelNumber)) {
+        advance(2, `Apply labels to pallet bravo. Label number ${asgn.bravoLabelNumber}.`);
+      } else {
+        setPromptAndSpeak(`Apply labels to pallet alpha. Label number ${asgn.alphaLabelNumber}.`);
+      }
+      return;
+    }
+
+    if (step === 2) {
+      if (isConfirm(input) || normalizeSpeech(input) === "bravo" || extractNumber(input) === String(asgn.bravoLabelNumber)) {
+        advance(3, `Deliver bravo pallet to door ${asgn.doorNumber}. Confirm staging code.`);
+      } else {
+        setPromptAndSpeak(`Apply labels to pallet bravo. Label number ${asgn.bravoLabelNumber}.`);
+      }
+      return;
+    }
+
+    if (step === 3) {
+      if (isConfirm(input) || extractNumber(input) === asgn.doorCode) {
+        advance(4, `Deliver alpha pallet to door ${asgn.doorNumber}. Confirm staging code.`);
+      } else {
+        setPromptAndSpeak(`Deliver bravo pallet to door ${asgn.doorNumber}. Confirm staging code.`);
+      }
+      return;
+    }
+
+    if (step === 4) {
+      if (isConfirm(input) || extractNumber(input) === asgn.doorCode) {
+        setBatchStep(5);
+        batchStepRef.current = 5;
+        setPhase("DONE");
+        setPromptAndSpeak("Assignment complete. Good work. Say load picks for next batch.");
+      } else {
+        setPromptAndSpeak(`Deliver alpha pallet to door ${asgn.doorNumber}. Confirm staging code.`);
+      }
+      return;
+    }
+
+    if (step === 5) {
+      if (isLoadPicks(input)) {
+        startAssignedBatch(asgn, stops);
+      } else {
+        setPromptAndSpeak("Say load picks for next batch.");
+      }
+      return;
+    }
+  }, [assignment, stops, startAssignedBatch, setPromptAndSpeak]);
+
+  // ── Start session ────────────────────────────────────────────────────────
+
+  const startSession = useCallback(() => {
+    if (!assignment) return;
+    setPhase("SIGN_ON");
+    setEquipmentId("");
+    setMaxPallets("2");
+    setSafetyIndex(0);
+    setCurrentStopIndex(0);
+    setPickedCount(0);
+    setBatchStep(0);
+    setLastCodeWrong(false);
     setCodeInput("");
-    if (result === "correct") {
-      setCodeError(false);
-      speak(`Confirmed. Grab ${currentStop.qty}.`);
+    setCommandLog([]);
+    setHeardText("");
+    setFailedSafetyItem("");
+    setPromptAndSpeak("Enter equipment ID.");
+
+    const SpeechRec =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRec) {
+      setMicMode("browser");
+      setTimeout(() => startListening(), 1800);
+    } else {
+      setMicMode("button");
+    }
+  }, [assignment, setPromptAndSpeak, startListening]);
+
+  const resetSession = useCallback(() => {
+    stopListening();
+    try { window.speechSynthesis.cancel(); } catch {}
+    setSpeaking(false);
+    setPhase("IDLE");
+    setPromptText("NOVA ready. Select a selector to begin.");
+    setHeardText("");
+    setCommandLog([]);
+    setEquipmentId("");
+    setMaxPallets("2");
+    setSafetyIndex(0);
+    setCurrentStopIndex(0);
+    setPickedCount(0);
+    setBatchStep(0);
+    setLastCodeWrong(false);
+    setCodeInput("");
+    setFailedSafetyItem("");
+  }, [stopListening]);
+
+  // ── Button-mode check code submit ────────────────────────────────────────
+
+  const submitCheckCode = useCallback(() => {
+    const stop = stops[currentStopIndex];
+    if (!stop || !codeInput.trim()) return;
+
+    const input = codeInput.trim();
+    setCodeInput("");
+
+    if (input === stop.checkCode) {
+      setLastCodeWrong(false);
+      const pallet = (currentStopIndex % 2 === 0) ? "Alpha" : "Bravo";
+      setPickedCount((c) => c + 1);
+      addLog("USER", input);
+      setPromptAndSpeak(`Grab ${stop.qty} ${pallet}.`);
+
       setTimeout(() => {
-        // transition to confirm_qty handled via runnerState
-      }, 0);
+        const nextIdx = currentStopIndex + 1;
+        currentStopIndexRef.current = nextIdx;
+        if (nextIdx < stops.length) {
+          beginStop(nextIdx, stops);
+        } else {
+          startBatchComplete(assignment);
+        }
+      }, 3500);
     } else {
-      setCodeError(true);
-      speak(`Invalid. ${codeInput}. ${currentStop.aisle} ${currentStop.slot} check.`);
+      setLastCodeWrong(true);
+      addLog("USER", input);
+      setPromptAndSpeak(`You said ${input}. Invalid. New aisle ${stop.aisle} slot ${stop.slot}`);
     }
-  };
+  }, [stops, currentStopIndex, codeInput, addLog, setPromptAndSpeak, beginStop, startBatchComplete, assignment]);
 
-  const handleConfirmQty = () => {
-    if (isSpeaking) return;
-    runner.confirmQty(assignment, allStops);
-    const nextIdx = runner.currentStopIndex + 1;
-    if (nextIdx < allStops.length) {
-      const next = allStops[nextIdx];
-      speak(`${next.aisle} ${next.slot} check.`);
-    } else {
-      speak(
-        `Last case complete. Proceed to printer ${SYSTEM_DEFAULTS.printerNumber}. ` +
-        `Apply label ${SYSTEM_DEFAULTS.alphaLabelNumber} to pallet Alpha. ` +
-        `Apply label ${SYSTEM_DEFAULTS.bravoLabelNumber} to pallet Bravo. ` +
-        `Deliver to door ${assignment.doorNumber}. Say ready to complete.`
-      );
-    }
-  };
+  // ── Button-mode confirm/deny ─────────────────────────────────────────────
 
-  const handleReset = () => {
-    stop();
-    runner.reset();
-    setCodeInput("");
-    setCodeError(false);
-  };
+  const handleButtonInput = useCallback((input: string) => {
+    addLog("USER", input);
+    handleVoiceInput(input);
+  }, [addLog, handleVoiceInput]);
 
-  const paceStatus = (() => {
-    const goalSecs = assignment.goalTimeMinutes * 60;
-    if (progress === 0) return null;
-    const expectedProgress = Math.min(100, (runner.elapsedSeconds / goalSecs) * 100);
-    const diff = progress - expectedProgress;
-    if (diff > 5) return { label: "AHEAD", color: "text-green-400" };
-    if (diff < -5) return { label: "BEHIND", color: "text-red-400" };
-    return { label: "ON PACE", color: "text-yellow-400" };
-  })();
+  // ── Computed values ──────────────────────────────────────────────────────
 
-  const performancePercent = (() => {
-    if (runner.elapsedSeconds < 10 || progress === 0) return null;
-    const goalSecs = assignment.goalTimeMinutes * 60;
-    const expectedProgress = (runner.elapsedSeconds / goalSecs) * 100;
-    return Math.round((progress / Math.max(1, expectedProgress)) * 100);
-  })();
+  const currentStop = stops[currentStopIndex] ?? null;
+  const progress = stops.length > 0 ? Math.round((pickedCount / stops.length) * 100) : 0;
+  const isIdle = phase === "IDLE";
+  const isActive = !isIdle && phase !== "DONE" && phase !== "SAFETY_FAILED";
+  const isPicking = phase === "PICKING";
 
-  const isIdle = runner.runnerState === 'idle';
-  const isCompleted = runner.runnerState === 'completed';
-  const isPicking = runner.runnerState === 'picking' || runner.runnerState === 'wrong_code';
-  const isConfirmQty = runner.runnerState === 'confirm_qty';
+  const safetyPercent = SAFETY_ITEMS.length > 0
+    ? Math.round((safetyIndex / SAFETY_ITEMS.length) * 100)
+    : 0;
+
+  // ─── Render ──────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-[#080e17] text-slate-100">
-      {/* Header */}
+
+      {/* ── Top bar ─────────────────────────────────────────────────────── */}
       <div className="border-b border-slate-800 bg-slate-950 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-yellow-400 rounded-lg">
+          <div className="p-2 bg-yellow-400 rounded-xl">
             <Headphones className="h-5 w-5 text-slate-950" />
           </div>
           <div>
             <h1 className="text-xl font-black text-white">NOVA Trainer</h1>
-            <p className="text-xs text-slate-400">Voice-Directed Picking Simulator</p>
+            <p className="text-xs text-slate-400">ES3 Voice-Directed Picking — Jennifer Script</p>
           </div>
         </div>
-        {!isIdle && !isCompleted && (
-          <button onClick={handleReset} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-700 text-slate-400 hover:border-yellow-400 hover:text-white text-sm transition">
-            <RotateCcw className="h-4 w-4" /> Reset
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {phase !== "IDLE" && (
+            <>
+              <span className={`text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full bg-slate-800 ${PHASE_COLOR[phase]}`}>
+                {PHASE_LABEL[phase]}
+              </span>
+              <button
+                onClick={resetSession}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-700 text-slate-400 hover:border-yellow-400 hover:text-white text-sm transition"
+              >
+                <RotateCcw className="h-4 w-4" /> Reset
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8 grid xl:grid-cols-3 gap-8">
-        {/* Left: Controls */}
-        <div className="xl:col-span-1 space-y-6">
+      <div className="max-w-[1400px] mx-auto px-4 py-6 grid xl:grid-cols-[280px_1fr_260px] gap-6">
 
-          {/* Selector Picker */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
-              <User className="h-4 w-4" /> Selector
+        {/* ── Left panel ──────────────────────────────────────────────── */}
+        <div className="space-y-4">
+
+          {/* Selector picker */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
+              <User className="h-3.5 w-3.5" /> Selector
             </h2>
             {selectors.length === 0 ? (
-              <p className="text-slate-500 text-sm">No selectors registered. Add one in the Trainer Dashboard.</p>
+              <p className="text-slate-500 text-xs">No selectors registered. Add one in the Trainer Dashboard.</p>
             ) : (
               <select
                 disabled={!isIdle}
                 value={selectedSelectorId}
-                onChange={e => { setSelectedSelectorId(e.target.value); runner.reset(); }}
-                className="w-full rounded-xl bg-slate-950 border border-slate-700 text-white px-4 py-3 text-sm font-mono focus:outline-none focus:border-yellow-400 disabled:opacity-50"
+                onChange={(e) => { setSelectedSelectorId(e.target.value); resetSession(); }}
+                className="w-full rounded-xl bg-slate-950 border border-slate-700 text-white px-3 py-2.5 text-sm focus:outline-none focus:border-yellow-400 disabled:opacity-50 transition"
               >
                 <option value="">— Choose selector —</option>
-                {selectors.map(s => (
+                {selectors.map((s) => (
                   <option key={s.id} value={String(s.id)}>
-                    {s.name} ({s.novaId})
+                    {s.name} · {s.novaId}
                   </option>
                 ))}
               </select>
             )}
 
-            {selectedSelector && (
-              <div className="mt-3">
-                {hasAssignment ? (
-                  <div className="rounded-xl bg-green-500/10 border border-green-500/30 px-4 py-3 text-sm">
-                    <p className="text-green-300 font-bold">Assignment #{assignment.assignmentNumber}</p>
-                    <p className="text-slate-400 text-xs mt-0.5">{assignment.type} · {assignment.totalCases} cases · Aisles {assignment.startAisle}–{assignment.endAisle}</p>
-                  </div>
-                ) : (
-                  <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm flex items-start gap-2">
-                    <Lock className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
-                    <div>
-                      <p className="text-red-300 font-bold">No assignment assigned</p>
-                      <p className="text-slate-400 text-xs mt-0.5">A trainer must assign an assignment to this selector before starting a session.</p>
+            {selectedSelector && assignment && (
+              <div className="mt-3 rounded-xl bg-green-500/10 border border-green-500/20 px-3 py-2.5 text-xs">
+                <p className="text-green-300 font-bold">Assignment #{assignment.assignmentNumber}</p>
+                <p className="text-slate-400 mt-0.5">{assignment.totalCases} cases · {stops.length} stops · Aisles {assignment.startAisle}–{assignment.endAisle}</p>
+              </div>
+            )}
+            {selectedSelector && !assignment && (
+              <div className="mt-3 rounded-xl bg-red-500/10 border border-red-500/20 px-3 py-2.5 text-xs text-red-300">
+                No assignment assigned to this selector.
+              </div>
+            )}
+          </div>
+
+          {/* Phase + safety progress */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
+              <Activity className="h-3.5 w-3.5" /> Session State
+            </h2>
+            <div className="space-y-3">
+              {(["SIGN_ON", "SAFETY", "LOAD_PICKS_WAIT", "ALPHA_SETUP", "PICKING", "BATCH_COMPLETE"] as Phase[]).map((p) => {
+                const phases: Phase[] = ["IDLE", "SIGN_ON", "SIGN_ON_CONFIRM", "PALLET_COUNT", "PALLET_COUNT_CONFIRM", "SAFETY", "SAFETY_FAILED", "LOAD_PICKS_WAIT", "LOAD_PICKS_SUMMARY", "ALPHA_SETUP", "BRAVO_SETUP", "PICKING", "BATCH_COMPLETE", "DONE"];
+                const phaseOrderMap: Record<Phase, number> = {} as any;
+                phases.forEach((ph, i) => phaseOrderMap[ph] = i);
+
+                const current = phaseOrderMap[phase];
+                const thisIdx = phaseOrderMap[p];
+                const done = current > thisIdx;
+                const active = p === "SIGN_ON" ? ["SIGN_ON", "SIGN_ON_CONFIRM", "PALLET_COUNT", "PALLET_COUNT_CONFIRM"].includes(phase)
+                  : p === "SAFETY" ? phase === "SAFETY" || phase === "SAFETY_FAILED"
+                  : p === "LOAD_PICKS_WAIT" ? ["LOAD_PICKS_WAIT", "LOAD_PICKS_SUMMARY"].includes(phase)
+                  : p === "ALPHA_SETUP" ? ["ALPHA_SETUP", "BRAVO_SETUP"].includes(phase)
+                  : p === "PICKING" ? phase === "PICKING"
+                  : p === "BATCH_COMPLETE" ? ["BATCH_COMPLETE", "DONE"].includes(phase)
+                  : false;
+
+                const label = p === "SIGN_ON" ? "1. Sign On" : p === "SAFETY" ? "2. Safety Check"
+                  : p === "LOAD_PICKS_WAIT" ? "3. Load Picks" : p === "ALPHA_SETUP" ? "4. Pallet Setup"
+                  : p === "PICKING" ? "5. Picking" : "6. Batch Complete";
+
+                return (
+                  <div key={p} className={`flex items-center gap-3 text-sm transition ${active ? "opacity-100" : done ? "opacity-60" : "opacity-30"}`}>
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${done ? "bg-green-500" : active ? "bg-yellow-400" : "bg-slate-700"}`}>
+                      {done ? <CheckCircle2 className="h-3 w-3 text-white" /> : <span className="text-xs font-black text-slate-950 leading-none">{label[0]}</span>}
                     </div>
+                    <span className={active ? "text-white font-bold" : done ? "text-slate-300" : "text-slate-500"}>{label}</span>
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Voice Mode */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4">Voice Mode</h2>
-            <div className="space-y-2">
-              {(["training", "production", "ultra_fast"] as VoiceModeOption[]).map(mode => (
-                <button
-                  key={mode}
-                  disabled={!isIdle}
-                  onClick={() => setVoiceMode(mode)}
-                  className={`w-full text-left px-4 py-3 rounded-xl border text-sm font-semibold transition disabled:opacity-50 ${
-                    voiceMode === mode
-                      ? "border-yellow-400 bg-yellow-400/10 text-yellow-300"
-                      : "border-slate-700 text-slate-400 hover:border-slate-600"
-                  }`}
-                >
-                  {mode === "training" ? "Training Mode" : mode === "production" ? "Production Mode" : "Ultra-Fast Mode"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Assignment Summary */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4">Assignment Info</h2>
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between"><span className="text-slate-400">Assignment</span><span className="font-mono text-white">#{assignment.assignmentNumber}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Aisles</span><span className="font-mono text-white">{assignment.startAisle} → {assignment.endAisle}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Total Cases</span><span className="font-mono text-white">{assignment.totalCases}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Pallets</span><span className="font-mono text-white">{assignment.totalPallets}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Goal Time</span><span className="font-mono text-white">{assignment.goalTimeMinutes}m</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Stops</span><span className="font-mono text-white">{allStops.length}</span></div>
-              <div className="border-t border-slate-800 pt-3 flex justify-between"><span className="text-slate-400">Printer</span><span className="font-mono text-yellow-400">{SYSTEM_DEFAULTS.printerNumber}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Alpha Label</span><span className="font-mono text-yellow-400">{SYSTEM_DEFAULTS.alphaLabelNumber}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Bravo Label</span><span className="font-mono text-yellow-400">{SYSTEM_DEFAULTS.bravoLabelNumber}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Door</span><span className="font-mono text-yellow-400">{assignment.doorNumber}</span></div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Voice Panel */}
-        <div className="xl:col-span-2 space-y-6">
-
-          {/* NOVA Orb + Transcript */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 flex flex-col items-center">
-            {/* Orb */}
-            <div className="relative flex items-center justify-center h-40 w-40 mb-6">
-              {isSpeaking && (
-                <>
-                  <div className="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping" style={{ animationDuration: "1.4s" }} />
-                  <div className="absolute inset-[-16px] rounded-full bg-yellow-400/10 animate-ping" style={{ animationDuration: "2s", animationDelay: "0.3s" }} />
-                </>
-              )}
-              <div className={`w-28 h-28 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl ${isSpeaking ? "bg-yellow-400 scale-105 shadow-yellow-400/40" : "bg-slate-800 border-2 border-slate-700"}`}>
-                <Headphones className={`h-12 w-12 ${isSpeaking ? "text-slate-950" : "text-slate-500"}`} />
-              </div>
+                );
+              })}
             </div>
 
-            {/* Transcript */}
-            <div className="w-full min-h-[80px] flex items-center justify-center text-center px-4 mb-6">
-              {transcript ? (
-                <p className={`text-xl md:text-2xl font-medium leading-relaxed transition-all ${isSpeaking ? "text-white" : "text-slate-500"}`}>
-                  "{transcript}"
-                </p>
-              ) : (
-                <p className="text-slate-600 text-lg">NOVA is ready.</p>
-              )}
-            </div>
-
-            {/* Action zone */}
-            {isIdle && !selectedSelector && (
-              <div className="text-center text-slate-500 text-sm">
-                <User className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                Choose a selector on the left to begin.
-              </div>
-            )}
-
-            {isIdle && selectedSelector && !hasAssignment && (
-              <div className="text-center">
-                <Lock className="h-10 w-10 mx-auto mb-3 text-red-400 opacity-80" />
-                <p className="text-red-300 font-bold mb-1">Session Locked</p>
-                <p className="text-slate-500 text-sm">Go to the Trainer Dashboard and assign an assignment to <span className="text-white font-semibold capitalize">{selectedSelector.name}</span> first.</p>
-              </div>
-            )}
-
-            {isIdle && selectedSelector && hasAssignment && (
-              <button
-                onClick={handleStart}
-                className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-yellow-400 text-slate-950 font-black text-lg hover:bg-yellow-300 transition shadow-lg shadow-yellow-400/20"
-              >
-                <Play className="h-6 w-6" /> Start Session
-              </button>
-            )}
-
-            {isCompleted && (
-              <div className="text-center">
-                <CheckCircle2 className="h-16 w-16 text-green-400 mx-auto mb-4" />
-                <p className="text-2xl font-black text-white mb-2">Session Complete</p>
-                <p className="text-slate-400 mb-6">Assignment {assignment.assignmentNumber} finished.</p>
-                <button onClick={handleReset} className="px-6 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white font-semibold hover:border-yellow-400 transition">
-                  Run Another
-                </button>
-              </div>
-            )}
-
-            {!isIdle && !isCompleted && !isPicking && !isConfirmQty && (
-              <button
-                onClick={handleAdvance}
-                disabled={isSpeaking}
-                className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-slate-800 text-white font-bold text-lg border border-slate-700 hover:border-yellow-400 transition disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <Mic className="h-5 w-5 text-yellow-400" /> Say "READY"
-              </button>
-            )}
-
-            {isConfirmQty && (
-              <div className="w-full text-center">
-                <div className="inline-block rounded-2xl bg-yellow-400/10 border border-yellow-400/30 px-10 py-6 mb-4">
-                  <p className="text-xs font-bold uppercase tracking-widest text-yellow-400/70 mb-2">Grab Quantity</p>
-                  <p className="text-6xl font-black text-yellow-400">{currentStop?.qty}</p>
+            {phase === "SAFETY" && (
+              <div className="mt-4">
+                <div className="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>Safety progress</span>
+                  <span>{safetyIndex + 1} / {SAFETY_ITEMS.length}</span>
                 </div>
-                <br />
-                <button
-                  onClick={handleConfirmQty}
-                  disabled={isSpeaking}
-                  className="flex items-center gap-2 mx-auto px-8 py-4 rounded-2xl bg-yellow-400 text-slate-950 font-black text-lg hover:bg-yellow-300 transition shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <Mic className="h-5 w-5" /> READY
-                </button>
+                <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                  <div className="h-full bg-yellow-400 rounded-full transition-all duration-500" style={{ width: `${safetyPercent}%` }} />
+                </div>
               </div>
             )}
 
             {isPicking && (
-              <div className="w-full max-w-sm">
-                <div className="text-center mb-5">
-                  <p className="text-xs uppercase tracking-widest text-slate-500 mb-1">Current Location</p>
-                  <p className="text-5xl font-black text-white">{currentStop?.aisle ?? "—"} – {currentStop?.slot ?? "—"}</p>
+              <div className="mt-4">
+                <div className="flex justify-between text-xs text-slate-400 mb-1">
+                  <span>Pick progress</span>
+                  <span>{pickedCount} / {stops.length}</span>
                 </div>
+                <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                  <div className="h-full bg-green-400 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Assignment info */}
+          {assignment && !isIdle && (
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+              <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
+                <Package className="h-3.5 w-3.5" /> Assignment
+              </h2>
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between"><span className="text-slate-400">Number</span><span className="font-mono text-white">#{assignment.assignmentNumber}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">Aisles</span><span className="font-mono text-white">{assignment.startAisle}–{assignment.endAisle}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">Cases</span><span className="font-mono text-white">{assignment.totalCases}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">Stops</span><span className="font-mono text-white">{stops.length}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">Goal</span><span className="font-mono text-white">{assignment.goalTimeMinutes}m</span></div>
+                <div className="border-t border-slate-800 pt-2 flex justify-between"><span className="text-slate-400 flex items-center gap-1"><DoorOpen className="h-3 w-3" /> Door</span><span className="font-mono text-yellow-400 font-bold">{assignment.doorNumber} · {assignment.doorCode}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">Alpha Label</span><span className="font-mono text-yellow-400">{assignment.alphaLabelNumber}</span></div>
+                <div className="flex justify-between"><span className="text-slate-400">Bravo Label</span><span className="font-mono text-yellow-400">{assignment.bravoLabelNumber}</span></div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Center panel — NOVA voice ──────────────────────────────────── */}
+        <div className="space-y-4">
+
+          {/* Voice orb */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 flex flex-col items-center">
+            <div className="relative flex items-center justify-center h-32 w-32 mb-5">
+              {speaking && (
+                <>
+                  <div className="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping" style={{ animationDuration: "1.4s" }} />
+                  <div className="absolute inset-[-12px] rounded-full bg-yellow-400/10 animate-ping" style={{ animationDuration: "2s", animationDelay: "0.3s" }} />
+                </>
+              )}
+              {listening && !speaking && (
+                <div className="absolute inset-0 rounded-full bg-green-400/15 animate-ping" style={{ animationDuration: "1.8s" }} />
+              )}
+              <div className={`w-24 h-24 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl ${
+                speaking ? "bg-yellow-400 scale-110 shadow-yellow-400/40"
+                : listening ? "bg-green-500/20 border-2 border-green-400"
+                : phase === "SAFETY_FAILED" ? "bg-red-500/20 border-2 border-red-400"
+                : "bg-slate-800 border-2 border-slate-700"
+              }`}>
+                {speaking ? (
+                  <Volume2 className="h-10 w-10 text-slate-950" />
+                ) : listening ? (
+                  <Mic className="h-10 w-10 text-green-400" />
+                ) : (
+                  <Headphones className={`h-10 w-10 ${phase === "SAFETY_FAILED" ? "text-red-400" : "text-slate-500"}`} />
+                )}
+              </div>
+            </div>
+
+            {/* Status label */}
+            <div className="flex items-center gap-2 mb-4">
+              <span className={`text-xs font-bold uppercase tracking-widest px-2.5 py-1 rounded-full ${
+                speaking ? "bg-yellow-400/20 text-yellow-300"
+                : listening ? "bg-green-500/20 text-green-300"
+                : "bg-slate-800 text-slate-400"
+              }`}>
+                {speaking ? "NOVA speaking" : listening ? "Listening…" : "Standby"}
+              </span>
+            </div>
+
+            {/* Current prompt */}
+            <div className="w-full min-h-[72px] flex items-center justify-center text-center px-4 mb-5">
+              <p className={`text-xl font-medium leading-relaxed transition-all ${
+                speaking ? "text-white" : phase === "SAFETY_FAILED" ? "text-red-300" : "text-slate-300"
+              }`}>
+                "{promptText}"
+              </p>
+            </div>
+
+            {/* Last heard */}
+            {heardText && phase !== "IDLE" && (
+              <div className="flex items-center gap-2 mb-4 px-4 py-2 rounded-xl bg-slate-800 border border-slate-700">
+                <Mic className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                <span className="text-sm text-slate-300 font-mono">"{heardText}"</span>
+              </div>
+            )}
+
+            {/* ── Action zone ── */}
+
+            {isIdle && !selectedSelector && (
+              <div className="text-center text-slate-500 text-sm">
+                <User className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                Choose a selector to begin.
+              </div>
+            )}
+
+            {isIdle && selectedSelector && !assignment && (
+              <div className="text-center">
+                <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-red-400 opacity-80" />
+                <p className="text-red-300 text-sm font-bold">No assignment — cannot start session.</p>
+              </div>
+            )}
+
+            {isIdle && selectedSelector && assignment && (
+              <button
+                onClick={startSession}
+                className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-yellow-400 text-slate-950 font-black text-lg hover:bg-yellow-300 transition shadow-lg shadow-yellow-400/20"
+              >
+                <Play className="h-6 w-6" /> Start NOVA Session
+              </button>
+            )}
+
+            {phase === "SAFETY_FAILED" && (
+              <div className="text-center">
+                <AlertTriangle className="h-10 w-10 text-red-400 mx-auto mb-3" />
+                <p className="text-red-300 font-black text-lg mb-1">Safety Check Failed</p>
+                <p className="text-slate-400 text-sm mb-4">Failed item: <span className="text-red-300 font-bold">{failedSafetyItem}</span></p>
+                <p className="text-slate-500 text-sm">Contact your supervisor before continuing.</p>
+                <button onClick={resetSession} className="mt-5 px-6 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white font-semibold hover:border-yellow-400 transition text-sm">
+                  Reset Session
+                </button>
+              </div>
+            )}
+
+            {phase === "DONE" && (
+              <div className="text-center">
+                <CheckCircle2 className="h-14 w-14 text-green-400 mx-auto mb-3" />
+                <p className="text-2xl font-black text-white mb-1">Batch Complete!</p>
+                <p className="text-slate-400 text-sm mb-5">Assignment {assignment?.assignmentNumber} finished. {pickedCount} stops picked.</p>
+                <button onClick={resetSession} className="px-6 py-3 rounded-xl bg-slate-800 border border-slate-700 text-white font-semibold hover:border-yellow-400 transition">
+                  Run Another Session
+                </button>
+              </div>
+            )}
+
+            {/* Picking: check code input */}
+            {isPicking && currentStop && (
+              <div className="w-full max-w-sm">
+                <div className="text-center mb-4">
+                  <p className="text-xs uppercase tracking-widest text-slate-500 mb-1">Current Location</p>
+                  <p className="text-4xl font-black text-white">Aisle {currentStop.aisle} · Slot {currentStop.slot}</p>
+                  <p className="text-sm text-slate-400 mt-1">Stop {currentStopIndex + 1} of {stops.length} · Qty: {currentStop.qty}</p>
+                </div>
+
                 <div className="flex gap-2">
                   <input
-                    ref={inputRef}
+                    ref={codeInputRef}
                     value={codeInput}
-                    onChange={e => { setCodeInput(e.target.value.toUpperCase()); setCodeError(false); }}
-                    onKeyDown={e => e.key === "Enter" && handleCheckCode()}
-                    disabled={isSpeaking}
+                    onChange={(e) => { setCodeInput(e.target.value); setLastCodeWrong(false); }}
+                    onKeyDown={(e) => e.key === "Enter" && submitCheckCode()}
+                    disabled={speaking}
                     maxLength={6}
-                    placeholder="Check Code"
-                    className={`flex-1 bg-slate-950 border rounded-xl px-4 py-3 text-white font-mono text-center text-xl uppercase placeholder:text-slate-600 focus:outline-none transition disabled:opacity-40 ${codeError ? "border-red-500 focus:border-red-400" : "border-slate-700 focus:border-yellow-400"}`}
+                    placeholder="Check code…"
+                    className={`flex-1 bg-slate-950 border rounded-xl px-4 py-3 text-white font-mono text-center text-xl placeholder:text-slate-600 focus:outline-none transition disabled:opacity-40 ${
+                      lastCodeWrong ? "border-red-500 focus:border-red-400" : "border-slate-700 focus:border-yellow-400"
+                    }`}
                   />
                   <button
-                    onClick={handleCheckCode}
-                    disabled={!codeInput || isSpeaking}
+                    onClick={submitCheckCode}
+                    disabled={!codeInput || speaking}
                     className="px-5 py-3 rounded-xl bg-yellow-400 text-slate-950 font-black hover:bg-yellow-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <ChevronRight className="h-6 w-6" />
                   </button>
                 </div>
-                {codeError && !isSpeaking && (
-                  <div className="mt-3 flex items-center gap-2 text-red-400 text-sm">
-                    <AlertTriangle className="h-4 w-4" /> Invalid check code. Try again.
+                {lastCodeWrong && (
+                  <div className="mt-2 flex items-center gap-2 text-red-400 text-xs">
+                    <AlertTriangle className="h-3.5 w-3.5" /> Invalid check code. Try again.
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* Confirm / Deny buttons for non-picking phases */}
+            {isActive && !isPicking && phase !== "LOAD_PICKS_SUMMARY" && phase !== "LOAD_PICKS_WAIT" && (
+              <div className="flex gap-3 mt-2">
+                <button
+                  onClick={() => handleButtonInput("confirm")}
+                  disabled={speaking}
+                  className="flex-1 px-6 py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white font-black transition disabled:opacity-40 text-sm"
+                >
+                  ✓ Confirm
+                </button>
+                <button
+                  onClick={() => handleButtonInput("no")}
+                  disabled={speaking}
+                  className="flex-1 px-6 py-3 rounded-xl bg-red-700 hover:bg-red-600 text-white font-black transition disabled:opacity-40 text-sm"
+                >
+                  ✗ Deny
+                </button>
+              </div>
+            )}
+
+            {/* Load picks / Ready buttons */}
+            {phase === "LOAD_PICKS_WAIT" && (
+              <button
+                onClick={() => handleButtonInput("load picks")}
+                disabled={speaking}
+                className="px-8 py-4 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-black text-lg transition disabled:opacity-40"
+              >
+                📦 Load Picks
+              </button>
+            )}
+
+            {phase === "LOAD_PICKS_SUMMARY" && (
+              <button
+                onClick={() => handleButtonInput("ready")}
+                disabled={speaking}
+                className="px-8 py-4 rounded-2xl bg-slate-700 hover:bg-slate-600 border border-slate-600 text-white font-black text-lg transition disabled:opacity-40"
+              >
+                <Mic className="inline h-5 w-5 mr-2" /> Say "Ready"
+              </button>
+            )}
+
+            {(phase === "ALPHA_SETUP" || phase === "BRAVO_SETUP") && (
+              <button
+                onClick={() => handleButtonInput("ready")}
+                disabled={speaking}
+                className="px-8 py-4 rounded-2xl bg-cyan-700 hover:bg-cyan-600 text-white font-black text-lg transition disabled:opacity-40"
+              >
+                <Mic className="inline h-5 w-5 mr-2" /> Ready
+              </button>
+            )}
+
+            {/* Mic toggle */}
+            {isActive && (
+              <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
+                {micMode === "browser" ? (
+                  <>
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                    Browser mic active — speak your response
+                  </>
+                ) : (
+                  <>
+                    <MicOff className="h-3.5 w-3.5" />
+                    No mic detected — use buttons above
+                  </>
                 )}
               </div>
             )}
           </div>
 
-          {/* HUD: Live Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 text-center">
-              <Clock className="h-5 w-5 mx-auto text-slate-500 mb-2" />
-              <p className="text-2xl font-black text-white font-mono">{formatTime(runner.elapsedSeconds)}</p>
-              <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider">Elapsed</p>
+          {/* Command log */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
+              <List className="h-3.5 w-3.5" /> Command Log
+            </h2>
+            <div
+              ref={logContainerRef}
+              className="space-y-1.5 max-h-48 overflow-y-auto pr-1 scrollbar-thin"
+            >
+              {commandLog.length === 0 && (
+                <p className="text-slate-600 text-xs text-center py-4">No activity yet.</p>
+              )}
+              {commandLog.map((entry) => (
+                <div key={entry.id} className={`flex gap-2 text-xs rounded-lg px-3 py-1.5 ${
+                  entry.type === "NOVA" ? "bg-yellow-400/8 text-slate-300"
+                  : entry.type === "USER" ? "bg-green-500/8 text-green-300"
+                  : "bg-slate-800 text-slate-400"
+                }`}>
+                  <span className={`font-bold shrink-0 ${entry.type === "NOVA" ? "text-yellow-400" : entry.type === "USER" ? "text-green-400" : "text-slate-500"}`}>
+                    {entry.type === "NOVA" ? "NOVA" : entry.type === "USER" ? "YOU" : "SYS"}
+                  </span>
+                  <span className="flex-1">{entry.text}</span>
+                  <span className="text-slate-600 shrink-0">{entry.time}</span>
+                </div>
+              ))}
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 text-center">
-              <Activity className="h-5 w-5 mx-auto text-slate-500 mb-2" />
-              <p className={`text-2xl font-black font-mono ${performancePercent && performancePercent >= 100 ? "text-green-400" : performancePercent && performancePercent >= 85 ? "text-yellow-400" : "text-slate-400"}`}>
-                {performancePercent ? `${performancePercent}%` : "—"}
-              </p>
-              <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider">Performance</p>
+          </div>
+        </div>
+
+        {/* ── Right panel — cheat sheet ──────────────────────────────────── */}
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
+              <BookOpen className="h-3.5 w-3.5" /> ES3 Commands
+            </h2>
+
+            <div className="mb-3">
+              <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-2">Confirm / Deny</p>
+              <div className="space-y-1">
+                {["yes / confirm / affirmative", "no / cancel / negative"].map((cmd) => (
+                  <div key={cmd} className="flex items-start gap-2 text-xs">
+                    <ChevronRight className="h-3 w-3 text-slate-600 mt-0.5 shrink-0" />
+                    <span className="font-mono text-slate-300">{cmd}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 text-center">
-              <Package className="h-5 w-5 mx-auto text-slate-500 mb-2" />
-              <p className="text-2xl font-black text-white">{progress}%</p>
-              <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider">Progress</p>
+
+            <div className="mb-3">
+              <p className="text-xs font-bold text-purple-400 uppercase tracking-widest mb-2">Help Mode</p>
+              <div className="space-y-1">
+                {voiceCommands.filter((c) => c.type === "help").map((cmd) => (
+                  <div key={cmd.action} className="flex items-start gap-2 text-xs">
+                    <ChevronRight className="h-3 w-3 text-slate-600 mt-0.5 shrink-0" />
+                    <div>
+                      <span className="font-mono text-slate-200">{cmd.phrase}</span>
+                      <p className="text-slate-500 text-[10px] leading-tight">{cmd.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 text-center">
-              <Box className="h-5 w-5 mx-auto text-slate-500 mb-2" />
-              <p className={`text-xl font-black ${paceStatus?.color ?? "text-slate-500"}`}>{paceStatus?.label ?? "—"}</p>
-              <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider">Pace</p>
+
+            <div>
+              <p className="text-xs font-bold text-green-400 uppercase tracking-widest mb-2">Picking Commands</p>
+              <div className="space-y-1">
+                {voiceCommands.filter((c) => c.type === "basic" && !["confirm","deny"].includes(c.action)).map((cmd) => (
+                  <div key={cmd.action} className="flex items-start gap-2 text-xs">
+                    <ChevronRight className="h-3 w-3 text-slate-600 mt-0.5 shrink-0" />
+                    <div>
+                      <span className="font-mono text-slate-200">{cmd.phrase}</span>
+                      <p className="text-slate-500 text-[10px] leading-tight">{cmd.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Next Stop */}
-          {nextStop && !isIdle && (
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 flex items-center gap-4">
-              <Box className="h-5 w-5 text-slate-500 shrink-0" />
-              <div>
-                <p className="text-xs uppercase tracking-widest text-slate-500 mb-0.5">Next Stop</p>
-                <p className="font-mono font-bold text-white">Aisle {nextStop.aisle} — Slot {nextStop.slot}</p>
-              </div>
+          {/* Safety checklist reference */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
+              <Shield className="h-3.5 w-3.5" /> Safety Items
+            </h2>
+            <div className="space-y-1.5">
+              {SAFETY_ITEMS.map((item, idx) => (
+                <div key={item} className={`flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 transition ${
+                  phase === "SAFETY" && idx === safetyIndex ? "bg-yellow-400/10 text-yellow-300 font-bold"
+                  : phase === "SAFETY" && idx < safetyIndex ? "text-green-400"
+                  : phase === "SAFETY_FAILED" && item === failedSafetyItem ? "text-red-400 font-bold"
+                  : "text-slate-500"
+                }`}>
+                  {phase === "SAFETY" && idx < safetyIndex ? (
+                    <CheckCircle2 className="h-3 w-3 text-green-400 shrink-0" />
+                  ) : phase === "SAFETY_FAILED" && item === failedSafetyItem ? (
+                    <AlertTriangle className="h-3 w-3 text-red-400 shrink-0" />
+                  ) : (
+                    <span className="w-3 h-3 rounded-full border border-current inline-block shrink-0" />
+                  )}
+                  {item}
+                </div>
+              ))}
             </div>
-          )}
-
-          {/* Voice Mode + Mode Chips */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Headphones className="h-4 w-4 text-slate-500" />
-              <span className="text-sm text-slate-400">Voice Mode</span>
-              <span className="px-3 py-1 rounded-full bg-yellow-400/10 border border-yellow-400/30 text-yellow-300 text-xs font-bold uppercase tracking-wider">
-                {voiceMode.replace("_", " ")}
-              </span>
-            </div>
-            <Link href="/nova/voice-commands" className="text-xs text-slate-500 hover:text-yellow-400 transition underline">
-              Command Reference
-            </Link>
           </div>
         </div>
       </div>

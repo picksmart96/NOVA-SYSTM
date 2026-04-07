@@ -1,80 +1,33 @@
 export interface VoiceCommand {
-  command: string;
-  aliases: string[];
+  phrase: string;
+  type: "help" | "basic";
+  action: string;
   description: string;
-  category: string;
-  modes: string[];
 }
 
-export const VOICE_COMMANDS: VoiceCommand[] = [
-  {
-    command: "ready",
-    aliases: ["go", "confirm"],
-    description: "Confirm you are ready to proceed to the next step or have completed the current one.",
-    category: "Navigation",
-    modes: ["training", "production", "ultra_fast"],
-  },
-  {
-    command: "repeat",
-    aliases: ["say again", "again"],
-    description: "NOVA repeats the last spoken instruction.",
-    category: "Navigation",
-    modes: ["training", "production", "ultra_fast"],
-  },
-  {
-    command: "short",
-    aliases: ["shortage", "short pick"],
-    description: "Flag the current location as a short pick (quantity unavailable).",
-    category: "Picking",
-    modes: ["training", "production", "ultra_fast"],
-  },
-  {
-    command: "slow",
-    aliases: ["slow down"],
-    description: "Ask NOVA to speak more slowly for the current session.",
-    category: "Settings",
-    modes: ["training", "production"],
-  },
-  {
-    command: "pause",
-    aliases: ["hold", "wait"],
-    description: "Pause the session timer and NOVA voice output.",
-    category: "Navigation",
-    modes: ["training", "production"],
-  },
-  {
-    command: "resume",
-    aliases: ["continue", "start"],
-    description: "Resume the paused session.",
-    category: "Navigation",
-    modes: ["training", "production"],
-  },
-  {
-    command: "help",
-    aliases: ["nova help", "hey nova"],
-    description: "Open the NOVA help panel with guidance and tips.",
-    category: "Support",
-    modes: ["training", "production", "ultra_fast"],
-  },
-  {
-    command: "emergency stop",
-    aliases: ["stop", "emergency"],
-    description: "Immediately stop all NOVA voice output and pause the session. Alert supervisor.",
-    category: "Safety",
-    modes: ["training", "production", "ultra_fast"],
-  },
-  {
-    command: "back",
-    aliases: ["go back", "previous"],
-    description: "Return to the previous stop (trainer mode only).",
-    category: "Navigation",
-    modes: ["training"],
-  },
-  {
-    command: "skip",
-    aliases: ["next", "skip stop"],
-    description: "Skip the current stop (trainer mode only, requires supervisor override in production).",
-    category: "Navigation",
-    modes: ["training"],
-  },
+export const voiceCommands: VoiceCommand[] = [
+  { phrase: "repeat labels", type: "help", action: "repeat_labels", description: "Replay label instructions" },
+  { phrase: "makeup skips", type: "help", action: "makeup_skips", description: "Retrieve skipped slots" },
+  { phrase: "get drops", type: "help", action: "get_drops", description: "Retrieve replenishments" },
+  { phrase: "close batch", type: "help", action: "close_batch", description: "Close current batch" },
+  { phrase: "go to aisle [#]", type: "help", action: "go_to_aisle", description: "Jump to aisle" },
+
+  { phrase: "load picks", type: "basic", action: "load_picks", description: "Load assigned batch" },
+  { phrase: "base items", type: "basic", action: "base_items", description: "Review base items" },
+  { phrase: "confirm / yes / affirmative", type: "basic", action: "confirm", description: "Confirm current prompt" },
+  { phrase: "no / cancel / negative", type: "basic", action: "deny", description: "Deny current prompt" },
+  { phrase: "previous", type: "basic", action: "previous", description: "Go to previous item" },
+  { phrase: "base complete", type: "basic", action: "base_complete", description: "Base setup finished" },
+  { phrase: "grab", type: "basic", action: "grab", description: "Confirm pick quantity" },
+  { phrase: "remove pallet", type: "basic", action: "remove_pallet", description: "Remove pallet from slot" },
+  { phrase: "skip slot", type: "basic", action: "skip_slot", description: "Skip current slot" },
+  { phrase: "report damage", type: "basic", action: "report_damage", description: "Start damage flow" },
+  { phrase: "damage [#]", type: "basic", action: "damage_count", description: "Report damaged case count" },
+  { phrase: "slot empty", type: "basic", action: "slot_empty", description: "Mark slot empty" },
+  { phrase: "recap weights", type: "basic", action: "recap_weights", description: "Replay weight entries" },
+  { phrase: "next", type: "basic", action: "next", description: "Next list item" },
+  { phrase: "exit list", type: "basic", action: "exit_list", description: "Exit list mode" },
+  { phrase: "no labels", type: "basic", action: "no_labels", description: "Label print failed" },
 ];
+
+export const VOICE_COMMANDS = voiceCommands;
