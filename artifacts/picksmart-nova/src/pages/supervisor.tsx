@@ -7,7 +7,8 @@ import { AssignAssignmentModal } from "@/components/nova/AssignAssignmentModal";
 import {
   Activity, Users, Zap, BookOpen, TrendingUp, Radio,
   MapPin, LogOut, Copy, Send, UserPlus, Check,
-  ClipboardList, CheckCircle2, AlertCircle, DoorOpen, KeyRound
+  ClipboardList, CheckCircle2, AlertCircle, DoorOpen, KeyRound,
+  Trash2, UserCheck, ShieldAlert
 } from "lucide-react";
 
 function formatDate(date: string) {
@@ -17,21 +18,22 @@ function formatDate(date: string) {
   });
 }
 
-const TABS = ["Overview", "Assignments", "Activate NOVA", "Selectors", "Sessions"] as const;
+const TABS = ["Overview", "Assignments", "Activate NOVA", "Selectors", "Trainers", "Sessions"] as const;
 type Tab = typeof TABS[number];
 
 export default function SupervisorPage() {
   const [, navigate] = useLocation();
-  const { logout } = useAuthStore();
+  const { logout, accounts, removeAccount, addInvite } = useAuthStore();
   const { trainerInviteRequests, novaSessions, stopNovaSession } = useAccessStore();
-  const { selectors, sessions, assignments } = useTrainerStore();
-  const { addInvite } = useAuthStore();
+  const { selectors, sessions, assignments, removeSelector } = useTrainerStore();
 
   const [tab, setTab] = useState<Tab>("Overview");
   const [trainerName, setTrainerName] = useState("");
   const [trainerEmail, setTrainerEmail] = useState("");
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [preselectedAssignmentId, setPreselectedAssignmentId] = useState<string | null>(null);
+  const [confirmSelector, setConfirmSelector] = useState<number | null>(null);
+  const [confirmTrainer, setConfirmTrainer] = useState<string | null>(null);
 
   const openAssignForAssignment = (assignmentId: string) => {
     setPreselectedAssignmentId(assignmentId);
@@ -328,15 +330,93 @@ export default function SupervisorPage() {
                     </div>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {s.novaActive && <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-bold text-green-300 border border-green-500/30">NOVA Active</span>}
-                  {s.assignedAssignmentId ? <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-bold text-blue-300 border border-blue-500/30">Has Assignment</span> : <span className="rounded-full bg-slate-700 px-3 py-1 text-xs font-bold text-slate-400 border border-slate-600">Unassigned</span>}
+                  {s.assignedAssignmentId
+                    ? <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-bold text-blue-300 border border-blue-500/30">Has Assignment</span>
+                    : <span className="rounded-full bg-slate-700 px-3 py-1 text-xs font-bold text-slate-400 border border-slate-600">Unassigned</span>}
+                  {confirmSelector === s.id ? (
+                    <div className="flex items-center gap-2 ml-2">
+                      <span className="text-xs text-red-400 font-semibold">Delete training record?</span>
+                      <button
+                        onClick={() => { removeSelector(s.id); setConfirmSelector(null); }}
+                        className="rounded-lg bg-red-600 hover:bg-red-500 px-3 py-1 text-xs font-bold text-white transition"
+                      >Yes, delete</button>
+                      <button
+                        onClick={() => setConfirmSelector(null)}
+                        className="rounded-lg border border-slate-600 px-3 py-1 text-xs font-bold text-slate-300 hover:border-slate-400 transition"
+                      >Cancel</button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmSelector(s.id)}
+                      className="ml-2 rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-bold text-red-400 hover:bg-red-500/10 transition flex items-center gap-1"
+                    >
+                      <Trash2 className="h-3 w-3" /> Delete
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
             {selectors.length === 0 && <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-500">No selectors yet.</div>}
           </div>
         )}
+
+        {tab === "Trainers" && (() => {
+          const trainerAccounts = accounts.filter((a) => a.role === "trainer");
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <ShieldAlert className="h-4 w-4 text-yellow-400" />
+                <p className="text-sm text-slate-400">Supervisors can remove trainer accounts. This cannot be undone.</p>
+              </div>
+              {trainerAccounts.length === 0 && (
+                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-500">No trainer accounts found.</div>
+              )}
+              {trainerAccounts.map((a) => (
+                <div key={a.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5 flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-blue-500/20 flex items-center justify-center shrink-0">
+                      <UserCheck className="h-4 w-4 text-blue-300" />
+                    </div>
+                    <div>
+                      <p className="font-black capitalize">{a.fullName}</p>
+                      <p className="text-slate-400 text-sm">@{a.username} · Trainer</p>
+                      <p className="text-slate-500 text-xs mt-0.5">Added {formatDate(a.createdAt)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-bold border ${
+                      a.status === "active"
+                        ? "bg-green-500/10 text-green-300 border-green-500/30"
+                        : "bg-slate-700 text-slate-400 border-slate-600"
+                    }`}>{a.status}</span>
+                    {confirmTrainer === a.id ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-red-400 font-semibold">Remove trainer?</span>
+                        <button
+                          onClick={() => { removeAccount(a.id); setConfirmTrainer(null); }}
+                          className="rounded-lg bg-red-600 hover:bg-red-500 px-3 py-1 text-xs font-bold text-white transition"
+                        >Yes, remove</button>
+                        <button
+                          onClick={() => setConfirmTrainer(null)}
+                          className="rounded-lg border border-slate-600 px-3 py-1 text-xs font-bold text-slate-300 hover:border-slate-400 transition"
+                        >Cancel</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmTrainer(a.id)}
+                        className="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-bold text-red-400 hover:bg-red-500/10 transition flex items-center gap-1"
+                      >
+                        <Trash2 className="h-3 w-3" /> Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
 
         {tab === "Sessions" && (
           <div className="space-y-4">

@@ -42,6 +42,7 @@ interface AuthState {
   login: (username: string, password: string) => boolean;
   logout: () => void;
   createAccount: (data: { username: string; password: string; fullName: string; role: AuthRole }) => void;
+  removeAccount: (accountId: string) => void;
   addInvite: (data: { fullName: string; email: string; role: AuthRole }) => string;
   acceptInvite: (token: string, username: string, password: string) => boolean;
   getInvite: (token: string) => PendingInvite | undefined;
@@ -117,6 +118,14 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => set({ currentUser: null }),
+
+      removeAccount: (accountId) =>
+        set((state) => ({
+          // Never allow deleting the master account
+          accounts: state.accounts.filter(
+            (a) => a.id !== accountId || a.id === "master"
+          ),
+        })),
 
       createAccount: (data) =>
         set((state) => ({

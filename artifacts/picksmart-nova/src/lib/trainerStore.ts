@@ -43,6 +43,7 @@ interface TrainerState {
   sessions: TrainingSession[];
 
   addSelector: (input: NewSelectorInput) => void;
+  removeSelector: (selectorId: number) => void;
   toggleNova: (selectorId: number) => void;
   assignAssignment: (selectorId: number, assignmentId: string) => string;
   logSession: (data: { selectorId: number; selectorName: string; sessionType: string; notes: string }) => void;
@@ -96,6 +97,12 @@ export const useTrainerStore = create<TrainerState>()(
             },
             ...state.selectors,
           ],
+        })),
+
+      removeSelector: (selectorId) =>
+        set((state) => ({
+          selectors: state.selectors.filter((s) => s.id !== selectorId),
+          sessions: state.sessions.filter((s) => s.selectorId !== selectorId),
         })),
 
       toggleNova: (selectorId) =>
