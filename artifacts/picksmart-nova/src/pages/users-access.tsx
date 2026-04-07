@@ -4,7 +4,7 @@ import { useAccessStore } from "@/lib/accessStore";
 import { useAuthStore } from "@/lib/authStore";
 import type { AuthRole } from "@/lib/authStore";
 import { useTranslation } from "react-i18next";
-import { Users, Shield, Key, UserPlus, Copy, Check, LogOut } from "lucide-react";
+import { Users, Shield, Key, UserPlus, Copy, Check, Mail, Share2 } from "lucide-react";
 
 type RoleKey = "Selector" | "Trainer" | "Supervisor" | "Admin" | "User";
 
@@ -69,6 +69,10 @@ export default function UsersAccessPage() {
   const [ownerPassword, setOwnerPassword] = useState("");
   const [copied, setCopied] = useState("");
   const [generatedInviteUrl, setGeneratedInviteUrl] = useState<string | null>(null);
+  const [generatedInviteName, setGeneratedInviteName] = useState("");
+  const [generatedInviteEmail, setGeneratedInviteEmail] = useState("");
+  const [generatedInviteRole, setGeneratedInviteRole] = useState<RoleKey>("Selector");
+  const canShare = typeof navigator !== "undefined" && !!navigator.share;
 
   const inviteLink = useMemo(() => roleLinks[inviteForm.role], [inviteForm.role]);
 
@@ -95,14 +99,42 @@ export default function UsersAccessPage() {
     inviteAppUser({ fullName: inviteForm.fullName, email: inviteForm.email, role: inviteForm.role, inviteLink });
 
     const authRole = AUTH_ROLES[inviteForm.role];
+    const name = inviteForm.fullName.trim();
+    const email = inviteForm.email.trim();
+    const role = inviteForm.role;
+
     if (authRole) {
-      const token = addInvite({ fullName: inviteForm.fullName.trim(), email: inviteForm.email.trim(), role: authRole });
-      setGeneratedInviteUrl(`${window.location.origin}/invite/${token}`);
+      const token = addInvite({ fullName: name, email, role: authRole });
+      const url = `${window.location.origin}/invite/${token}`;
+      setGeneratedInviteUrl(url);
+      setGeneratedInviteName(name);
+      setGeneratedInviteEmail(email);
+      setGeneratedInviteRole(role);
     } else {
       setGeneratedInviteUrl(null);
     }
 
     setInviteForm({ fullName: "", email: "", role: "Selector" });
+  };
+
+  const handleSendEmail = () => {
+    if (!generatedInviteUrl) return;
+    const subject = encodeURIComponent("You've been invited to PickSmart Academy");
+    const body = encodeURIComponent(
+      `Hi ${generatedInviteName},\n\nYou've been invited to join PickSmart Academy as a ${generatedInviteRole}.\n\nClick the link below to create your account:\n\n${generatedInviteUrl}\n\nSee you on the floor!\n— PickSmart Academy`
+    );
+    window.open(`mailto:${generatedInviteEmail}?subject=${subject}&body=${body}`, "_blank");
+  };
+
+  const handleShare = async () => {
+    if (!generatedInviteUrl || !canShare) return;
+    try {
+      await navigator.share({
+        title: "PickSmart Academy Invite",
+        text: `You've been invited to PickSmart Academy as a ${generatedInviteRole}. Create your account here:`,
+        url: generatedInviteUrl,
+      });
+    } catch { /* user cancelled */ }
   };
 
   const handleCreateAccount = () => {
@@ -205,21 +237,46 @@ export default function UsersAccessPage() {
               </button>
 
               {generatedInviteUrl && (
-                <div className="rounded-2xl border border-green-500/30 bg-green-500/10 p-4 mt-2">
-                  <p className="text-green-300 text-sm font-bold mb-3 flex items-center gap-2">
-                    <Check className="h-4 w-4" /> Share this invite link:
+                <div className="rounded-2xl border border-green-500/30 bg-green-500/10 p-4 mt-2 space-y-4">
+                  <p className="text-green-300 text-sm font-bold flex items-center gap-2">
+                    <Check className="h-4 w-4" /> Invite link ready for {generatedInviteName}
                   </p>
-                  <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-                    <div className="flex-1 rounded-xl bg-slate-950 border border-slate-800 px-3 py-2.5 text-xs text-slate-300 break-all">
-                      {generatedInviteUrl}
-                    </div>
+
+                  <div className="rounded-xl bg-slate-950 border border-slate-800 px-3 py-2.5 text-xs text-slate-300 break-all">
+                    {generatedInviteUrl}
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={handleSendEmail}
+                      className="flex-1 min-w-[140px] rounded-2xl bg-yellow-400 px-4 py-2.5 font-bold text-sm text-slate-950 hover:bg-yellow-300 transition flex items-center justify-center gap-2"
+                    >
+                      <Mail className="h-4 w-4" /> Send Email
+                    </button>
+
+                    {canShare && (
+                      <button
+                        onClick={handleShare}
+                        className="flex-1 min-w-[120px] rounded-2xl border border-slate-600 bg-slate-900 px-4 py-2.5 font-semibold text-sm text-white hover:border-yellow-400 transition flex items-center justify-center gap-2"
+                      >
+                        <Share2 className="h-4 w-4" /> Share
+                      </button>
+                    )}
+
                     <button
                       onClick={() => handleCopy(generatedInviteUrl, "Invite URL")}
-                      className="rounded-2xl border border-slate-700 px-4 py-2.5 font-semibold text-sm hover:border-yellow-400 transition flex items-center gap-2 shrink-0"
+                      className="flex-1 min-w-[120px] rounded-2xl border border-slate-600 bg-slate-900 px-4 py-2.5 font-semibold text-sm text-white hover:border-yellow-400 transition flex items-center justify-center gap-2"
                     >
-                      <Copy className="h-4 w-4" /> {copied === "Invite URL" ? "Copied!" : "Copy"}
+                      {copied === "Invite URL"
+                        ? <><Check className="h-4 w-4 text-green-400" /> Copied!</>
+                        : <><Copy className="h-4 w-4" /> Copy Link</>
+                      }
                     </button>
                   </div>
+
+                  <p className="text-xs text-green-400/70">
+                    "Send Email" opens your email app pre-filled with {generatedInviteEmail} and the invite link.
+                  </p>
                 </div>
               )}
             </div>
