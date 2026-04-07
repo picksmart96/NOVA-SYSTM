@@ -1,0 +1,581 @@
+Build a full React + Vite + Tailwind app called PickSmart NOVA.
+
+IMPORTANT GOAL
+This app must combine:
+1. PickSmart Academy public training website
+2. NOVA warehouse voice trainer and assignment simulator
+3. Common Mistakes coaching with video + NOVA voice guidance
+4. Real scoring and leaderboard tracking
+5. Simulation mode with real pick flow
+
+STYLE
+- dark navy / slate industrial theme
+- safety yellow accents
+- modern clean warehouse design
+- rounded cards
+- soft shadows
+- responsive desktop and mobile
+
+ROLES
+- selector
+- trainer
+- supervisor
+- owner/admin
+
+NAVIGATION
+Public + internal nav should support:
+- Home
+- Training
+- Common Mistakes
+- My Progress
+- Leaderboard
+- NOVA Trainer
+- NOVA Help
+- My Assignments
+- Selector Nation
+- Trainer Portal
+- Supervisor
+- Pricing
+- Users & Access
+
+ROLE RULES
+- selector sees: Home, Training, Common Mistakes, My Progress, Leaderboard, NOVA Trainer, NOVA Help, My Assignments
+- trainer sees selector pages plus Trainer Portal, Assignment Control, Slot Master, Warehouse Reference, Voice Commands
+- supervisor sees trainer pages plus Live Tracking and Supervisor Dashboard
+- owner/admin sees everything
+
+APP STRUCTURE
+Use:
+- React
+- Vite
+- Tailwind
+- React Router
+- local seed data first
+- Context or Zustand for state
+- browser speech recognition
+- browser text-to-speech
+
+FOLDER STRUCTURE
+src/
+  components/
+    home/
+    training/
+    mistakes/
+    nova/
+    warehouse/
+    layout/
+    ui/
+  pages/
+    public/
+    nova/
+    admin/
+  data/
+  hooks/
+  lib/
+  store/
+  App.jsx
+  main.jsx
+
+========================
+HOME PAGE
+========================
+Make the homepage match PickSmart Academy style:
+- hero headline:
+  Built for warehouse selectors by warehouse selectors
+  Pick Faster. Stay Safer. Hit 100%+.
+- CTA buttons:
+  Start Free Training
+  View Plans
+- trust bullets:
+  No experience needed
+  First module free
+  Cancel anytime
+- hero stats cards
+- intro video section
+- real talk section
+- curriculum section
+- results section
+- testimonials
+- NOVA Help section
+- pricing section
+- final CTA
+- footer
+
+========================
+TRAINING ACADEMY
+========================
+Create a Training page with these modules:
+- Door Staging and Delivery
+- NOVA Voice System Basics
+- Pallet Building Standards
+- Performance and Pace Tracking
+- Pick Path Optimization
+- Warehouse Safety Fundamentals
+
+Each module card should show:
+- title
+- category
+- duration
+- difficulty
+- lesson count
+- Start Module button
+- video preview box
+
+When Start Module is clicked:
+Open a Lesson Session page.
+
+LESSON SESSION FLOW
+For every lesson:
+1. NOVA welcomes the user by lesson title
+2. NOVA says:
+   "Welcome to [lesson title]. When you are ready, click Ready."
+3. User clicks Ready
+4. NOVA starts lesson steps one by one
+5. Each step is spoken using text-to-speech
+6. Show Next Step button and Repeat Step button
+7. At lesson end NOVA says:
+   "Lesson complete. Start test."
+8. Show yes/no test questions
+9. Save score, pass/fail, completed state, timestamp
+10. Show Retry Lesson and Next Lesson buttons
+
+Create components:
+- LessonSession
+- NovaLessonGuide
+- LessonStepCard
+- LessonTest
+- YesNoQuestion
+- LessonResultCard
+- VideoBox
+
+Each lesson must support:
+- title
+- intro
+- steps[]
+- summary
+- questions[] with correct yes/no answers
+- videoUrl
+
+========================
+COMMON MISTAKES PAGE
+========================
+Build a Common Mistakes page that works like Training Academy but for mistakes.
+
+Add these mistakes:
+- Mispick (Wrong Item)
+- Short Pick (Missing Quantity)
+- Over Pick (Extra Quantity)
+- Bad Stacking (Crush Damage)
+- Stacking Poorly
+- Moving Too Slow Between Picks
+- Overthinking Picks
+- Not Preparing the Next Move
+- Ignoring Ergonomics
+- Skipping Breaks and Hydration
+- Poor Pallet Jack Handling
+- Focusing Only on Speed
+- Not Learning the Layout
+- Giving Up Too Early
+
+For each mistake include:
+- title
+- risk level
+- mistake description
+- why it happens
+- what goes wrong
+- fixSteps[]
+- coaching script
+- yes/no test
+- videoUrl
+- novaIntro
+
+Each mistake card must have:
+- video box
+- Start NOVA Coaching button
+
+When clicked:
+- NOVA speaks the mistake intro
+- shows why it happens
+- shows fix steps
+- shows coaching script
+- ends with yes/no test
+- saves score and completion
+
+========================
+REAL SPEECH RECOGNITION
+========================
+Add real browser speech recognition to NOVA.
+
+Create a hook:
+- useVoiceEngine.js
+
+It must support:
+- startListening
+- stopListening
+- speak
+- transcript
+- listening state
+- speaking state
+- error state
+
+Rules:
+- use Web Speech API if available
+- auto restart listening after NOVA finishes speaking if session requires it
+- normalize transcript to lowercase
+- restart cleanly if recognition stops unexpectedly
+- show visible indicators:
+  Listening
+  Speaking
+  Thinking
+  Error
+
+Add female-preferred voice when available:
+- Samantha
+- Zira
+- Karen
+- or first available voice
+
+========================
+SCORING + LEADERBOARD
+========================
+Create a real scoring system tied to lessons, mistake coaching, and NOVA simulation.
+
+Track for each user:
+- modules completed
+- lessons completed
+- common mistakes sessions completed
+- average lesson test score
+- average mistake test score
+- NOVA simulation score
+- total points
+- leaderboard rank
+
+Scoring rules:
+- module lesson pass = 100 points
+- mistake coaching pass = 60 points
+- perfect test score bonus = 25 points
+- simulation completion = 150 points
+- gold performance bonus = 50 points
+
+Create:
+- Progress page
+- Leaderboard page
+
+Leaderboard ranks by:
+1. total points
+2. modules completed
+3. lessons completed
+4. simulation score
+
+Show medals for top 3.
+
+========================
+MISTAKE DETECTION AI IN NOVA TRAINER
+========================
+Build a NOVA Trainer page that includes simulated mistake detection AI.
+
+The system should detect simulated mistakes during session flow such as:
+- wrong code entered
+- wrong quantity entered
+- too many invalid attempts
+- stacking warning if user chooses wrong case placement
+- weak base
+- fragile on bottom
+- pallet too tall
+- too many gaps
+- wrong door code
+- wrong printer number
+- wrong label confirmation
+
+When mistake happens:
+- NOVA repeats what it heard
+- says invalid
+- gives coaching feedback
+- logs the event
+- does not freeze
+- loops until corrected if required
+
+Examples:
+- "You said 999. Invalid. Check."
+- "Weak base detected. Fix stacking."
+- "Wrong printer. Enter printer number."
+- "Incorrect slot. Check location."
+
+Log mistake events with:
+- timestamp
+- assignment id
+- user id
+- mistake type
+- expected value
+- heard value
+
+Show mistake logs in trainer dashboard.
+
+========================
+SIMULATION MODE (REAL PICK FLOW)
+========================
+Create a real simulation mode inside NOVA Trainer.
+
+Simulation Mode flow:
+1. User clicks Start Session
+2. NOVA says:
+   "Complete safety check. When ready, say ready."
+3. Wait for Ready
+4. NOVA says:
+   "Say load pick to begin assignment."
+5. Wait for exact command:
+   "load pick"
+6. Load only the assignment assigned to the selector user id
+7. If no assignment:
+   NOVA says:
+   "No assignment assigned to your ID."
+
+ACTIVE ASSIGNMENTS
+Seed these:
+- 251735
+- 251736
+- 251737
+- 251738
+
+ASSIGNMENT DATA
+Each assignment must include:
+- assignmentNumber
+- selectorUserId
+- trainerUserId
+- startAisle
+- endAisle
+- totalCases
+- totalCube
+- totalPallets
+- goalTimeMinutes
+- doorNumber
+- printerNumber
+- alphaLabelNumber
+- bravoLabelNumber
+- status
+- stops[]
+
+Each stop must include:
+- stopOrder
+- aisle
+- slot
+- level
+- checkCode
+- qty
+- status
+
+Seed defaults:
+- printer 307
+- alpha label 242
+- bravo label 578
+- door 355 code 641
+- door 370 code 714
+- door 340 code 581
+
+STRICT SLOT FLOW
+For each stop:
+- NOVA must say in ultra-fast style:
+  "[aisle] [slot] check."
+- selector must speak the correct 3-digit code
+- if wrong:
+  NOVA repeats what it heard and says invalid
+- if no input:
+  NOVA says:
+  "No input. Check."
+- never freeze
+- never stay stuck on thinking
+- keep looping until correct
+- only after correct code:
+  "Confirmed. Grab [qty]."
+- then wait for:
+  "ready"
+- then move to next stop
+
+INVALID LOOP RULE
+If user says wrong number or wrong words:
+- repeat back what was heard
+- mark invalid
+- ask again
+Examples:
+- "You said 22. Invalid. Check."
+- "You said ready. Invalid. Check."
+- "You said 999. Invalid. Check."
+
+VOICE COMMANDS
+Support:
+- ready
+- repeat
+- short
+- slow
+- pause
+- resume
+- help
+- emergency stop
+- back
+- skip
+
+VOICE MODES
+Add:
+- Training Mode
+  format: "Aisle 17. Slot 28. Check."
+- Production Mode
+  format: "17 slot 28 check."
+- Ultra-Fast Mode
+  format: "17 28 check."
+
+AUTO SPEED ADJUSTMENT
+- 3 invalid inputs in short period = slow down
+- 5 correct stops in a row with quick response = speed up
+- frequent repeat usage = slow down
+When mode changes:
+- NOVA says:
+  "Speed adjusted."
+
+REALISTIC HEADSET TIMING
+- short pauses between prompts
+- stop listening while speaking
+- resume after speech ends
+- smooth headset-style cadence
+
+COMPLETION FLOW
+After last stop:
+- "Last case complete. Proceed to printer 307."
+- wait for "307"
+- "Apply label 242 to pallet Alpha."
+- wait for "Alpha"
+- "Apply label 578 to pallet Bravo."
+- wait for "Bravo"
+- "Deliver Bravo pallet to door [door number]. Read staging check."
+- wait for shared door code
+- "Deliver Alpha pallet to door [door number]. Read staging check."
+- wait for same shared door code again
+- "Assignment complete."
+
+========================
+PALLET VISUAL / SIMULATION UI
+========================
+Add pallet simulation panels:
+- ALPHA pallet
+- BRAVO pallet
+
+Each pallet should show a simple grid.
+Case types:
+- small
+- medium
+- large
+
+Case sizes affect height:
+- small = 4
+- medium = 6
+- large = 8
+
+Track:
+- alpha height
+- bravo height
+- cube total
+
+Add mistake checks:
+- if height > 72 -> "Pallet too tall"
+- if bottom layer is small -> "Weak base"
+- if gaps > 2 -> "Too many gaps"
+
+Add a simple order table:
+- aisle
+- slot
+- cases
+- status
+
+========================
+WAREHOUSE PAGES
+========================
+Add:
+- Warehouse Reference page
+- Slot Master page
+- Assignment Control page
+- Assignment Detail page
+- My Assignments page
+- Live Tracking page
+- Voice Commands page
+- Trainer Portal page
+- Supervisor Dashboard page
+- Users & Access page
+
+WAREHOUSE REFERENCE PAGE
+Show:
+- aisle numbers
+- slot numbers
+- slot check codes
+- door numbers
+- door codes
+- printer number
+- alpha label number
+- bravo label number
+- search
+- copy buttons
+
+LIVE TRACKING
+Show:
+- selector
+- active assignment
+- current aisle / slot
+- next aisle / slot
+- elapsed time
+- current dwell time
+- last dwell time
+- performance percent
+- pace status
+- voice mode
+- invalid input count
+- help count
+
+========================
+STATE + DATA
+========================
+Use local seed data files:
+- trainingModules.js
+- commonMistakes.js
+- users.js
+- assignments.js
+- assignmentStops.js
+- slotMaster.js
+- systemDefaults.js
+- doorCodes.js
+- voiceCommands.js
+- progress.js
+
+Use a central store for:
+- current user
+- current role
+- lesson progress
+- mistake progress
+- leaderboard points
+- active assignment
+- voice session state
+- simulation session state
+
+========================
+DELIVERABLES
+========================
+Generate actual code files for:
+- App.jsx
+- router.jsx
+- Navbar / Layout
+- HomePage
+- TrainingPage
+- LessonSession
+- CommonMistakesPage
+- NovaTrainerPage
+- MyAssignmentsPage
+- WarehouseReferencePage
+- LeaderboardPage
+- ProgressPage
+- all seed data files
+- voice hook
+- speech utility
+- scoring utility
+
+IMPORTANT
+Make this one complete connected app.
+Do not leave placeholders for core logic.
+Keep the current PickSmart-style homepage.
+Add the full NOVA trainer voice, scoring, mistake coaching, and simulation system into the same codebase.

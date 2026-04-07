@@ -1,75 +1,140 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, ArrowRight, ShieldAlert, XCircle } from "lucide-react";
+import { Link } from "wouter";
+import { MISTAKES } from "@/data/mistakesData";
+import { useProgressStore } from "@/lib/progressStore";
+import { Headphones, CheckCircle2, AlertTriangle, ShieldAlert } from "lucide-react";
+
+const RISK_COLORS = {
+  critical: "bg-red-500/10 text-red-400 border-red-500/30",
+  high: "bg-orange-500/10 text-orange-400 border-orange-500/30",
+  medium: "bg-yellow-400/10 text-yellow-300 border-yellow-400/30",
+  low: "bg-green-500/10 text-green-400 border-green-500/30",
+};
+
+const RISK_BADGE_COLORS = {
+  critical: "bg-red-500 text-white",
+  high: "bg-orange-500 text-white",
+  medium: "bg-yellow-400 text-slate-950",
+  low: "bg-green-500 text-white",
+};
+
+const CATEGORY_ICONS: Record<string, typeof AlertTriangle> = {
+  Accuracy: AlertTriangle,
+  "Pallet Quality": ShieldAlert,
+  Performance: Headphones,
+  "Safety & Health": ShieldAlert,
+  "Safety & Skills": ShieldAlert,
+  Mindset: CheckCircle2,
+};
 
 export default function CommonMistakesPage() {
-  const mistakes = [
-    {
-      id: 1,
-      title: "Mispick (Wrong Item)",
-      description: "Selecting a similar looking item instead of the required one. Often happens with flavor variants or different sizes of the same brand.",
-      prevention: "Always verify the check digit and scan the barcode. Don't rely solely on visual appearance. Read the label description carefully.",
-      icon: XCircle,
-      severity: "High"
-    },
-    {
-      id: 2,
-      title: "Short Pick (Missing Quantity)",
-      description: "Grabbing fewer cases than requested by the system. E.g., picking 4 cases instead of 5.",
-      prevention: "Count aloud as you place cases on the pallet. Confirm the final quantity matches the NOVA prompt before saying 'Ready'.",
-      icon: AlertCircle,
-      severity: "Medium"
-    },
-    {
-      id: 3,
-      title: "Over Pick (Extra Quantity)",
-      description: "Grabbing more cases than requested, which throws off inventory and frustrates receivers.",
-      prevention: "Double-check the requested quantity. Don't assume you need to empty the slot just because it's almost empty.",
-      icon: ArrowRight,
-      severity: "Medium"
-    },
-    {
-      id: 4,
-      title: "Bad Stacking (Crush Damage)",
-      description: "Placing heavy items on top of fragile items, or creating an unstable pallet that leans or falls during transit.",
-      prevention: "Follow the Ti-Hi rules. Build a solid base with heavy, square cases. Keep fragile items (chips, light boxes) for the top layers. Interlock cases like bricks.",
-      icon: ShieldAlert,
-      severity: "High"
-    },
-  ];
+  const { mistakeProgress } = useProgressStore();
+
+  const totalPassed = Object.values(mistakeProgress).filter(m => m.passed).length;
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-5xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-black tracking-tight text-foreground">Common Mistakes</h1>
-        <p className="text-muted-foreground mt-2">Learn how to prevent the most frequent selector errors to maintain high accuracy.</p>
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      {/* Header */}
+      <div className="border-b border-slate-800 bg-gradient-to-b from-slate-900 to-slate-950 px-6 py-14 text-center">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-red-500 mb-5">
+          <AlertTriangle className="h-8 w-8 text-white" />
+        </div>
+        <h1 className="text-4xl font-black text-white mb-3">Common Mistakes</h1>
+        <p className="text-slate-400 text-lg max-w-2xl mx-auto">
+          14 real warehouse selector mistakes — each with a NOVA coaching session, fix steps, and a short quiz. Learn what goes wrong and how to fix it permanently.
+        </p>
+        <div className="mt-5 flex flex-wrap gap-3 justify-center text-sm">
+          <div className="px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
+            <span className="text-yellow-400 font-black">14</span> Mistakes
+          </div>
+          <div className="px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
+            <span className="text-yellow-400 font-black">{totalPassed}</span> Coached
+          </div>
+          <div className="px-4 py-2 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
+            NOVA Voice Coaching
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {mistakes.map((mistake) => (
-          <Card key={mistake.id} className="border-border bg-card">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-xl flex items-center gap-2">
-                  <mistake.icon className="h-5 w-5 text-primary" />
-                  {mistake.title}
-                </CardTitle>
-                <span className={`text-xs font-bold px-2 py-1 rounded-sm ${mistake.severity === 'High' ? 'bg-destructive/20 text-destructive' : 'bg-yellow-500/20 text-yellow-500'}`}>
-                  {mistake.severity} Risk
-                </span>
+      {/* Grid */}
+      <div className="max-w-6xl mx-auto px-6 py-12">
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {MISTAKES.map((mistake, index) => {
+            const mp = mistakeProgress[mistake.id];
+            const isPassed = mp?.passed ?? false;
+            const isStarted = mp?.started ?? false;
+            const Icon = CATEGORY_ICONS[mistake.category] ?? AlertTriangle;
+
+            return (
+              <div
+                key={mistake.id}
+                className={`rounded-3xl border bg-slate-900 flex flex-col overflow-hidden transition-all hover:border-slate-700 ${
+                  isPassed ? "border-green-500/30" : "border-slate-800"
+                }`}
+              >
+                {/* Card header */}
+                <div className={`px-5 py-5 flex items-center justify-between border-b border-slate-800 ${RISK_COLORS[mistake.riskLevel]}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black ${RISK_BADGE_COLORS[mistake.riskLevel]}`}>
+                      {index + 1}
+                    </div>
+                    <span className={`text-xs font-bold uppercase tracking-widest capitalize border px-2 py-0.5 rounded-full ${RISK_COLORS[mistake.riskLevel]}`}>
+                      {mistake.riskLevel} risk
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isPassed && <CheckCircle2 className="h-5 w-5 text-green-400" />}
+                    <Icon className="h-5 w-5 opacity-60" />
+                  </div>
+                </div>
+
+                {/* Card body */}
+                <div className="p-5 flex-1 flex flex-col">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">
+                    {mistake.category}
+                  </p>
+                  <h3 className="text-lg font-black text-white mb-3 leading-tight">
+                    {mistake.title}
+                  </h3>
+
+                  <div className="flex items-center gap-3 text-xs text-slate-500 mb-3">
+                    <span>{mistake.fixSteps.length} fix steps</span>
+                    <span>·</span>
+                    <span>{mistake.questions.length} questions</span>
+                    <span>·</span>
+                    <span className="flex items-center gap-1"><Headphones className="h-3 w-3" /> NOVA coached</span>
+                  </div>
+
+                  {mp && (
+                    <div className="mb-3">
+                      {isPassed ? (
+                        <div className="flex items-center gap-2 text-sm text-green-400 font-semibold">
+                          <CheckCircle2 className="h-4 w-4" />
+                          Passed — {mp.testScore}/{mp.totalQuestions} correct
+                        </div>
+                      ) : isStarted ? (
+                        <div className="text-sm text-yellow-400 font-semibold">In progress</div>
+                      ) : null}
+                    </div>
+                  )}
+
+                  <div className="mt-auto">
+                    <Link
+                      href={`/mistakes/coaching/${mistake.id}`}
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-slate-800 text-white font-bold border border-slate-700 hover:border-yellow-400 hover:text-yellow-400 transition-all active:scale-[0.98] text-sm"
+                    >
+                      <Headphones className="h-4 w-4" />
+                      {isPassed
+                        ? "Replay NOVA Coaching"
+                        : isStarted
+                        ? "Continue Coaching"
+                        : "Start NOVA Coaching"}
+                    </Link>
+                  </div>
+                </div>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <h4 className="text-sm font-bold text-foreground mb-1">The Mistake</h4>
-                <p className="text-sm text-muted-foreground leading-relaxed">{mistake.description}</p>
-              </div>
-              <div className="bg-secondary/30 p-3 rounded-md border border-border">
-                <h4 className="text-sm font-bold text-primary mb-1">Prevention</h4>
-                <p className="text-sm text-muted-foreground leading-relaxed">{mistake.prevention}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+            );
+          })}
+        </div>
       </div>
     </div>
   );
