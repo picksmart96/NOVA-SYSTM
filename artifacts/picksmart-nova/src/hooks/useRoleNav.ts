@@ -32,6 +32,8 @@ export function useRoleNav(): NavLink[] {
   links.push(
     { href: "/", label: t("nav.home"), group: "public" },
     { href: "/training", label: t("nav.training"), group: "public" },
+    { href: "/nova-trainer", label: t("nav.novaTrainer"), group: "nova" },
+    { href: "/nova-help", label: t("nav.novaHelp"), group: "nova" },
   );
 
   if (atLeast("trainer", role)) {
@@ -53,8 +55,6 @@ export function useRoleNav(): NavLink[] {
 
   if (atLeast("selector", role)) {
     links.push(
-      { href: "/nova-trainer", label: t("nav.novaTrainer"), group: "nova" },
-      { href: "/nova-help", label: t("nav.novaHelp"), group: "nova" },
       { href: "/leaderboard", label: t("nav.leaderboard"), group: "public" },
       { href: "/selector-nation", label: t("nav.selectorNation"), group: "public" },
     );

@@ -11,6 +11,7 @@ import {
 } from "@/lib/parser";
 import { useVoiceEngine, UseVoiceEngineReturn } from "@/hooks/useVoiceEngine";
 import { useTranslation } from "react-i18next";
+import { useAuthStore } from "@/lib/authStore";
 
 const SYSTEM_DEFAULTS = {
   printerNumber: "307",
@@ -93,13 +94,35 @@ function VoiceStateBadge({ voice, labels }: { voice: UseVoiceEngineReturn; label
 
 export default function NovaTrainerPage() {
   const { t } = useTranslation();
+  const { currentUser, accounts } = useAuthStore();
 
   const SAFETY_ITEMS = t("novaTrainer.safetyItems", { returnObjects: true }) as string[];
 
   const p = (key: string, vars?: Record<string, string | number>) =>
     t(`novaTrainer.prompt.${key}`, vars);
 
-  const [selectorUserId, setSelectorUserId] = useState("user-001");
+  // Real registered selectors from authStore
+  const selectorAccounts = useMemo(
+    () => accounts.filter((a) => a.role === "selector"),
+    [accounts]
+  );
+  // Map each selector's username → a demo user-ID used by the hardcoded assignment data
+  const usernameToId = useMemo(
+    () => Object.fromEntries(selectorAccounts.map((acc, i) => [acc.username, `user-00${i + 1}`])),
+    [selectorAccounts]
+  );
+
+  // When the logged-in user is a selector, default to their own username
+  const defaultUsername =
+    currentUser?.role === "selector"
+      ? currentUser.username
+      : selectorAccounts.length > 0
+      ? selectorAccounts[0].username
+      : "user-001";
+
+  const [selectorUsername, setSelectorUsername] = useState(defaultUsername);
+  // The underlying demo user-ID used to filter ASSIGNMENTS data
+  const selectorUserId = usernameToId[selectorUsername] ?? "user-001";
   const [phase, setPhase] = useState(PHASES.IDLE);
   const [promptText, setPromptText] = useState(p("startNova"));
   const [commandLog, setCommandLog] = useState<{ id: number; type: string; text: string; at: string }[]>([]);
@@ -540,24 +563,68 @@ export default function NovaTrainerPage() {
           </div>
         ) : null}
 
-        {/* Selector switcher */}
-        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-lg flex flex-wrap items-center gap-4">
-          <p className="text-sm text-slate-400 font-semibold">{t("novaTrainer.selectorId")}</p>
-          <select
-            value={selectorUserId}
-            onChange={(e) => setSelectorUserId(e.target.value)}
-            className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2 text-sm text-white focus:border-yellow-400 focus:outline-none"
-          >
-            {["user-001", "user-002", "user-003"].map((uid) => (
-              <option key={uid} value={uid}>{uid}</option>
-            ))}
-          </select>
-        </div>
+        {/* Selector switcher — only shown to trainers/supervisors */}
+        {currentUser?.role !== "selector" && (
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-lg flex flex-wrap items-center gap-4">
+            <p className="text-sm text-slate-400 font-semibold">{t("novaTrainer.selectorId")}</p>
+            {selectorAccounts.length > 0 ? (
+              <select
+                value={selectorUsername}
+                onChange={(e) => setSelectorUsername(e.target.value)}
+                className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2 text-sm text-white focus:border-yellow-400 focus:outline-none"
+              >
+                {selectorAccounts.map((acc) => (
+                  <option key={acc.id} value={acc.username}>{acc.username}</option>
+                ))}
+              </select>
+            ) : (
+              <div className="flex items-center gap-3">
+                <input
+                  value={selectorUsername}
+                  onChange={(e) => setSelectorUsername(e.target.value)}
+                  placeholder="Enter selector username"
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2 text-sm text-white focus:border-yellow-400 focus:outline-none w-52"
+                />
+                <span className="text-xs text-slate-500">No selectors registered yet — type a username manually</span>
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Top stats */}
+        {/* ── Selector clean view (hidden debug, just NOVA voice) ────────────── */}
+        {currentUser?.role === "selector" && (
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 sm:p-8 shadow-2xl">
+            <div className="flex items-center justify-between gap-3 mb-6">
+              <div>
+                <p className="text-xs text-slate-400 font-semibold uppercase tracking-widest">
+                  {t("novaTrainer.label")}
+                </p>
+                <p className="mt-1 text-lg font-bold text-white">
+                  {currentUser.fullName} · <span className="text-yellow-400">{currentUser.username}</span>
+                </p>
+              </div>
+              <VoiceStateBadge voice={voice} labels={voiceLabels} />
+            </div>
+
+            <div className="rounded-2xl border border-slate-700 bg-slate-950 p-6 min-h-[120px] flex items-center">
+              <p className="text-2xl font-bold text-white leading-snug">{promptText}</p>
+            </div>
+
+            {voice.lastHeard && (
+              <div className="mt-4 rounded-2xl border border-blue-500/20 bg-blue-500/10 px-4 py-3">
+                <p className="text-xs text-slate-400 mb-1">{t("novaTrainer.heardResponse")}</p>
+                <p className="font-semibold text-blue-200">{voice.lastHeard}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Top stats + main layout — trainer/supervisor/owner only */}
+        {currentUser?.role !== "selector" && (
+        <>
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
           <StatCard label={t("novaTrainer.phase")} value={phase} tone="accent" />
-          <StatCard label={t("novaTrainer.selector")} value={selectorUserId} />
+          <StatCard label={t("novaTrainer.selector")} value={selectorUsername} />
           <StatCard label={t("novaTrainer.assignment")} value={activeAssignment ? `#${activeAssignment.assignmentNumber}` : "—"} />
           <StatCard label={t("novaTrainer.currentStop")} value={currentStop ? `${currentStop.stopOrder}` : "—"} />
           <StatCard
@@ -723,6 +790,7 @@ export default function NovaTrainerPage() {
             </div>
           </div>
         </div>
+        </> )} {/* end trainer-only block */}
 
       </div>
     </div>

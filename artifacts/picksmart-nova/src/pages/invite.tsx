@@ -28,7 +28,12 @@ export default function InvitePage() {
   const token = params?.token ?? "";
   const invite = getInvite(token);
 
-  const [username, setUsername] = useState("");
+  // Auto-derive a clean username from the email address (before the @)
+  const suggestedUsername = invite
+    ? invite.email.split("@")[0].toLowerCase().replace(/[^a-z0-9._-]/g, "")
+    : "";
+
+  const [username, setUsername] = useState(suggestedUsername);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -135,13 +140,23 @@ export default function InvitePage() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm text-slate-400 mb-2">Choose a username</label>
+              <label className="block text-sm text-slate-400 mb-2">
+                Choose a username
+                {suggestedUsername && (
+                  <span className="ml-2 text-xs text-yellow-400 font-normal">
+                    — suggested from your email
+                  </span>
+                )}
+              </label>
               <input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="e.g. john.smith"
                 className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition placeholder:text-slate-600"
               />
+              <p className="mt-1.5 text-xs text-slate-500">
+                This is what you'll type into NOVA Trainer to start your session.
+              </p>
             </div>
 
             <div>
