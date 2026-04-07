@@ -8,14 +8,14 @@ import { LogSessionModal } from "@/components/nova/LogSessionModal";
 import { SessionCard } from "@/components/nova/SessionCard";
 import {
   Shield, Users, ClipboardList, Zap, BookOpen,
-  MapPin, UserPlus, LogOut, CheckCircle2, AlertCircle, DoorOpen, KeyRound
+  MapPin, UserPlus, LogOut, CheckCircle2, AlertCircle, DoorOpen, KeyRound, Copy, Check, Mail, Send
 } from "lucide-react";
 
 type SelectorLevel = "Beginner" | "Intermediate" | "Advanced";
 
 export default function TrainerPortalPage() {
   const [, navigate] = useLocation();
-  const { currentUser, logout } = useAuthStore();
+  const { currentUser, logout, addInvite } = useAuthStore();
   const {
     trainer, selectors, sessions, assignments,
     addSelector, toggleNova,
@@ -33,22 +33,37 @@ export default function TrainerPortalPage() {
   const [preselectedAssignmentId, setPreselectedAssignmentId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
-    fullName: "John Smith",
-    age: "22",
+    fullName: "",
+    email: "",
+    age: "",
     level: "Beginner" as SelectorLevel,
     notes: "",
   });
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [copiedInvite, setCopiedInvite] = useState(false);
 
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.fullName.trim()) return;
+    if (!form.fullName.trim() || !form.email.trim()) return;
     addSelector({
       name: form.fullName,
-      age: Number(form.age),
+      email: form.email,
+      age: Number(form.age) || 20,
       level: form.level,
       notes: form.notes,
     });
-    setForm({ fullName: "", age: "", level: "Beginner", notes: "" });
+    const token = addInvite({ fullName: form.fullName, email: form.email, role: "selector" });
+    const link = `${window.location.origin}/invite/${token}`;
+    setInviteLink(link);
+    setForm({ fullName: "", email: "", age: "", level: "Beginner", notes: "" });
+  };
+
+  const handleCopyInvite = () => {
+    if (inviteLink) {
+      navigator.clipboard.writeText(inviteLink).catch(() => {});
+      setCopiedInvite(true);
+      setTimeout(() => setCopiedInvite(false), 2500);
+    }
   };
 
   const openNovaFor = (id: number) => {
@@ -174,13 +189,45 @@ export default function TrainerPortalPage() {
               <UserPlus className="h-5 w-5 text-yellow-400" /> Register Selector
             </h2>
 
+            {inviteLink && (
+              <div className="mb-6 rounded-2xl border border-green-500/30 bg-green-500/5 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-green-300 font-black text-sm uppercase tracking-widest">
+                  <Send className="h-4 w-4" /> Selector registered — invite link ready
+                </div>
+                <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 font-mono text-xs text-slate-300 break-all">
+                  {inviteLink}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyInvite}
+                  className={`rounded-2xl px-4 py-2 text-sm font-black flex items-center gap-2 transition ${
+                    copiedInvite ? "bg-green-500/20 text-green-300" : "bg-slate-800 text-white hover:bg-slate-700"
+                  }`}
+                >
+                  {copiedInvite ? <><Check className="h-4 w-4" /> Copied!</> : <><Copy className="h-4 w-4" /> Copy invite link</>}
+                </button>
+              </div>
+            )}
+
             <form onSubmit={handleRegister} className="space-y-5">
               <div>
                 <label className="block text-sm text-slate-400 mb-2">Full name</label>
                 <input
                   value={form.fullName}
                   onChange={(e) => setForm((p) => ({ ...p, fullName: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition"
+                  placeholder="e.g. John Smith"
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition placeholder:text-slate-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-slate-400 mb-2 flex items-center gap-1"><Mail className="h-3.5 w-3.5" /> Email address</label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                  placeholder="selector@example.com"
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition placeholder:text-slate-600"
                 />
               </div>
 
@@ -224,9 +271,10 @@ export default function TrainerPortalPage() {
 
               <button
                 type="submit"
-                className="rounded-2xl bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300 transition flex items-center gap-2"
+                disabled={!form.fullName.trim() || !form.email.trim()}
+                className="rounded-2xl bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300 transition flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <UserPlus className="h-4 w-4" /> Register selector
+                <UserPlus className="h-4 w-4" /> Register selector &amp; generate invite
               </button>
             </form>
           </div>

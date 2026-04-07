@@ -1,7 +1,16 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuthStore } from "@/lib/authStore";
+import type { AuthRole } from "@/lib/authStore";
 import { Activity, Eye, EyeOff, Lock } from "lucide-react";
+
+const ROLE_HOME: Record<AuthRole, string> = {
+  selector: "/selector",
+  trainer: "/trainer-portal",
+  supervisor: "/supervisor",
+  manager: "/supervisor",
+  owner: "/users-access",
+};
 
 export default function LoginPage() {
   const [, navigate] = useLocation();
@@ -14,7 +23,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   const params = new URLSearchParams(window.location.search);
-  const redirect = params.get("redirect") || "/trainer-portal";
+  const redirect = params.get("redirect") || null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +36,9 @@ export default function LoginPage() {
     setLoading(false);
 
     if (ok) {
-      navigate(redirect);
+      const { currentUser } = useAuthStore.getState();
+      const dest = redirect || (currentUser ? ROLE_HOME[currentUser.role] : "/");
+      navigate(dest);
     } else {
       setError("Incorrect username or password. Please try again.");
     }
@@ -37,7 +48,6 @@ export default function LoginPage() {
     <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
 
-        {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-10">
           <div className="bg-yellow-400 text-slate-950 p-2 rounded-xl">
             <Activity className="h-6 w-6" />
@@ -47,7 +57,6 @@ export default function LoginPage() {
           </span>
         </div>
 
-        {/* Card */}
         <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-xl bg-yellow-400/10 border border-yellow-400/30 flex items-center justify-center">
@@ -55,7 +64,7 @@ export default function LoginPage() {
             </div>
             <div>
               <h1 className="text-2xl font-black text-white">Sign in</h1>
-              <p className="text-slate-400 text-sm">Trainer &amp; Supervisor access</p>
+              <p className="text-slate-400 text-sm">PickSmart NOVA — Staff &amp; Selector access</p>
             </div>
           </div>
 
@@ -110,7 +119,7 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-6 text-center text-slate-600 text-sm">
-          PickSmart Academy &mdash; Staff access only
+          PickSmart Academy &mdash; Staff &amp; Selector access
         </p>
       </div>
     </div>

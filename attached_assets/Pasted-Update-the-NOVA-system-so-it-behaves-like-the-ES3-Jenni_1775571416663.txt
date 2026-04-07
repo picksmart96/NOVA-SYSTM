@@ -1,0 +1,366 @@
+Update the NOVA system so it behaves like the ES3/Jennifer voice script shown in the reference pages.
+
+IMPORTANT
+Remove the small sample paper assignment flow:
+- do not use the example:
+  start aisle 2 end aisle 12
+  total cases 48
+  cube 13
+  pallets 2
+  new aisle 2 slot 157
+  new aisle 12 slot 200
+This paper assignment is only a behavior example.
+NOVA should use the real seeded assignments in the system instead:
+- 251735
+- 251736
+- 251737
+- 251738
+
+GOAL
+Make NOVA behave like a real warehouse voice system with:
+1. Sign On flow
+2. Safety checklist
+3. Load picks flow
+4. Slot confirmation flow
+5. Batch complete flow
+6. Voice commands list
+7. Confirm / deny behavior
+
+VOICE SYSTEM MODES
+Add a mode called:
+- ES3 Script Mode
+
+In ES3 Script Mode, NOVA should follow the sequence below.
+
+========================
+1. SIGN ON FLOW
+========================
+When selector starts NOVA, begin the Jennifer Sign On flow.
+
+NOVA says:
+"Enter equipment ID."
+
+Expected response:
+equipment ID digits like:
+0 0 0 1
+
+Then NOVA says:
+"Confirm equipment 0001."
+
+Expected confirm:
+- confirm
+- yes
+- affirmative
+
+Expected deny:
+- cancel
+- no
+- negative
+
+Then NOVA says:
+"Enter maximum pallet count for jack 0001."
+
+Expected response:
+numeric value, usually 2
+
+Then NOVA says:
+"Confirm maximum pallet count."
+
+Expected confirm:
+- confirm
+- yes
+
+If denied:
+repeat the step until confirmed.
+
+========================
+2. SAFETY CHECKLIST
+========================
+After pallet count is confirmed, NOVA must read each safety item one by one:
+
+- Brakes okay?
+- Battery guard okay?
+- Horn okay?
+- Wheels okay?
+- Hydraulics okay?
+- Controls okay?
+- Steering okay?
+- Welds okay?
+- Electric wiring okay?
+
+For each item:
+Confirm responses allowed:
+- confirm
+- yes
+- affirmative
+
+Deny responses allowed:
+- cancel
+- no
+- negative
+
+If denied:
+- log failed safety item
+- stop session
+- show warning in UI
+- do not continue to assignment flow
+
+If all are confirmed:
+continue to loading picks flow
+
+========================
+3. LOAD PICKS FLOW
+========================
+After safety checklist passes:
+
+NOVA says:
+"Say load picks."
+
+Expected response:
+- load picks
+
+If anything else is said:
+repeat:
+"Say load picks."
+
+After user says load picks:
+NOVA loads only the assignment assigned to the selector user id.
+
+Do not use the paper sample assignment.
+Use the live assignment assigned to that selector.
+
+NOVA then reads assignment summary in ES3 style:
+- start aisle [start aisle] end aisle [end aisle]
+- slots [number of stops]
+- total cases [total cases]
+- cube [total cube if available]
+- pallets [total pallets]
+- estimated goal [goal if available]
+- to continue say ready
+
+Expected response:
+- ready
+
+Then NOVA says:
+- position alpha pallet get chep
+Expected response:
+- ready
+
+Then NOVA says:
+- position bravo pallet get chep
+Expected response:
+- ready
+
+========================
+4. PICK FLOW
+========================
+For each stop in the assignment, NOVA should behave like this:
+
+NOVA says:
+"New aisle [aisle] slot [slot]"
+
+Selector must say the stop check digits.
+
+If correct:
+NOVA says:
+"Grab [qty] [Alpha or Bravo if assigned]"
+
+Examples:
+- Grab 24 Alpha
+- Grab 24 Bravo
+
+STRICT CHECK LOGIC
+- do not continue until the correct code is spoken
+- if wrong, repeat what was heard and say invalid
+- never freeze
+- keep listening until correct
+
+Examples:
+- "You said 999. Invalid."
+- "You said ready. Invalid."
+- "No input received."
+
+After valid stop confirmation:
+NOVA reads grab quantity.
+
+Expected follow-up can include:
+- grab
+- ready
+- confirm
+
+========================
+5. BATCH COMPLETE FLOW
+========================
+After last stop:
+
+NOVA says:
+"Batch complete deliver pallet bravo to door [door number]"
+
+Selector confirms door code.
+Use live door code from assignment, not the paper sample.
+
+Then NOVA says:
+"Apply labels to pallet alpha"
+
+Selector confirms alpha label digits or says alpha
+
+Then NOVA says:
+"Apply labels to pallet bravo"
+
+Selector confirms bravo label digits or says bravo
+
+Then NOVA says:
+"Deliver bravo pallet to door [door number]"
+
+Selector confirms staging code
+
+Then NOVA says:
+"Deliver alpha pallet to door [door number]"
+
+Selector confirms staging code again
+
+Then NOVA says:
+"Say load picks"
+
+If user says load picks:
+start next assigned batch if available
+
+========================
+6. CONFIRM / DENY COMMANDS
+========================
+Anywhere confirm/deny is needed, allow these sets:
+
+CONFIRM:
+- yes
+- confirm
+- affirmative
+
+DENY:
+- no
+- cancel
+- negative
+
+Normalize all speech input to lowercase before matching.
+
+========================
+7. ES3 VOICE COMMAND LIST
+========================
+Add these supported commands to NOVA:
+
+HELP MODE COMMANDS
+- repeat labels
+- makeup skips
+- get drops
+- close batch
+- go to aisle [number]
+
+BASIC PICKING COMMANDS
+- load picks
+- base items
+- confirm
+- no
+- previous
+- base complete
+- grab
+- remove pallet
+- skip slot
+- report damage
+- damage [number]
+- slot empty
+- recap weights
+- next
+- previous
+- exit list
+- no labels
+
+Each command must map to an internal action.
+
+Command behavior:
+- repeat labels -> replay label instructions
+- makeup skips -> retrieve skipped slots
+- get drops -> retrieve replenishment drops
+- close batch -> remove from current assignment / close batch state
+- go to aisle [number] -> jump navigation helper
+- load picks -> load assigned batch
+- base items -> review base items
+- confirm -> confirm current prompt
+- no -> deny current prompt
+- previous -> replay previous item or weight item
+- base complete -> mark base setup done
+- grab -> confirm case quantity action
+- remove pallet -> mark pallet removed from pick slot
+- skip slot -> mark slot skipped
+- report damage -> start damage flow
+- damage [number] -> report damaged case count
+- slot empty -> mark slot empty / trigger replenishment need
+- recap weights -> recap random weight entries
+- next -> next weight/list item
+- exit list -> exit list mode
+- no labels -> label print failure flow
+
+========================
+8. UI CHANGES
+========================
+Add an ES3 Script Mode panel in NOVA Trainer showing:
+- current phase:
+  Sign On / Safety / Load Picks / Picking / Batch Complete
+- current spoken prompt
+- heard response
+- confirm/deny buttons
+- command log
+- active command list
+- current assignment number
+- current stop
+- current aisle
+- current slot
+- current door
+- current alpha label
+- current bravo label
+
+Add a voice command cheat sheet panel showing the ES3 commands list.
+
+========================
+9. DATA RULES
+========================
+Use live system data:
+- assignments from assignments.js
+- stops from assignmentStops.js
+- printer from defaults
+- alpha/bravo labels from defaults
+- door codes from door data
+
+Do not hardcode the paper example assignment.
+The paper assignment is only a script example.
+
+========================
+10. ERROR HANDLING
+========================
+NOVA must never freeze on wrong input.
+If speech recognition fails:
+- speak an error response
+- continue listening
+- do not stay stuck on thinking
+
+For invalid check code:
+- repeat heard input
+- say invalid
+- ask again
+
+For denied safety item:
+- stop workflow
+- mark session failed
+- show failed item in UI
+
+========================
+11. FILES TO UPDATE
+========================
+Update or create:
+- src/hooks/useVoiceEngine.js
+- src/hooks/useAssignmentRunner.js
+- src/pages/nova/NovaTrainerPage.jsx
+- src/components/nova/VoiceSession.jsx
+- src/data/voiceCommands.js
+- src/lib/parser.js
+
+IMPORTANT
+Make this behave like the paper script flow, but powered by the real Replit assignment data already in the system.

@@ -45,7 +45,7 @@ const AUTH_ROLES: Record<RoleKey, AuthRole | null> = {
 
 export default function UsersAccessPage() {
   const [, navigate] = useLocation();
-  const { logout, addInvite } = useAuthStore();
+  const { currentUser, logout, addInvite } = useAuthStore();
   const {
     appUsers, novaAccounts,
     inviteAppUser, createNovaAccount, deactivateNovaAccount,
@@ -69,6 +69,14 @@ export default function UsersAccessPage() {
   const [generatedInviteUrl, setGeneratedInviteUrl] = useState<string | null>(null);
 
   const inviteLink = useMemo(() => roleLinks[inviteForm.role], [inviteForm.role]);
+
+  const allowedRoles: RoleKey[] = useMemo(() => {
+    const r = currentUser?.role;
+    if (r === "owner" || r === "manager") {
+      return ["Selector", "Trainer", "Supervisor", "Admin"];
+    }
+    return ["Selector", "Trainer"];
+  }, [currentUser?.role]);
 
   const handleSignOut = () => { logout(); navigate("/login"); };
 
@@ -163,11 +171,9 @@ export default function UsersAccessPage() {
                   onChange={(e) => setInviteForm((p) => ({ ...p, role: e.target.value as RoleKey }))}
                   className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition"
                 >
-                  <option>Selector</option>
-                  <option>Trainer</option>
-                  <option>Supervisor</option>
-                  <option>Admin</option>
-                  <option>User</option>
+                  {allowedRoles.map((r) => (
+                    <option key={r}>{r}</option>
+                  ))}
                 </select>
               </div>
 

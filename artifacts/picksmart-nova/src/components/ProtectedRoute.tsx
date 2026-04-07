@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuthStore } from "@/lib/authStore";
 import type { AuthRole } from "@/lib/authStore";
+import { ROLE_RANK } from "@/lib/authStore";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -9,13 +10,7 @@ interface ProtectedRouteProps {
   path: string;
 }
 
-const ROLE_RANK: Record<AuthRole, number> = {
-  trainer: 1,
-  supervisor: 2,
-  owner: 3,
-};
-
-export function ProtectedRoute({ children, requiredRole = "trainer", path }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, requiredRole = "selector", path }: ProtectedRouteProps) {
   const [, navigate] = useLocation();
   const { currentUser } = useAuthStore();
 

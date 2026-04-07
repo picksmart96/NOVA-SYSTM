@@ -1,7 +1,19 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type AuthRole = "owner" | "supervisor" | "trainer";
+export type AuthRole = "selector" | "trainer" | "supervisor" | "manager" | "owner";
+
+export const ROLE_RANK: Record<AuthRole, number> = {
+  selector: 0,
+  trainer: 1,
+  supervisor: 2,
+  manager: 3,
+  owner: 4,
+};
+
+export function atLeastRole(min: AuthRole, role: AuthRole): boolean {
+  return ROLE_RANK[role] >= ROLE_RANK[min];
+}
 
 export interface AuthAccount {
   id: string;

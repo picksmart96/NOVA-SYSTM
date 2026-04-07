@@ -7,6 +7,7 @@ export interface TrainerSelector {
   id: number;
   userId: string;
   name: string;
+  email: string;
   novaId: string;
   novaPin: string | null;
   age: number;
@@ -29,6 +30,7 @@ export interface TrainingSession {
 
 export interface NewSelectorInput {
   name: string;
+  email: string;
   age: number;
   level: "Beginner" | "Intermediate" | "Advanced";
   notes?: string;
@@ -51,6 +53,7 @@ const initialSelectors: TrainerSelector[] = [
     id: 1,
     userId: "user-001",
     name: "soumaila ouedraogo",
+    email: "draogo96@example.com",
     novaId: "NOVA-25917",
     novaPin: null,
     age: 30,
@@ -87,6 +90,7 @@ export const useTrainerStore = create<TrainerState>()(
               experience: "New selector",
               notes: input.notes ?? "",
               name: input.name,
+              email: input.email,
               age: input.age,
               level: input.level,
             },

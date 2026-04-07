@@ -1,7 +1,24 @@
 import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useAuthStore } from "@/lib/authStore";
+import type { AuthRole } from "@/lib/authStore";
 import { Activity, Eye, EyeOff, UserPlus, AlertTriangle } from "lucide-react";
+
+const ROLE_HOME: Record<AuthRole, string> = {
+  selector: "/selector",
+  trainer: "/trainer-portal",
+  supervisor: "/supervisor",
+  manager: "/supervisor",
+  owner: "/users-access",
+};
+
+const ROLE_LABEL: Record<AuthRole, string> = {
+  selector: "Selector",
+  trainer: "Trainer",
+  supervisor: "Supervisor",
+  manager: "Manager",
+  owner: "Owner",
+};
 
 export default function InvitePage() {
   const [, params] = useRoute("/invite/:token");
@@ -32,6 +49,7 @@ export default function InvitePage() {
   }
 
   if (done) {
+    const home = ROLE_HOME[invite.role];
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
         <div className="rounded-3xl border border-green-500/30 bg-slate-900 p-10 max-w-md w-full text-center">
@@ -41,7 +59,7 @@ export default function InvitePage() {
           <h1 className="text-2xl font-black text-white mb-2">Account created!</h1>
           <p className="text-slate-400 mb-6">Your account is ready. Sign in to get started.</p>
           <button
-            onClick={() => navigate("/login")}
+            onClick={() => navigate(`/login?redirect=${encodeURIComponent(home)}`)}
             className="rounded-2xl bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300 transition"
           >
             Go to Sign in
@@ -81,13 +99,12 @@ export default function InvitePage() {
     }
   };
 
-  const roleLabel = invite.role.charAt(0).toUpperCase() + invite.role.slice(1);
+  const roleLabel = ROLE_LABEL[invite.role] ?? invite.role;
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
 
-        {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-10">
           <div className="bg-yellow-400 text-slate-950 p-2 rounded-xl">
             <Activity className="h-6 w-6" />
@@ -100,10 +117,11 @@ export default function InvitePage() {
         <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl">
           <div className="mb-6">
             <h1 className="text-2xl font-black text-white">Create your account</h1>
-            <p className="text-slate-400 text-sm mt-1">You were invited as a <span className="text-yellow-300 font-bold">{roleLabel}</span></p>
+            <p className="text-slate-400 text-sm mt-1">
+              You were invited as a <span className="text-yellow-300 font-bold">{roleLabel}</span>
+            </p>
           </div>
 
-          {/* Invite info */}
           <div className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 mb-6">
             <p className="text-white font-bold capitalize">{invite.fullName}</p>
             <p className="text-slate-400 text-sm">{invite.email}</p>

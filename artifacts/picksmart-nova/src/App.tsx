@@ -32,6 +32,7 @@ import TrainerPortalPage from "@/pages/trainer-portal";
 import SupervisorPage from "@/pages/supervisor";
 import UsersAccessPage from "@/pages/users-access";
 
+import SelectorPortalPage from "@/pages/selector-portal";
 import LoginPage from "@/pages/login";
 import InvitePage from "@/pages/invite";
 
@@ -90,8 +91,13 @@ function Router() {
       <Route path="/nova/voice/:id">
         <VoiceSessionPage />
       </Route>
+      <Route path="/selector">
+        <ProtectedRoute path="/selector" requiredRole="selector">
+          <Layout><SelectorPortalPage /></Layout>
+        </ProtectedRoute>
+      </Route>
       <Route path="/nova-trainer">
-        <ProtectedRoute path="/nova-trainer">
+        <ProtectedRoute path="/nova-trainer" requiredRole="selector">
           <Layout><NovaTrainerPage /></Layout>
         </ProtectedRoute>
       </Route>

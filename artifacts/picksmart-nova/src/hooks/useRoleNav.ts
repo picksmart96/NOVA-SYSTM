@@ -1,5 +1,6 @@
 import { useAppStore } from "@/lib/store";
-import type { UserRole } from "@/data/users";
+import { useAuthStore } from "@/lib/authStore";
+import type { AuthRole } from "@/lib/authStore";
 
 export interface NavLink {
   href: string;
@@ -7,13 +8,22 @@ export interface NavLink {
   group: string;
 }
 
-const atLeast = (min: UserRole, role: UserRole): boolean => {
-  const hierarchy: UserRole[] = ["selector", "trainer", "supervisor", "owner"];
-  return hierarchy.indexOf(role) >= hierarchy.indexOf(min);
+const RANK: Record<string, number> = {
+  selector: 0,
+  trainer: 1,
+  supervisor: 2,
+  manager: 3,
+  owner: 4,
 };
 
+const atLeast = (min: AuthRole, role: string): boolean =>
+  (RANK[role] ?? -1) >= (RANK[min] ?? 0);
+
 export function useRoleNav(): NavLink[] {
-  const { role } = useAppStore();
+  const { currentUser } = useAuthStore();
+  const { role: demoRole } = useAppStore();
+
+  const role: string = currentUser?.role ?? demoRole;
 
   const links: NavLink[] = [];
 
@@ -23,38 +33,38 @@ export function useRoleNav(): NavLink[] {
     { href: "/training", label: "Training", group: "public" },
   );
 
-  // Trainer+ — Trainer Dashboard (primary role link, shown early)
+  // Trainer+ — Trainer Dashboard
   if (atLeast("trainer", role)) {
     links.push({ href: "/trainer-portal", label: "Trainer Dashboard", group: "trainer" });
   }
 
-  // Supervisor+ — Supervisor Dashboard (primary role link, shown early)
+  // Supervisor+ — Supervisor Dashboard
   if (atLeast("supervisor", role)) {
     links.push({ href: "/supervisor", label: "Supervisor Dashboard", group: "supervisor" });
   }
 
-  // Owner — Users & Access (primary role link, shown early)
+  // Owner only — Users & Access
   if (atLeast("owner", role)) {
     links.push({ href: "/users-access", label: "Users & Access", group: "owner" });
   }
 
-  // Secondary public links
+  // Selector+ — Common pages
   links.push(
     { href: "/mistakes", label: "Common Mistakes", group: "public" },
     { href: "/progress", label: "My Progress", group: "public" },
   );
 
-  // Secondary selector+ links (overflow)
+  // Selector+ — NOVA & learning
   if (atLeast("selector", role)) {
     links.push(
-      { href: "/leaderboard", label: "Leaderboard", group: "public" },
-      { href: "/selector-nation", label: "Selector Nation", group: "public" },
       { href: "/nova-trainer", label: "NOVA Trainer", group: "nova" },
       { href: "/nova-help", label: "NOVA Help", group: "nova" },
+      { href: "/leaderboard", label: "Leaderboard", group: "public" },
+      { href: "/selector-nation", label: "Selector Nation", group: "public" },
     );
   }
 
-  // Secondary trainer+ links (overflow)
+  // Trainer+ — additional tools
   if (atLeast("trainer", role)) {
     links.push(
       { href: "/nova/control", label: "Assignment Control", group: "trainer" },
@@ -64,18 +74,16 @@ export function useRoleNav(): NavLink[] {
     );
   }
 
-  // Secondary supervisor+ links (overflow)
+  // Supervisor+ — live ops
   if (atLeast("supervisor", role)) {
     links.push(
       { href: "/nova/tracking", label: "Live Tracking", group: "supervisor" },
     );
   }
 
-  // Secondary owner links (overflow)
-  if (atLeast("owner", role)) {
-    links.push(
-      { href: "/pricing", label: "Pricing", group: "owner" },
-    );
+  // Manager+ — Pricing (NOT supervisor, NOT trainer, NOT selector)
+  if (atLeast("manager", role)) {
+    links.push({ href: "/pricing", label: "Pricing", group: "owner" });
   }
 
   return links;

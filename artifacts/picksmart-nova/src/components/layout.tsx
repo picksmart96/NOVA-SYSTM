@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useAppStore } from "@/lib/store";
+import { useAuthStore } from "@/lib/authStore";
 import { useRoleNav } from "@/hooks/useRoleNav";
 import type { UserRole } from "@/data/users";
 import {
@@ -25,9 +26,12 @@ const GROUP_LABELS: Record<string, string> = {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { role, setRole } = useAppStore();
-  const [location] = useLocation();
+  const { currentUser, logout } = useAuthStore();
+  const [location, navigate] = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const links = useRoleNav();
+
+  const displayRole = currentUser?.role ?? role;
 
   const isActive = (href: string) =>
     href === "/" ? location === "/" : location.startsWith(href);
@@ -105,33 +109,56 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {/* Right: role badge + switcher + mobile menu */}
+          {/* Right: role badge / user info + mobile menu */}
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="hidden sm:flex capitalize bg-secondary border-primary/20 text-primary">
-              {role}
-            </Badge>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full" data-testid="btn-role-switcher">
-                  <UserCircle className="h-5 w-5 text-muted-foreground" />
-                  <span className="sr-only">Switch role</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 bg-card border-border">
-                <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-border" />
-                {(["selector", "trainer", "supervisor", "owner"] as UserRole[]).map(r => (
+            {currentUser ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="rounded-full gap-2 px-3 hidden sm:flex" data-testid="btn-role-switcher">
+                    <UserCircle className="h-5 w-5 text-muted-foreground" />
+                    <span className="capitalize text-primary font-bold text-sm">{displayRole}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52 bg-card border-border">
+                  <DropdownMenuLabel className="capitalize">{currentUser.fullName}</DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal -mt-2">{currentUser.username} · {currentUser.role}</DropdownMenuLabel>
+                  <DropdownMenuSeparator className="bg-border" />
                   <DropdownMenuItem
-                    key={r}
-                    onClick={() => setRole(r)}
-                    className={`capitalize ${role === r ? "bg-primary/20 text-primary focus:bg-primary/30 focus:text-primary" : "focus:bg-secondary"}`}
+                    onClick={() => { logout(); navigate("/login"); }}
+                    className="text-red-400 focus:text-red-400 focus:bg-red-500/10"
                   >
-                    {r}
+                    Sign out
                   </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <>
+                <Badge variant="outline" className="hidden sm:flex capitalize bg-secondary border-primary/20 text-primary">
+                  {role}
+                </Badge>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="rounded-full" data-testid="btn-role-switcher">
+                      <UserCircle className="h-5 w-5 text-muted-foreground" />
+                      <span className="sr-only">Switch role</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 bg-card border-border">
+                    <DropdownMenuLabel>Demo Role</DropdownMenuLabel>
+                    <DropdownMenuSeparator className="bg-border" />
+                    {(["selector", "trainer", "supervisor", "owner"] as UserRole[]).map(r => (
+                      <DropdownMenuItem
+                        key={r}
+                        onClick={() => setRole(r)}
+                        className={`capitalize ${role === r ? "bg-primary/20 text-primary focus:bg-primary/30 focus:text-primary" : "focus:bg-secondary"}`}
+                      >
+                        {r}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            )}
 
             <Button
               variant="ghost"
