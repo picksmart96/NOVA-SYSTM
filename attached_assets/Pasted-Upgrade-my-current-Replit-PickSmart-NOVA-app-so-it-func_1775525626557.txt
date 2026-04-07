@@ -1,0 +1,185 @@
+Upgrade my current Replit PickSmart NOVA app so it functions like my Base44 version.
+
+CURRENT PROBLEM
+The homepage is closer to PickSmart Academy now, but the NOVA Trainer voice training and assignment system from Base44 is missing.
+
+GOAL
+Make the Replit app behave like the Base44 version by adding the full NOVA trainer and warehouse assignment system while keeping the PickSmart Academy homepage style.
+
+MATCH THESE BASE44 FEATURES
+Add these main navigation items and pages:
+- Home
+- Training
+- Common Mistakes
+- My Progress
+- Leaderboard
+- NOVA Trainer
+- NOVA Help
+- Selector Nation
+- Trainer Portal
+- Supervisor
+- Pricing
+- Users & Access
+
+PUBLIC SITE
+Keep the PickSmart Academy homepage style:
+- warehouse-selector landing page
+- hero
+- curriculum
+- testimonials
+- NOVA help
+- pricing
+- final CTA
+
+INTERNAL NOVA SYSTEM
+Add these internal NOVA pages:
+- Assignment Control
+- Assignment Detail
+- My Assignments
+- Warehouse Reference
+- Slot Master
+- Live Selector Tracking
+- Voice Commands
+- Trainer Portal
+- Supervisor Dashboard
+- Users & Access
+
+ROLE SYSTEM
+Support these roles:
+- selector
+- trainer
+- supervisor
+- owner/admin
+
+Role behavior:
+- selector sees public pages, NOVA, and My Assignments
+- trainer sees trainer pages and assignment tools
+- supervisor sees live tracking and supervisor tools
+- owner/admin sees everything
+
+NOVA TRAINER PAGE
+Create a working NOVA Trainer page with:
+- voice training panel
+- assignment runner
+- active assignment summary
+- current aisle
+- current slot
+- next slot
+- voice mode
+- elapsed time
+- performance percent
+- progress status
+
+ASSIGNMENT SYSTEM
+Add a full assignment system with:
+- assignment number
+- selector user id
+- start aisle
+- end aisle
+- total cases
+- total cube
+- total pallets
+- goal time
+- door number
+- printer number
+- alpha label number
+- bravo label number
+- route stops
+
+Seed these assignments:
+- 251735
+- 251736
+- 251737
+- 251738
+
+Add assignment stop data with:
+- aisle
+- slot
+- level
+- check code
+- qty
+
+VOICE FLOW
+NOVA must support the warehouse picker flow:
+- load assignment assigned to selector user id
+- say assignment start summary
+- pallet setup
+- slot-by-slot check code verification
+- quantity prompt
+- ready confirmation
+- last case complete
+- printer 307
+- alpha 242
+- bravo 578
+- door code staging completion
+
+STRICT CHECK LOGIC
+For each stop:
+- NOVA says: "[aisle] [slot] check."
+- selector must say correct 3-digit code
+- if wrong, NOVA repeats what it heard and says invalid
+- never freeze
+- loop until correct
+- only after correct code: "Confirmed. Grab [qty]."
+
+VOICE COMMANDS
+Support:
+- ready
+- repeat
+- short
+- slow
+- pause
+- resume
+- help
+- emergency stop
+- back
+- skip
+
+VOICE MODES
+Add:
+- Training mode
+- Production mode
+- Ultra-fast mode
+
+WAREHOUSE REFERENCE PAGE
+Create a page for trainer, supervisor, and owner that shows:
+- aisle numbers
+- slot numbers
+- slot check codes
+- door numbers
+- door codes
+- printer number
+- alpha label number
+- bravo label number
+
+LIVE TRACKING
+Create trainer/supervisor live tracking with:
+- selector name
+- selector user id
+- active assignment
+- current aisle/slot
+- next aisle/slot
+- elapsed time
+- dwell time
+- performance percent
+- pace status
+- voice mode
+
+DESIGN
+Keep dark navy / slate industrial style with safety yellow accents.
+Keep the homepage as PickSmart Academy style.
+Make internal NOVA pages look like a professional warehouse operations dashboard.
+
+TECH
+Use React + Vite + Tailwind + React Router.
+Use local seed data first.
+Organize code into:
+- pages
+- components
+- data
+- hooks
+- store
+
+IMPORTANT
+Do not remove the current homepage style.
+Add the missing Base44 NOVA features into the Replit app so the full platform works like Base44.

@@ -1,5 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useAppStore } from "@/lib/store";
+import { useRoleNav } from "@/hooks/useRoleNav";
+import type { UserRole } from "@/data/users";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,55 +11,44 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { UserCircle, Menu, X, Shield, Activity, Headphones, BookOpen } from "lucide-react";
+import { UserCircle, Menu, X, Activity } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+
+const GROUP_LABELS: Record<string, string> = {
+  public: "Academy",
+  nova: "NOVA",
+  trainer: "Trainer",
+  supervisor: "Supervisor",
+  owner: "Admin",
+};
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { role, setRole } = useAppStore();
   const [location] = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const links = useRoleNav();
 
-  const getLinksForRole = () => {
-    const base = [
-      { href: "/", label: "Home", icon: Activity },
-      { href: "/training", label: "Training", icon: BookOpen },
-      { href: "/mistakes", label: "Mistakes Guide", icon: Shield },
-      { href: "/nova", label: "My Assignments", icon: Activity },
-    ];
-    
-    if (role === "trainer" || role === "supervisor" || role === "owner") {
-      base.push(
-        { href: "/nova/control", label: "Assignment Control", icon: Shield },
-        { href: "/nova/slots", label: "Slot Master", icon: Activity },
-        { href: "/nova/warehouse", label: "Warehouse Ref", icon: BookOpen },
-        { href: "/nova/voice-commands", label: "Voice Commands", icon: Headphones }
-      );
-    }
-    
-    if (role === "supervisor" || role === "owner") {
-      base.push(
-        { href: "/nova/tracking", label: "Live Tracking", icon: Activity },
-      );
-    }
-    
-    if (role === "owner") {
-      base.push(
-        { href: "/pricing", label: "Pricing", icon: Shield },
-      );
-    }
-    
-    return base;
-  };
+  const isActive = (href: string) =>
+    href === "/" ? location === "/" : location.startsWith(href);
 
-  const links = getLinksForRole();
+  // Group links for display
+  const groups = links.reduce<Record<string, typeof links>>((acc, link) => {
+    if (!acc[link.group]) acc[link.group] = [];
+    acc[link.group].push(link);
+    return acc;
+  }, {});
+
+  // Desktop: show first 6 links inline, rest in overflow
+  const desktopLinks = links.slice(0, 7);
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground">
       <header className="sticky top-0 z-50 w-full border-b border-border bg-card">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          {/* Logo */}
           <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2">
+            <Link href="/" className="flex items-center gap-2 shrink-0">
               <div className="bg-primary text-primary-foreground p-1.5 rounded-md font-bold">
                 <Activity className="h-5 w-5" />
               </div>
@@ -65,43 +56,76 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 PickSmart <span className="text-primary font-black">NOVA</span>
               </span>
             </Link>
-            <div className="hidden md:flex ml-6 space-x-1">
-              {links.map((link) => (
-                <Link 
-                  key={link.href} 
+
+            {/* Desktop nav */}
+            <div className="hidden lg:flex ml-4 space-x-0.5 overflow-hidden">
+              {desktopLinks.map(link => (
+                <Link
+                  key={link.href}
                   href={link.href}
-                  className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    location === link.href || (location.startsWith(link.href) && link.href !== '/')
-                      ? "bg-secondary text-secondary-foreground" 
+                  className={`px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+                    isActive(link.href)
+                      ? "bg-secondary text-secondary-foreground"
                       : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
                   }`}
                 >
                   {link.label}
                 </Link>
               ))}
+              {links.length > 7 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground px-3">
+                      More ▾
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-52 bg-card border-border">
+                    {Object.entries(groups).map(([group, groupLinks]) => {
+                      const overflow = groupLinks.filter(l => !desktopLinks.includes(l));
+                      if (overflow.length === 0) return null;
+                      return (
+                        <div key={group}>
+                          <DropdownMenuLabel className="text-xs uppercase tracking-widest text-muted-foreground">
+                            {GROUP_LABELS[group] ?? group}
+                          </DropdownMenuLabel>
+                          {overflow.map(link => (
+                            <DropdownMenuItem key={link.href} asChild>
+                              <Link href={link.href} className={`cursor-pointer ${isActive(link.href) ? "text-primary" : ""}`}>
+                                {link.label}
+                              </Link>
+                            </DropdownMenuItem>
+                          ))}
+                          <DropdownMenuSeparator className="bg-border" />
+                        </div>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
           </div>
-          
+
+          {/* Right: role badge + switcher + mobile menu */}
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="hidden sm:flex capitalize bg-secondary border-primary/20 text-primary">
               {role}
             </Badge>
-            
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full" data-testid="btn-role-switcher">
                   <UserCircle className="h-5 w-5 text-muted-foreground" />
-                  <span className="sr-only">Toggle role</span>
+                  <span className="sr-only">Switch role</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 bg-card border-border">
-                <DropdownMenuLabel>Current Role</DropdownMenuLabel>
+                <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-border" />
-                {(['selector', 'trainer', 'supervisor', 'owner'] as const).map((r) => (
-                  <DropdownMenuItem 
-                    key={r} 
+                {(["selector", "trainer", "supervisor", "owner"] as UserRole[]).map(r => (
+                  <DropdownMenuItem
+                    key={r}
                     onClick={() => setRole(r)}
-                    className={`capitalize ${role === r ? 'bg-primary/20 text-primary focus:bg-primary/30 focus:text-primary' : 'focus:bg-secondary'}`}
+                    className={`capitalize ${role === r ? "bg-primary/20 text-primary focus:bg-primary/30 focus:text-primary" : "focus:bg-secondary"}`}
                   >
                     {r}
                   </DropdownMenuItem>
@@ -112,7 +136,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden text-muted-foreground"
+              className="lg:hidden text-muted-foreground"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             >
               {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -122,24 +146,30 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Mobile menu */}
         {isMobileMenuOpen && (
-          <div className="md:hidden border-t border-border bg-card pb-4">
-            <nav className="flex flex-col px-2 py-2 space-y-1">
-              {links.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md ${
-                    location === link.href || (location.startsWith(link.href) && link.href !== '/')
-                      ? "bg-secondary text-secondary-foreground"
-                      : "text-muted-foreground hover:bg-secondary/50"
-                  }`}
-                >
-                  <link.icon className="h-4 w-4" />
-                  {link.label}
-                </Link>
-              ))}
-            </nav>
+          <div className="lg:hidden border-t border-border bg-card pb-4 max-h-[80vh] overflow-y-auto">
+            {Object.entries(groups).map(([group, groupLinks]) => (
+              <div key={group}>
+                <p className="px-4 pt-4 pb-1 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  {GROUP_LABELS[group] ?? group}
+                </p>
+                <nav className="flex flex-col px-2 space-y-0.5">
+                  {groupLinks.map(link => (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-md ${
+                        isActive(link.href)
+                          ? "bg-secondary text-secondary-foreground"
+                          : "text-muted-foreground hover:bg-secondary/50"
+                      }`}
+                    >
+                      {link.label}
+                    </Link>
+                  ))}
+                </nav>
+              </div>
+            ))}
           </div>
         )}
       </header>
