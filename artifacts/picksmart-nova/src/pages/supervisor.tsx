@@ -286,13 +286,21 @@ export default function SupervisorPage() {
                     )}
                   </div>
 
-                  <button
-                    onClick={() => openAssignForAssignment(a.id)}
-                    className="mt-auto rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold hover:border-yellow-400 hover:text-yellow-400 transition flex items-center justify-center gap-1"
-                  >
-                    <ClipboardList className="h-3 w-3" />
-                    {assignedTo ? "Reassign" : "Assign to Selector"}
-                  </button>
+                  <div className="mt-auto flex gap-2">
+                    <Link
+                      href={`/nova/assignments/${a.id}`}
+                      className="flex-1 rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold text-center hover:border-slate-500 hover:text-white transition"
+                    >
+                      View Details
+                    </Link>
+                    <button
+                      onClick={() => openAssignForAssignment(a.id)}
+                      className="flex-1 rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold hover:border-yellow-400 hover:text-yellow-400 transition flex items-center justify-center gap-1"
+                    >
+                      <ClipboardList className="h-3 w-3" />
+                      {assignedTo ? "Reassign" : "Assign"}
+                    </button>
+                  </div>
                 </div>
               );
             })}
