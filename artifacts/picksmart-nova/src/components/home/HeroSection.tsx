@@ -1,9 +1,12 @@
 import { Link } from "wouter";
-import { heroStats } from "../../data/homepageData";
 import { useTranslation } from "react-i18next";
+
+const HERO_STAT_HREFS = ["/training", "/training", "/progress", "/mistakes", "/progress", "/mistakes"];
 
 export default function HeroSection() {
   const { t } = useTranslation();
+  const heroStats = t("home.heroStats", { returnObjects: true }) as string[];
+
   return (
     <section className="relative overflow-hidden border-b border-slate-800 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
       <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top_right,_rgba(250,204,21,0.25),_transparent_30%),radial-gradient(circle_at_left,_rgba(59,130,246,0.15),_transparent_28%)]" />
@@ -46,13 +49,13 @@ export default function HeroSection() {
         </div>
 
         <div className="mt-12 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-          {heroStats.map((item) => (
+          {heroStats.map((label, i) => (
             <Link
-              key={item.title}
-              href={item.href}
+              key={label}
+              href={HERO_STAT_HREFS[i] ?? "/training"}
               className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-4 text-center text-sm text-slate-200 shadow-lg hover:border-yellow-400 hover:text-white transition"
             >
-              {item.title}
+              {label}
             </Link>
           ))}
         </div>

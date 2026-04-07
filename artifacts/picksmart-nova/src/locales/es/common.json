@@ -471,5 +471,113 @@
     "yes": "Sí",
     "no": "No",
     "you": "Tú"
+  },
+  "home": {
+    "heroStats": [
+      "6 Módulos de Capacitación",
+      "24+ Lecciones en Video",
+      "Meta del 100%+",
+      "Técnicas Probadas por Selectores",
+      "Mejora Promedio del 30%",
+      "Prevención de Lesiones"
+    ],
+    "introVideo": {
+      "eyebrow": "Ver Primero",
+      "title": "¿Qué es PickSmart Academy?",
+      "subtitle": "Mira este corto video para entender cómo funciona nuestra capacitación, qué aprenderás y por qué los selectores confían en PickSmart para mejorar su carrera.",
+      "cards": [
+        { "title": "6 Módulos Estructurados", "text": "Del día uno hasta alcanzar las tasas más altas", "buttonText": "Ver Módulos" },
+        { "title": "Lecciones en Video", "text": "Mira, aprende y aplica en el piso", "buttonText": "Ver Lecciones" },
+        { "title": "Resultados Reales", "text": "Selectores alcanzando el 100%+ en semanas", "buttonText": "Ver Progreso" }
+      ]
+    },
+    "realTalk": {
+      "eyebrow": "La Verdad",
+      "title": "¿Nuevo en la selección de pedidos? Esto es lo que nadie te dice.",
+      "subtitle": "La selección de pedidos es uno de los trabajos de almacén más exigentes físicamente — y mejor pagados. Pero la mayoría de los nuevos entran sin ninguna capacitación.",
+      "palletLabel": "Técnica correcta de apilado de tarimas",
+      "rateLabel": "Tasa promedio en semanas",
+      "ratedLabel": "Calificado por selectores",
+      "ratedText": "Técnicas del mundo real construidas para la selección en almacenes de comestibles, no teoría de salón de clases.",
+      "items": [
+        { "title": "Por qué la mayoría tiene dificultades", "text": "Los sistemas de voz, cajas pesadas, presión de tiempo y construcción de tarimas — todo llega a la vez el primer día." },
+        { "title": "Lo que saben los mejores selectores", "text": "No se trata de ser el más fuerte. Se trata de planificación de ruta, técnica de tarimas y ritmo mental." },
+        { "title": "Cómo este curso cierra la brecha", "text": "Desglosamos todo en pasos simples y accionables para que construyas confianza antes de pisar el piso." }
+      ]
+    },
+    "curriculum": {
+      "eyebrow": "El Plan de Estudios",
+      "title": "Qué Aprenderás",
+      "subtitle": "Seis módulos completos que cubren desde tu primer día hasta alcanzar las tasas más altas.",
+      "viewModule": "Ver Módulo",
+      "browseAll": "Ver Todos los Módulos",
+      "modules": [
+        { "number": "Módulo 1", "badge": "GRATIS", "title": "Conceptos Básicos", "text": "Cómo funciona el trabajo, descripción del equipo, sistemas de voz y qué esperar el primer día." },
+        { "number": "Módulo 2", "badge": "", "title": "Seguridad Primero", "text": "Mecánica de levantamiento adecuada, prevención de lesiones y cómo sobrevivir turnos físicamente exigentes." },
+        { "number": "Módulo 3", "badge": "", "title": "Construcción de Tarimas", "text": "Apila como Tetris. Lo pesado abajo, lo ligero arriba. Construye tarimas que lleguen intactas a la tienda." },
+        { "number": "Módulo 4", "badge": "", "title": "Velocidad y Eficiencia", "text": "Muévete más rápido sin apresurarte. La planificación inteligente de rutas y eliminar pasos innecesarios suma rápido." },
+        { "number": "Módulo 5", "badge": "", "title": "Alcanzando Tu Tasa", "text": "Entiende el sistema de desempeño. Ve del 70% al 100%+ con estrategias probadas de mejora de tasa." },
+        { "number": "Módulo 6", "badge": "", "title": "Simulación de Turno Real", "text": "Recorrido completo de un turno real. Consejos para mantenerte enfocado, manejar energía y dominar tus primeras dos semanas." }
+      ]
+    },
+    "results": {
+      "eyebrow": "Trabaja Más Inteligente, No Solo Más Duro",
+      "title": "La diferencia entre luchar al 70% y avanzar al 100%+ no es fuerza — es técnica.",
+      "stats": [
+        { "value": "30%", "label": "Mejora promedio de tasa" },
+        { "value": "↓ 60%", "label": "Menos lesiones de espalda y rodillas" },
+        { "value": "2 Semanas", "label": "Para construir hábitos sólidos" },
+        { "value": "100%", "label": "Contenido probado por selectores" }
+      ]
+    },
+    "testimonials": {
+      "eyebrow": "Desde el Piso",
+      "title": "Selectores Que Ya Pasaron Por Aquí",
+      "subtitle": "Comentarios reales de trabajadores de almacén que completaron la capacitación.",
+      "items": [
+        { "initials": "M", "name": "Marcus T.", "role": "Selector de Pedidos · 8 meses", "quote": "Pasé del 72% al 108% en mis primeras 3 semanas con el Módulo 4. Este programa es de verdad." },
+        { "initials": "D", "name": "Deja R.", "role": "Nuevo Empleado · 2ª semana", "quote": "Nadie te enseña a construir una tarima correctamente. Este curso me salvó la espalda y el trabajo. El Módulo 3 solo ya vale la pena." },
+        { "initials": "C", "name": "Carlos M.", "role": "Selector · 1 año", "quote": "Ojalá esto hubiera existido cuando empecé. El módulo de simulación de turno es exactamente lo que necesitan los nuevos para sobrevivir las primeras dos semanas." }
+      ]
+    },
+    "novaHelp": {
+      "eyebrow": "Pregúntale a NOVA Cualquier Cosa",
+      "title": "Obtén ayuda instantánea con estrategias de selección, consejos de seguridad y rendimiento",
+      "novaTitle": "Ayuda NOVA",
+      "wakeLabel": "Di \"Hola NOVA\" para activarme",
+      "wakeText": "Di \"Hola NOVA\" para activarme. Seguiré escuchando después de cada respuesta. Di \"parar\" en cualquier momento para silenciarme.",
+      "hintText": "\"Hola NOVA\" para activar · \"parar\" para silenciar",
+      "openNova": "Abrir NOVA"
+    },
+    "pricing": {
+      "eyebrow": "Precios Simples",
+      "title": "Invierte en Tu Carrera",
+      "subtitle": "Comienza gratis o desbloquea todo con Pro. La mayoría de los selectores recuperan el costo en su primera semana de mejores tasas.",
+      "mostPopular": "Más Popular",
+      "plans": [
+        { "title": "Selector", "subtitle": "Capacita selectores individuales", "price": "$10", "suffix": "/por selector", "cta": "Comenzar Capacitación", "features": ["Acceso para 1 selector", "Los 6 módulos de capacitación", "Seguimiento de progreso", "Informes de rendimiento", "Soporte de entrenador"] },
+        { "title": "Pro Mensual", "subtitle": "Acceso completo a toda la capacitación", "price": "$29.99", "suffix": "/mes", "cta": "Ir Pro", "featured": true, "features": ["Los 6 módulos de capacitación", "Lecciones y demostraciones en video", "Técnicas avanzadas de velocidad", "Clase magistral de construcción de tarimas", "Estrategias de mejora de tasa", "Contenido nuevo mensual"] },
+        { "title": "Pro Anual", "subtitle": "Mejor valor — ahorra más del 40%", "price": "$199.99", "suffix": "/año", "cta": "Mejor Valor", "features": ["Todo en Pro Mensual", "Ahorra $81 por año", "Soporte prioritario", "Acceso anticipado a nuevos módulos", "Insignia de certificación"] }
+      ]
+    },
+    "finalCta": {
+      "eyebrow": "Listo para Subir de Nivel",
+      "title": "Deja de adivinar. Empieza a seleccionar al 100%+.",
+      "subtitle": "Únete a los selectores que usaron PickSmart Academy para pasar de luchar el primer día a alcanzar consistentemente las tasas más altas — con menos estrés y menos lesiones.",
+      "startFree": "Comenzar Capacitación Gratis",
+      "viewPricing": "Ver Precios",
+      "noCard": "Sin tarjeta de crédito · Primer módulo siempre gratis"
+    },
+    "footer": {
+      "tagline": "La plataforma #1 de capacitación para selectores de pedidos en almacén. Aprende a seleccionar más rápido, más seguro y alcanza tasas del 100%+ desde el primer día.",
+      "trainingLabel": "Capacitación",
+      "novaLabel": "NOVA",
+      "allModules": "Todos los Módulos",
+      "commonMistakes": "Errores Comunes",
+      "trackProgress": "Seguir Progreso",
+      "pricing": "Precios",
+      "myAssignments": "Mis Asignaciones",
+      "leaderboard": "Clasificación"
+    }
   }
 }

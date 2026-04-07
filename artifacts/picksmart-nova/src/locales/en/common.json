@@ -471,5 +471,113 @@
     "yes": "Yes",
     "no": "No",
     "you": "You"
+  },
+  "home": {
+    "heroStats": [
+      "6 Training Modules",
+      "24+ Video Lessons",
+      "100%+ Rate Target",
+      "Selector-Tested Techniques",
+      "Avg 30% Rate Improvement",
+      "Injury Prevention Focused"
+    ],
+    "introVideo": {
+      "eyebrow": "Watch First",
+      "title": "What Is PickSmart Academy?",
+      "subtitle": "Watch this short video to understand how our training works, what you'll learn, and why selectors trust PickSmart to level up their career.",
+      "cards": [
+        { "title": "6 Structured Modules", "text": "Covering day one to hitting top rates", "buttonText": "Browse Modules" },
+        { "title": "Video-Led Lessons", "text": "Watch, learn, and apply on the floor", "buttonText": "Watch Lessons" },
+        { "title": "Real Results", "text": "Selectors hitting 100%+ within weeks", "buttonText": "View Progress" }
+      ]
+    },
+    "realTalk": {
+      "eyebrow": "The Real Talk",
+      "title": "New to Order Selecting? Here's what nobody tells you.",
+      "subtitle": "Order selecting is one of the most physically demanding — and highest-paying — entry-level warehouse jobs. But most new hires are thrown in with zero training.",
+      "palletLabel": "Proper pallet stacking technique",
+      "rateLabel": "Average rate in weeks",
+      "ratedLabel": "Rated by selectors",
+      "ratedText": "Real-world techniques built for grocery warehouse picking, not classroom theory.",
+      "items": [
+        { "title": "Why most people struggle", "text": "Voice-directed systems, heavy cases, time pressure, and pallet building all hit at once on day one." },
+        { "title": "What top selectors know", "text": "It is not about being the strongest. It is about route planning, pallet technique, and mental pacing." },
+        { "title": "How this course bridges the gap", "text": "We break everything down into simple, actionable steps so you build confidence before you hit the floor." }
+      ]
+    },
+    "curriculum": {
+      "eyebrow": "The Curriculum",
+      "title": "What You'll Learn",
+      "subtitle": "Six comprehensive modules covering everything from your first day to hitting top rates.",
+      "viewModule": "View Module",
+      "browseAll": "Browse All Modules",
+      "modules": [
+        { "number": "Module 1", "badge": "FREE", "title": "Beginner Basics", "text": "How the job works, equipment overview, voice systems, and what to expect on day one." },
+        { "number": "Module 2", "badge": "", "title": "Safety First", "text": "Proper lifting mechanics, injury prevention, and how to survive physically demanding long shifts." },
+        { "number": "Module 3", "badge": "", "title": "Pallet Building", "text": "Stack like Tetris. Heavy on bottom, light on top. Build pallets that stay intact all the way to the store." },
+        { "number": "Module 4", "badge": "", "title": "Speed & Efficiency", "text": "Move faster without rushing. Smart route planning and eliminating wasted steps add up fast." },
+        { "number": "Module 5", "badge": "", "title": "Hitting Your Rate", "text": "Understand the performance system. Go from 70% to 100%+ with proven rate-building strategies." },
+        { "number": "Module 6", "badge": "", "title": "Real Shift Simulation", "text": "Full walkthrough of a real shift. Tips to stay focused, manage energy, and crush your first two weeks." }
+      ]
+    },
+    "results": {
+      "eyebrow": "Work Smarter, Not Just Harder",
+      "title": "The difference between struggling at 70% and cruising at 100%+ isn't strength — it's technique.",
+      "stats": [
+        { "value": "30%", "label": "Average rate improvement" },
+        { "value": "↓ 60%", "label": "Fewer back & knee injuries" },
+        { "value": "2 Weeks", "label": "To build solid habits" },
+        { "value": "100%", "label": "Real selector-tested content" }
+      ]
+    },
+    "testimonials": {
+      "eyebrow": "From the Floor",
+      "title": "Selectors Who've Been There",
+      "subtitle": "Real feedback from warehouse workers who went through the training.",
+      "items": [
+        { "initials": "M", "name": "Marcus T.", "role": "Order Selector · 8 months in", "quote": "I went from 72% to 108% in my first 3 weeks after going through Module 4. This program is the real deal." },
+        { "initials": "D", "name": "Deja R.", "role": "New Hire · 2nd week", "quote": "Nobody tells you how to build a pallet correctly. This course saved my back and my job. Module 3 alone is worth it." },
+        { "initials": "C", "name": "Carlos M.", "role": "Selector · 1 year", "quote": "I wish this existed when I started. The shift simulation module is exactly what new hires need to survive the first two weeks." }
+      ]
+    },
+    "novaHelp": {
+      "eyebrow": "Ask NOVA Anything",
+      "title": "Get instant help with picking strategies, safety tips, and performance advice",
+      "novaTitle": "NOVA Help",
+      "wakeLabel": "Say \"Hey NOVA\" to wake me",
+      "wakeText": "Say \"Hey NOVA\" to wake me up. I'll keep listening after each answer. Say \"stop\" anytime to silence me.",
+      "hintText": "\"Hey NOVA\" to wake · \"stop\" to silence",
+      "openNova": "Open NOVA"
+    },
+    "pricing": {
+      "eyebrow": "Simple Pricing",
+      "title": "Invest in Your Career",
+      "subtitle": "Start free or unlock everything with Pro. Most selectors make back the cost in their first week of better rates.",
+      "mostPopular": "Most Popular",
+      "plans": [
+        { "title": "Selector", "subtitle": "Train individual warehouse selectors", "price": "$10", "suffix": "/per selector", "cta": "Start Training", "features": ["Access for 1 selector", "All 6 training modules", "Progress tracking", "Performance reports", "Trainer support"] },
+        { "title": "Pro Monthly", "subtitle": "Full access to all training", "price": "$29.99", "suffix": "/month", "cta": "Go Pro", "featured": true, "features": ["All 6 training modules", "Video lessons & demonstrations", "Advanced speed techniques", "Pallet building masterclass", "Rate improvement strategies", "New content added monthly"] },
+        { "title": "Pro Annual", "subtitle": "Best value — save over 40%", "price": "$199.99", "suffix": "/year", "cta": "Best Value", "features": ["Everything in Pro Monthly", "Save $81 per year", "Priority support", "Early access to new modules", "Certification badge"] }
+      ]
+    },
+    "finalCta": {
+      "eyebrow": "Ready to Level Up",
+      "title": "Stop guessing. Start picking at 100%+.",
+      "subtitle": "Join selectors who've used PickSmart Academy to go from struggling on day one to consistently hitting top rates — with less stress and fewer injuries.",
+      "startFree": "Start Free Training",
+      "viewPricing": "View Pricing",
+      "noCard": "No credit card required · First module always free"
+    },
+    "footer": {
+      "tagline": "The #1 training platform for warehouse order selectors. Learn to pick faster, safer, and hit 100%+ rates from day one.",
+      "trainingLabel": "Training",
+      "novaLabel": "NOVA",
+      "allModules": "All Modules",
+      "commonMistakes": "Common Mistakes",
+      "trackProgress": "Track Progress",
+      "pricing": "Pricing",
+      "myAssignments": "My Assignments",
+      "leaderboard": "Leaderboard"
+    }
   }
 }

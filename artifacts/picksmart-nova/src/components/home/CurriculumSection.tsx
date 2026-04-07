@@ -1,21 +1,29 @@
 import SectionHeading from "./SectionHeading";
-import { modules } from "../../data/homepageData";
 import { Link } from "wouter";
+import { useTranslation } from "react-i18next";
 
 export default function CurriculumSection() {
+  const { t } = useTranslation();
+  const modules = t("home.curriculum.modules", { returnObjects: true }) as Array<{
+    number: string;
+    badge: string;
+    title: string;
+    text: string;
+  }>;
+
   return (
     <section className="py-20 bg-slate-950">
       <div className="max-w-7xl mx-auto px-6">
         <SectionHeading
-          eyebrow="The Curriculum"
-          title="What You'll Learn"
-          subtitle="Six comprehensive modules covering everything from your first day to hitting top rates."
+          eyebrow={t("home.curriculum.eyebrow")}
+          title={t("home.curriculum.title")}
+          subtitle={t("home.curriculum.subtitle")}
         />
 
         <div className="mt-12 grid md:grid-cols-2 xl:grid-cols-3 gap-6">
           {modules.map((module) => (
             <div
-              key={module.title}
+              key={module.number}
               className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg"
             >
               <div className="flex items-center justify-between">
@@ -34,7 +42,7 @@ export default function CurriculumSection() {
                 href="/training"
                 className="mt-6 inline-flex items-center rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-white hover:border-yellow-400"
               >
-                View Module
+                {t("home.curriculum.viewModule")}
               </Link>
             </div>
           ))}
@@ -45,7 +53,7 @@ export default function CurriculumSection() {
             href="/training"
             className="inline-flex items-center rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300"
           >
-            Browse All Modules
+            {t("home.curriculum.browseAll")}
           </Link>
         </div>
       </div>

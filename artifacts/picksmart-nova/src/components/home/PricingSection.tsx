@@ -1,19 +1,30 @@
 import SectionHeading from "./SectionHeading";
-import { pricingPlans } from "../../data/homepageData";
 import { Link } from "wouter";
+import { useTranslation } from "react-i18next";
 
 export default function PricingSection() {
+  const { t } = useTranslation();
+  const plans = t("home.pricing.plans", { returnObjects: true }) as Array<{
+    title: string;
+    subtitle: string;
+    price: string;
+    suffix: string;
+    cta: string;
+    featured?: boolean;
+    features: string[];
+  }>;
+
   return (
     <section className="py-20 bg-slate-950">
       <div className="max-w-7xl mx-auto px-6">
         <SectionHeading
-          eyebrow="Simple Pricing"
-          title="Invest in Your Career"
-          subtitle="Start free or unlock everything with Pro. Most selectors make back the cost in their first week of better rates."
+          eyebrow={t("home.pricing.eyebrow")}
+          title={t("home.pricing.title")}
+          subtitle={t("home.pricing.subtitle")}
         />
 
         <div className="mt-12 grid lg:grid-cols-3 gap-6">
-          {pricingPlans.map((plan) => (
+          {plans.map((plan) => (
             <div
               key={plan.title}
               className={`rounded-3xl border p-8 shadow-xl ${
@@ -24,7 +35,7 @@ export default function PricingSection() {
             >
               {plan.featured ? (
                 <div className="mb-4 inline-flex rounded-full bg-yellow-400 px-3 py-1 text-xs font-bold text-slate-950">
-                  Most Popular
+                  {t("home.pricing.mostPopular")}
                 </div>
               ) : null}
 

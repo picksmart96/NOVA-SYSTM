@@ -1,18 +1,26 @@
 import SectionHeading from "./SectionHeading";
-import { testimonials } from "../../data/homepageData";
+import { useTranslation } from "react-i18next";
 
 export default function TestimonialsSection() {
+  const { t } = useTranslation();
+  const items = t("home.testimonials.items", { returnObjects: true }) as Array<{
+    initials: string;
+    name: string;
+    role: string;
+    quote: string;
+  }>;
+
   return (
     <section className="py-20 bg-slate-950">
       <div className="max-w-7xl mx-auto px-6">
         <SectionHeading
-          eyebrow="From the Floor"
-          title="Selectors Who've Been There"
-          subtitle="Real feedback from warehouse workers who went through the training."
+          eyebrow={t("home.testimonials.eyebrow")}
+          title={t("home.testimonials.title")}
+          subtitle={t("home.testimonials.subtitle")}
         />
 
         <div className="mt-12 grid lg:grid-cols-3 gap-6">
-          {testimonials.map((item) => (
+          {items.map((item) => (
             <div
               key={item.name}
               className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg"
