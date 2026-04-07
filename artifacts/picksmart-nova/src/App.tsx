@@ -10,6 +10,7 @@ import ModulesPage from "@/pages/modules";
 import LessonSessionPage from "@/pages/lesson-session";
 import ModuleDetailPage from "@/pages/module-detail";
 import CommonMistakesPage from "@/pages/mistakes";
+import MistakeCoachingPage from "@/pages/mistake-coaching";
 import ProgressPage from "@/pages/progress";
 import LeaderboardPage from "@/pages/leaderboard";
 import PricingPage from "@/pages/pricing";
@@ -51,6 +52,10 @@ function Router() {
       </Route>
       <Route path="/mistakes">
         <Layout><CommonMistakesPage /></Layout>
+      </Route>
+      {/* Coaching is full-screen — no layout wrapper */}
+      <Route path="/mistakes/coaching/:id">
+        <MistakeCoachingPage />
       </Route>
       <Route path="/progress">
         <Layout><ProgressPage /></Layout>
