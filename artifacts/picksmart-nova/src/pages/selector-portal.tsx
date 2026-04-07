@@ -45,13 +45,13 @@ export default function SelectorPortalPage() {
     : null;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white px-6 py-8">
-      <div className="max-w-5xl mx-auto space-y-8">
+    <div className="min-h-screen bg-slate-950 text-white px-3 py-5 sm:px-6 sm:py-8">
+      <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8">
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <p className="text-slate-400 text-sm font-medium uppercase tracking-widest mb-1">Selector Portal</p>
-            <h1 className="text-4xl font-black capitalize">
+            <p className="text-slate-400 text-xs sm:text-sm font-medium uppercase tracking-widest mb-1">Selector Portal</p>
+            <h1 className="text-2xl sm:text-4xl font-black capitalize">
               {currentUser?.fullName ?? "Welcome"}
             </h1>
             {selectorProfile && (

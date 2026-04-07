@@ -93,19 +93,19 @@ export default function TrainerPortalPage() {
   const openAssignmentsCount = selectors.filter((s) => s.assignedAssignmentId).length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white px-6 py-8">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-slate-950 text-white px-3 py-5 sm:px-6 sm:py-8">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
 
         {/* ── Header ── */}
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-yellow-400 flex items-center justify-center">
-                <Shield className="h-5 w-5 text-slate-950" />
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-yellow-400 flex items-center justify-center shrink-0">
+                <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-slate-950" />
               </div>
-              <h1 className="text-4xl font-black">Trainer Dashboard</h1>
+              <h1 className="text-2xl sm:text-4xl font-black">Trainer Dashboard</h1>
             </div>
-            <p className="text-slate-400 capitalize">
+            <p className="text-slate-400 text-sm capitalize">
               {trainer.name} · {trainer.role}
             </p>
           </div>
@@ -126,29 +126,29 @@ export default function TrainerPortalPage() {
         </div>
 
         {/* ── Stats ── */}
-        <div className="grid sm:grid-cols-3 gap-4">
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-            <div className="flex items-center gap-2 mb-3">
+        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-4 sm:p-6 shadow-lg">
+            <div className="flex items-center gap-2 mb-2 sm:mb-3">
               <Users className="h-4 w-4 text-slate-500" />
-              <p className="text-slate-400 text-sm font-medium">My Selectors</p>
+              <p className="text-slate-400 text-xs sm:text-sm font-medium">My Selectors</p>
             </div>
-            <p className="text-5xl font-black text-white">{selectors.length}</p>
+            <p className="text-3xl sm:text-5xl font-black text-white">{selectors.length}</p>
           </div>
 
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-            <div className="flex items-center gap-2 mb-3">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-4 sm:p-6 shadow-lg">
+            <div className="flex items-center gap-2 mb-2 sm:mb-3">
               <BookOpen className="h-4 w-4 text-slate-500" />
-              <p className="text-slate-400 text-sm font-medium">Sessions Logged</p>
+              <p className="text-slate-400 text-xs sm:text-sm font-medium">Sessions</p>
             </div>
-            <p className="text-5xl font-black text-white">{sessions.length}</p>
+            <p className="text-3xl sm:text-5xl font-black text-white">{sessions.length}</p>
           </div>
 
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-            <div className="flex items-center gap-2 mb-3">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-4 sm:p-6 shadow-lg">
+            <div className="flex items-center gap-2 mb-2 sm:mb-3">
               <ClipboardList className="h-4 w-4 text-slate-500" />
-              <p className="text-slate-400 text-sm font-medium">Open Assignments</p>
+              <p className="text-slate-400 text-xs sm:text-sm font-medium">Assignments</p>
             </div>
-            <p className="text-5xl font-black text-white">{openAssignmentsCount}</p>
+            <p className="text-3xl sm:text-5xl font-black text-white">{openAssignmentsCount}</p>
           </div>
         </div>
 

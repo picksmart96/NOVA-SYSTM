@@ -260,3 +260,34 @@
     inset: -1px;
   }
 }
+
+/* ── Mobile / touch improvements ─────────────────────────────────── */
+
+/* Prevent iOS Safari from zooming in on focused inputs */
+input, select, textarea {
+  font-size: 16px !important;
+}
+
+/* Hide scrollbar on horizontal scroll containers but still allow scrolling */
+.scroll-x-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scroll-x-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe-area insets for iPhone notch / home bar */
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Minimum 44px touch targets for interactive elements on mobile */
+@media (max-width: 640px) {
+  button, [role="button"] {
+    min-height: 44px;
+  }
+}

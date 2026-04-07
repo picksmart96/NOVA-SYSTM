@@ -69,19 +69,19 @@ export default function SupervisorPage() {
   const openCount = selectors.filter((s) => s.assignedAssignmentId).length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white px-6 py-8">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-slate-950 text-white px-3 py-5 sm:px-6 sm:py-8">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
 
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-yellow-400 flex items-center justify-center">
-                <Radio className="h-5 w-5 text-slate-950" />
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-yellow-400 flex items-center justify-center shrink-0">
+                <Radio className="h-4 w-4 sm:h-5 sm:w-5 text-slate-950" />
               </div>
-              <h1 className="text-4xl font-black">Supervisor Dashboard</h1>
+              <h1 className="text-2xl sm:text-4xl font-black">Supervisor Dashboard</h1>
             </div>
-            <p className="text-slate-400">soumaila ouedraogo · NOVA ES3 D2S</p>
+            <p className="text-slate-400 text-sm">soumaila ouedraogo · NOVA ES3 D2S</p>
           </div>
 
           <div className="flex gap-3 flex-wrap">
@@ -100,7 +100,7 @@ export default function SupervisorPage() {
         </div>
 
         {/* Stats row */}
-        <div className="grid sm:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4">
           {[
             { label: "Open", value: openCount, icon: Activity },
             { label: "Selectors", value: selectors.length, icon: Users },
@@ -108,12 +108,12 @@ export default function SupervisorPage() {
             { label: "Sessions", value: sessions.length, icon: BookOpen },
             { label: "Pass rate", value: "0%", icon: TrendingUp },
           ].map(({ label, value, icon: Icon }) => (
-            <div key={label} className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-              <div className="flex items-center gap-2 mb-3">
+            <div key={label} className="rounded-3xl border border-slate-800 bg-slate-900 p-4 sm:p-6 shadow-lg">
+              <div className="flex items-center gap-2 mb-2 sm:mb-3">
                 <Icon className="h-4 w-4 text-slate-500" />
-                <p className="text-slate-400 text-sm font-medium">{label}</p>
+                <p className="text-slate-400 text-xs sm:text-sm font-medium">{label}</p>
               </div>
-              <p className="text-4xl font-black text-white">{value}</p>
+              <p className="text-3xl sm:text-4xl font-black text-white">{value}</p>
             </div>
           ))}
         </div>
@@ -209,12 +209,12 @@ export default function SupervisorPage() {
         </div>
 
         {/* Tab bar */}
-        <div className="flex flex-wrap gap-3">
+        <div className="flex overflow-x-auto scroll-x-hidden gap-2 pb-1 -mx-1 px-1">
           {TABS.map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`rounded-full px-5 py-2 text-sm font-bold border transition ${
+              className={`rounded-full px-4 sm:px-5 py-2 text-sm font-bold border transition whitespace-nowrap shrink-0 ${
                 tab === t
                   ? "bg-yellow-400 text-slate-950 border-yellow-400"
                   : "bg-slate-900 text-slate-300 border-slate-700 hover:border-yellow-400"

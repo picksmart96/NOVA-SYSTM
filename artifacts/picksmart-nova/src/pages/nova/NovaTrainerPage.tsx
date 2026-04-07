@@ -9,7 +9,7 @@ import {
   isLoadPicks,
   extractDigits,
 } from "@/lib/parser";
-import useVoiceEngine, { UseVoiceEngineReturn } from "@/hooks/useVoiceEngine";
+import { useVoiceEngine, UseVoiceEngineReturn } from "@/hooks/useVoiceEngine";
 
 const SYSTEM_DEFAULTS = {
   printerNumber: "307",
@@ -62,9 +62,9 @@ function StatCard({ label, value, tone = "default" }: { label: string; value: st
       : "text-white";
 
   return (
-    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-lg">
-      <p className="text-sm text-slate-400">{label}</p>
-      <p className={`mt-3 text-2xl font-black ${toneClass}`}>{value}</p>
+    <div className="rounded-2xl sm:rounded-3xl border border-slate-800 bg-slate-900 p-3 sm:p-5 shadow-lg">
+      <p className="text-xs sm:text-sm text-slate-400">{label}</p>
+      <p className={`mt-1 sm:mt-3 text-lg sm:text-2xl font-black truncate ${toneClass}`}>{value}</p>
     </div>
   );
 }
@@ -480,15 +480,15 @@ export default function NovaTrainerPage() {
   }, [voice.currentPrompt]);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white px-6 py-8">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-slate-950 text-white px-3 py-5 sm:px-6 sm:py-8">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
 
         {/* Header */}
         <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
           <div>
-            <p className="text-yellow-400 text-sm font-semibold uppercase tracking-[0.22em]">NOVA Trainer</p>
-            <h1 className="mt-2 text-4xl font-black">ES3 Script Mode</h1>
-            <p className="mt-2 text-slate-400 max-w-3xl">
+            <p className="text-yellow-400 text-xs sm:text-sm font-semibold uppercase tracking-[0.22em]">NOVA Trainer</p>
+            <h1 className="mt-1 sm:mt-2 text-2xl sm:text-4xl font-black">ES3 Script Mode</h1>
+            <p className="mt-1 sm:mt-2 text-slate-400 text-sm sm:text-base max-w-3xl">
               Hands-free voice workflow after one tap. Selector can talk to NOVA without touching the screen again.
             </p>
           </div>
@@ -549,7 +549,7 @@ export default function NovaTrainerPage() {
         </div>
 
         {/* Top stats */}
-        <div className="grid sm:grid-cols-2 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
           <StatCard label="Phase" value={phase} tone="accent" />
           <StatCard label="Selector" value={selectorUserId} />
           <StatCard label="Assignment" value={activeAssignment ? `#${activeAssignment.assignmentNumber}` : "—"} />
@@ -566,10 +566,10 @@ export default function NovaTrainerPage() {
         <div className="grid xl:grid-cols-[1.15fr_0.85fr] gap-6">
 
           {/* Left column */}
-          <div className="space-y-6">
-            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+          <div className="space-y-5 sm:space-y-6">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-4 sm:p-6 shadow-lg">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="text-2xl font-bold">Current Prompt</h2>
+                <h2 className="text-xl sm:text-2xl font-bold">Current Prompt</h2>
                 <VoiceStateBadge voice={voice} />
               </div>
 
