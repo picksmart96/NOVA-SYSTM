@@ -20,6 +20,21 @@ export function useRoleNav(): NavLink[] {
   links.push(
     { href: "/", label: "Home", group: "public" },
     { href: "/training", label: "Training", group: "public" },
+  );
+
+  if (atLeast("selector", role)) {
+    links.push(
+      { href: "/nova", label: "My Assignments", group: "nova" },
+    );
+  }
+
+  if (atLeast("trainer", role)) {
+    links.push(
+      { href: "/trainer-portal", label: "Trainer Dashboard", group: "trainer" },
+    );
+  }
+
+  links.push(
     { href: "/mistakes", label: "Common Mistakes", group: "public" },
     { href: "/progress", label: "My Progress", group: "public" },
     { href: "/leaderboard", label: "Leaderboard", group: "public" },
@@ -28,7 +43,6 @@ export function useRoleNav(): NavLink[] {
 
   if (atLeast("selector", role)) {
     links.push(
-      { href: "/nova", label: "My Assignments", group: "nova" },
       { href: "/nova-trainer", label: "NOVA Trainer", group: "nova" },
       { href: "/nova-help", label: "NOVA Help", group: "nova" },
     );
@@ -40,7 +54,6 @@ export function useRoleNav(): NavLink[] {
       { href: "/nova/slots", label: "Slot Master", group: "trainer" },
       { href: "/nova/warehouse", label: "Warehouse Ref", group: "trainer" },
       { href: "/nova/voice-commands", label: "Voice Commands", group: "trainer" },
-      { href: "/trainer-portal", label: "Trainer Portal", group: "trainer" },
     );
   }
 
