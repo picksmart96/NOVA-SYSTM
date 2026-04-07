@@ -26,7 +26,7 @@ import SlotMasterPage from "@/pages/nova/slot-master";
 import VoiceCommandsPage from "@/pages/nova/voice-commands";
 import LiveTrackingPage from "@/pages/nova/tracking";
 
-import NovaTrainerPage from "@/pages/nova-trainer";
+import NovaTrainerPage from "@/pages/nova/NovaTrainerPage";
 import NovaHelpPage from "@/pages/nova-help";
 import TrainerPortalPage from "@/pages/trainer-portal";
 import SupervisorPage from "@/pages/supervisor";
