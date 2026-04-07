@@ -7,7 +7,7 @@ import { AssignAssignmentModal } from "@/components/nova/AssignAssignmentModal";
 import {
   Activity, Users, Zap, BookOpen, TrendingUp, Radio,
   MapPin, LogOut, Copy, Send, UserPlus, Check,
-  ClipboardList, CheckCircle2, AlertCircle, DoorOpen
+  ClipboardList, CheckCircle2, AlertCircle, DoorOpen, KeyRound
 } from "lucide-react";
 
 function formatDate(date: string) {
@@ -231,6 +231,12 @@ export default function SupervisorPage() {
                 <h3 className="font-black capitalize">{s.name}</h3>
                 <p className="text-slate-400 text-sm mt-1">{s.novaId} · Age {s.age}</p>
                 <p className="text-slate-400 text-sm">{s.experience}</p>
+                {s.novaPin && (
+                  <div className="mt-2 inline-flex items-center gap-1.5 rounded-xl border border-yellow-400/30 bg-yellow-400/5 px-2.5 py-1">
+                    <KeyRound className="h-3 w-3 text-yellow-400" />
+                    <span className="text-xs font-black text-yellow-300 tracking-widest">{s.novaPin}</span>
+                  </div>
+                )}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <span className="rounded-full bg-yellow-500/10 px-2.5 py-1 text-xs font-bold text-yellow-300 border border-yellow-500/30">{s.level}</span>
                   {s.novaActive && <span className="rounded-full bg-green-500/10 px-2.5 py-1 text-xs font-bold text-green-300 border border-green-500/30">NOVA Active</span>}
@@ -315,6 +321,12 @@ export default function SupervisorPage() {
                   <h3 className="font-black capitalize">{s.name}</h3>
                   <p className="text-slate-400 text-sm mt-1">{s.novaId} · Level: {s.level} · Age {s.age}</p>
                   <p className="text-slate-400 text-sm">{s.experience}</p>
+                  {s.novaPin && (
+                    <div className="mt-2 inline-flex items-center gap-1.5 rounded-xl border border-yellow-400/30 bg-yellow-400/5 px-2.5 py-1">
+                      <KeyRound className="h-3 w-3 text-yellow-400" />
+                      <span className="text-xs font-black text-yellow-300 tracking-widest">NOVA ID: {s.novaPin}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {s.novaActive && <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-bold text-green-300 border border-green-500/30">NOVA Active</span>}

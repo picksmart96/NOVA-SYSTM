@@ -8,6 +8,7 @@ export interface TrainerSelector {
   userId: string;
   name: string;
   novaId: string;
+  novaPin: string | null;
   age: number;
   experience: string;
   level: "Beginner" | "Intermediate" | "Advanced";
@@ -41,7 +42,7 @@ interface TrainerState {
 
   addSelector: (input: NewSelectorInput) => void;
   toggleNova: (selectorId: number) => void;
-  assignAssignment: (selectorId: number, assignmentId: string) => void;
+  assignAssignment: (selectorId: number, assignmentId: string) => string;
   logSession: (data: { selectorId: number; selectorName: string; sessionType: string; notes: string }) => void;
 }
 
@@ -51,6 +52,7 @@ const initialSelectors: TrainerSelector[] = [
     userId: "user-001",
     name: "soumaila ouedraogo",
     novaId: "NOVA-25917",
+    novaPin: null,
     age: 30,
     experience: "3 weeks selector",
     level: "Beginner",
@@ -59,6 +61,10 @@ const initialSelectors: TrainerSelector[] = [
     notes: "",
   },
 ];
+
+function generateNovaPin(): string {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
 
 export const useTrainerStore = create<TrainerState>()(
   persist(
@@ -75,6 +81,7 @@ export const useTrainerStore = create<TrainerState>()(
               id: Date.now(),
               userId: `user-${String(state.selectors.length + 1).padStart(3, "0")}`,
               novaId: `NOVA-${Math.floor(10000 + Math.random() * 89999)}`,
+              novaPin: null,
               novaActive: false,
               assignedAssignmentId: null,
               experience: "New selector",
@@ -94,12 +101,15 @@ export const useTrainerStore = create<TrainerState>()(
           ),
         })),
 
-      assignAssignment: (selectorId, assignmentId) =>
+      assignAssignment: (selectorId, assignmentId) => {
+        const pin = generateNovaPin();
         set((state) => {
           const selector = state.selectors.find((s) => s.id === selectorId);
           return {
             selectors: state.selectors.map((s) =>
-              s.id === selectorId ? { ...s, assignedAssignmentId: assignmentId } : s
+              s.id === selectorId
+                ? { ...s, assignedAssignmentId: assignmentId, novaPin: pin }
+                : s
             ),
             assignments: state.assignments.map((a) =>
               a.id === assignmentId
@@ -107,7 +117,9 @@ export const useTrainerStore = create<TrainerState>()(
                 : a
             ),
           };
-        }),
+        });
+        return pin;
+      },
 
       logSession: (data) =>
         set((state) => ({

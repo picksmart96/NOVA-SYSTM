@@ -8,7 +8,7 @@ import { LogSessionModal } from "@/components/nova/LogSessionModal";
 import { SessionCard } from "@/components/nova/SessionCard";
 import {
   Shield, Users, ClipboardList, Zap, BookOpen,
-  MapPin, UserPlus, LogOut, CheckCircle2, AlertCircle, DoorOpen
+  MapPin, UserPlus, LogOut, CheckCircle2, AlertCircle, DoorOpen, KeyRound
 } from "lucide-react";
 
 type SelectorLevel = "Beginner" | "Intermediate" | "Advanced";
@@ -252,9 +252,15 @@ export default function TrainerPortalPage() {
                     >
                       <h3 className="text-lg font-black capitalize">{selector.name}</h3>
                       <p className="mt-1 text-slate-400 text-sm">
-                        NOVA ID: <span className="text-slate-300">{selector.novaId}</span> · Age {selector.age}
+                        {selector.novaId} · Age {selector.age}
                       </p>
                       <p className="mt-1 text-slate-400 text-sm">{selector.experience}</p>
+                      {selector.novaPin && (
+                        <div className="mt-2 inline-flex items-center gap-1.5 rounded-xl border border-yellow-400/30 bg-yellow-400/5 px-3 py-1">
+                          <KeyRound className="h-3 w-3 text-yellow-400" />
+                          <span className="text-xs font-black text-yellow-300 tracking-widest">{selector.novaPin}</span>
+                        </div>
+                      )}
 
                       {/* Badges */}
                       <div className="mt-3 flex flex-wrap gap-2">

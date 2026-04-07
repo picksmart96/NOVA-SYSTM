@@ -91,7 +91,9 @@ function Router() {
         <VoiceSessionPage />
       </Route>
       <Route path="/nova-trainer">
-        <Layout><NovaTrainerPage /></Layout>
+        <ProtectedRoute path="/nova-trainer">
+          <Layout><NovaTrainerPage /></Layout>
+        </ProtectedRoute>
       </Route>
       <Route path="/nova-help">
         <Layout><NovaHelpPage /></Layout>
