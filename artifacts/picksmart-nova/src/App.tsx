@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/layout";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import NotFound from "@/pages/not-found";
 
 import HomePage from "@/pages/home";
@@ -31,11 +32,22 @@ import TrainerPortalPage from "@/pages/trainer-portal";
 import SupervisorPage from "@/pages/supervisor";
 import UsersAccessPage from "@/pages/users-access";
 
+import LoginPage from "@/pages/login";
+import InvitePage from "@/pages/invite";
+
 const queryClient = new QueryClient();
 
 function Router() {
   return (
     <Switch>
+      {/* Auth — full screen, no layout */}
+      <Route path="/login">
+        <LoginPage />
+      </Route>
+      <Route path="/invite/:token">
+        <InvitePage />
+      </Route>
+
       {/* Public */}
       <Route path="/">
         <Layout><HomePage /></Layout>
@@ -43,7 +55,6 @@ function Router() {
       <Route path="/training">
         <Layout><ModulesPage /></Layout>
       </Route>
-      {/* Lesson session is full-screen — no layout wrapper */}
       <Route path="/training/lesson/:id">
         <LessonSessionPage />
       </Route>
@@ -53,7 +64,6 @@ function Router() {
       <Route path="/mistakes">
         <Layout><CommonMistakesPage /></Layout>
       </Route>
-      {/* Coaching is full-screen — no layout wrapper */}
       <Route path="/mistakes/coaching/:id">
         <MistakeCoachingPage />
       </Route>
@@ -77,7 +87,6 @@ function Router() {
       <Route path="/nova/assignments/:id">
         <Layout><AssignmentDetailPage /></Layout>
       </Route>
-      {/* Voice session is full-screen — no layout wrapper */}
       <Route path="/nova/voice/:id">
         <VoiceSessionPage />
       </Route>
@@ -88,7 +97,7 @@ function Router() {
         <Layout><NovaHelpPage /></Layout>
       </Route>
 
-      {/* Trainer+ */}
+      {/* Trainer tools */}
       <Route path="/nova/control">
         <Layout><AssignmentControlPage /></Layout>
       </Route>
@@ -101,21 +110,38 @@ function Router() {
       <Route path="/nova/voice-commands">
         <Layout><VoiceCommandsPage /></Layout>
       </Route>
+
+      {/* ── PROTECTED ROUTES ── */}
       <Route path="/trainer-portal">
-        <Layout><TrainerPortalPage /></Layout>
+        <Layout>
+          <ProtectedRoute path="/trainer-portal" requiredRole="trainer">
+            <TrainerPortalPage />
+          </ProtectedRoute>
+        </Layout>
       </Route>
 
-      {/* Supervisor+ */}
       <Route path="/nova/tracking">
-        <Layout><LiveTrackingPage /></Layout>
-      </Route>
-      <Route path="/supervisor">
-        <Layout><SupervisorPage /></Layout>
+        <Layout>
+          <ProtectedRoute path="/nova/tracking" requiredRole="supervisor">
+            <LiveTrackingPage />
+          </ProtectedRoute>
+        </Layout>
       </Route>
 
-      {/* Owner */}
+      <Route path="/supervisor">
+        <Layout>
+          <ProtectedRoute path="/supervisor" requiredRole="supervisor">
+            <SupervisorPage />
+          </ProtectedRoute>
+        </Layout>
+      </Route>
+
       <Route path="/users-access">
-        <Layout><UsersAccessPage /></Layout>
+        <Layout>
+          <ProtectedRoute path="/users-access" requiredRole="owner">
+            <UsersAccessPage />
+          </ProtectedRoute>
+        </Layout>
       </Route>
 
       <Route>

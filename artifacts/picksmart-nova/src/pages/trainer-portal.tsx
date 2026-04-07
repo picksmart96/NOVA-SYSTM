@@ -1,22 +1,30 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useTrainerStore } from "@/lib/trainerStore";
+import { useAuthStore } from "@/lib/authStore";
 import { AssignAssignmentModal } from "@/components/nova/AssignAssignmentModal";
 import { ActivateNovaModal } from "@/components/nova/ActivateNovaModal";
 import { LogSessionModal } from "@/components/nova/LogSessionModal";
 import { SessionCard } from "@/components/nova/SessionCard";
 import {
   Shield, Users, ClipboardList, Zap, BookOpen,
-  MapPin, UserPlus, LogIn, ChevronRight
+  MapPin, UserPlus, LogOut
 } from "lucide-react";
 
 type SelectorLevel = "Beginner" | "Intermediate" | "Advanced";
 
 export default function TrainerPortalPage() {
+  const [, navigate] = useLocation();
+  const { currentUser, logout } = useAuthStore();
   const {
     trainer, selectors, sessions, assignments,
     addSelector, toggleNova,
   } = useTrainerStore();
+
+  const handleSignOut = () => {
+    logout();
+    navigate("/login");
+  };
 
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showNovaModal, setShowNovaModal] = useState(false);
@@ -86,8 +94,11 @@ export default function TrainerPortalPage() {
                 <MapPin className="h-4 w-4" /> Warehouse Ref
               </button>
             </Link>
-            <button className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-red-400 transition flex items-center gap-2">
-              <LogIn className="h-4 w-4" /> Sign out
+            <button
+              onClick={handleSignOut}
+              className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-red-400 hover:text-red-400 transition flex items-center gap-2"
+            >
+              <LogOut className="h-4 w-4" /> Sign out
             </button>
           </div>
         </div>

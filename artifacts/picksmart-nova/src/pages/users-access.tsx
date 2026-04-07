@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useAccessStore } from "@/lib/accessStore";
-import { Users, Shield, Key, UserPlus, Copy, Check } from "lucide-react";
+import { useAuthStore } from "@/lib/authStore";
+import type { AuthRole } from "@/lib/authStore";
+import { Users, Shield, Key, UserPlus, Copy, Check, LogOut } from "lucide-react";
 
 type RoleKey = "Selector" | "Trainer" | "Supervisor" | "Admin" | "User";
 
@@ -33,7 +35,17 @@ const ROLE_BADGE: Record<string, string> = {
   User: "bg-slate-700 text-slate-300 border-slate-600",
 };
 
+const AUTH_ROLES: Record<RoleKey, AuthRole | null> = {
+  Selector: null,
+  Trainer: "trainer",
+  Supervisor: "supervisor",
+  Admin: "owner",
+  User: null,
+};
+
 export default function UsersAccessPage() {
+  const [, navigate] = useLocation();
+  const { logout, addInvite } = useAuthStore();
   const {
     appUsers, novaAccounts,
     inviteAppUser, createNovaAccount, deactivateNovaAccount,
@@ -54,12 +66,15 @@ export default function UsersAccessPage() {
 
   const [ownerPassword, setOwnerPassword] = useState("");
   const [copied, setCopied] = useState("");
+  const [generatedInviteUrl, setGeneratedInviteUrl] = useState<string | null>(null);
 
   const inviteLink = useMemo(() => roleLinks[inviteForm.role], [inviteForm.role]);
 
+  const handleSignOut = () => { logout(); navigate("/login"); };
+
   const handleCopy = async (text: string, label: string) => {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}${text}`);
+      await navigator.clipboard.writeText(text);
       setCopied(label);
       setTimeout(() => setCopied(""), 1800);
     } catch { /* silent */ }
@@ -68,6 +83,15 @@ export default function UsersAccessPage() {
   const handleInviteUser = () => {
     if (!inviteForm.fullName.trim() || !inviteForm.email.trim()) return;
     inviteAppUser({ fullName: inviteForm.fullName, email: inviteForm.email, role: inviteForm.role, inviteLink });
+
+    const authRole = AUTH_ROLES[inviteForm.role];
+    if (authRole) {
+      const token = addInvite({ fullName: inviteForm.fullName.trim(), email: inviteForm.email.trim(), role: authRole });
+      setGeneratedInviteUrl(`${window.location.origin}/invite/${token}`);
+    } else {
+      setGeneratedInviteUrl(null);
+    }
+
     setInviteForm({ fullName: "", email: "", role: "Selector" });
   };
 
@@ -169,8 +193,27 @@ export default function UsersAccessPage() {
                 onClick={handleInviteUser}
                 className="rounded-2xl bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300 transition flex items-center gap-2"
               >
-                <UserPlus className="h-4 w-4" /> Send Invite Email
+                <UserPlus className="h-4 w-4" /> Generate Invite Link
               </button>
+
+              {generatedInviteUrl && (
+                <div className="rounded-2xl border border-green-500/30 bg-green-500/10 p-4 mt-2">
+                  <p className="text-green-300 text-sm font-bold mb-3 flex items-center gap-2">
+                    <Check className="h-4 w-4" /> Share this invite link:
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                    <div className="flex-1 rounded-xl bg-slate-950 border border-slate-800 px-3 py-2.5 text-xs text-slate-300 break-all">
+                      {generatedInviteUrl}
+                    </div>
+                    <button
+                      onClick={() => handleCopy(generatedInviteUrl, "Invite URL")}
+                      className="rounded-2xl border border-slate-700 px-4 py-2.5 font-semibold text-sm hover:border-yellow-400 transition flex items-center gap-2 shrink-0"
+                    >
+                      <Copy className="h-4 w-4" /> {copied === "Invite URL" ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

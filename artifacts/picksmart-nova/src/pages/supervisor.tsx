@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useAccessStore } from "@/lib/accessStore";
 import { useTrainerStore } from "@/lib/trainerStore";
+import { useAuthStore } from "@/lib/authStore";
 import {
   Activity, Users, Zap, BookOpen, TrendingUp, Radio,
-  MapPin, LogIn, Copy, Send, UserPlus
+  MapPin, LogOut, Copy, Send, UserPlus, Check
 } from "lucide-react";
 
 function formatDate(date: string) {
@@ -18,16 +19,32 @@ const TABS = ["Overview", "Activate NOVA", "Selectors", "Sessions"] as const;
 type Tab = typeof TABS[number];
 
 export default function SupervisorPage() {
+  const [, navigate] = useLocation();
+  const { logout } = useAuthStore();
   const { trainerInviteRequests, novaSessions, stopNovaSession } = useAccessStore();
   const { selectors, sessions } = useTrainerStore();
+  const { addInvite } = useAuthStore();
 
   const [tab, setTab] = useState<Tab>("Overview");
   const [trainerName, setTrainerName] = useState("");
-  const [trainerEmail, setTrainerEmail] = useState("trainer@email.com");
+  const [trainerEmail, setTrainerEmail] = useState("");
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [copied, setCopied] = useState("");
 
-  const trainerUrl = `${window.location.origin}/trainer-portal`;
-  const trainerSignupUrl = `${window.location.origin}/trainer-signup`;
+  const handleSignOut = () => {
+    logout();
+    navigate("/login");
+  };
+
+  const handleSendInvite = () => {
+    if (!trainerName.trim() || !trainerEmail.trim()) return;
+    const token = addInvite({ fullName: trainerName.trim(), email: trainerEmail.trim(), role: "trainer" });
+    setInviteToken(token);
+    setTrainerName("");
+    setTrainerEmail("");
+  };
+
+  const generatedInviteUrl = inviteToken ? `${window.location.origin}/invite/${inviteToken}` : null;
 
   const handleCopy = async (text: string, label: string) => {
     try {
@@ -62,8 +79,11 @@ export default function SupervisorPage() {
                 <MapPin className="h-4 w-4" /> Warehouse Ref
               </button>
             </Link>
-            <button className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-red-400 transition flex items-center gap-2">
-              <LogIn className="h-4 w-4" /> Sign out
+            <button
+              onClick={handleSignOut}
+              className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-red-400 hover:text-red-400 transition flex items-center gap-2"
+            >
+              <LogOut className="h-4 w-4" /> Sign out
             </button>
           </div>
         </div>
@@ -115,25 +135,37 @@ export default function SupervisorPage() {
               <input
                 value={trainerEmail}
                 onChange={(e) => setTrainerEmail(e.target.value)}
-                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition"
+                placeholder="trainer@email.com"
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition placeholder:text-slate-600"
               />
             </div>
-            <button className="rounded-2xl bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300 transition flex items-center gap-2">
-              <Send className="h-4 w-4" /> Send Invite
+            <button
+              onClick={handleSendInvite}
+              disabled={!trainerName.trim() || !trainerEmail.trim()}
+              className="rounded-2xl bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300 transition flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Send className="h-4 w-4" /> Generate Invite
             </button>
           </div>
 
-          <div className="mt-5 flex flex-col sm:flex-row gap-3 sm:items-center">
-            <div className="flex-1 rounded-xl bg-slate-950 border border-slate-800 px-4 py-3 text-sm text-slate-300 break-all">
-              {trainerUrl}
+          {generatedInviteUrl && (
+            <div className="mt-5 rounded-2xl border border-green-500/30 bg-green-500/10 p-4">
+              <p className="text-green-300 text-sm font-bold mb-3 flex items-center gap-2">
+                <Check className="h-4 w-4" /> Invite link generated — share this with the trainer:
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                <div className="flex-1 rounded-xl bg-slate-950 border border-slate-800 px-4 py-3 text-sm text-slate-300 break-all">
+                  {generatedInviteUrl}
+                </div>
+                <button
+                  onClick={() => handleCopy(generatedInviteUrl, "Invite URL")}
+                  className="rounded-2xl border border-slate-700 px-4 py-3 font-semibold hover:border-yellow-400 transition flex items-center gap-2 shrink-0"
+                >
+                  <Copy className="h-4 w-4" /> {copied === "Invite URL" ? "Copied!" : "Copy"}
+                </button>
+              </div>
             </div>
-            <button
-              onClick={() => handleCopy(trainerUrl, "Trainer URL")}
-              className="rounded-2xl border border-slate-700 px-4 py-3 font-semibold hover:border-yellow-400 transition flex items-center gap-2 shrink-0"
-            >
-              <Copy className="h-4 w-4" /> Copy
-            </button>
-          </div>
+          )}
         </div>
 
         {/* Trainer Access Requests */}
