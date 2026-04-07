@@ -1,5 +1,5 @@
-import { heroStats } from "../../data/homepageData";
 import { Link } from "wouter";
+import { heroStats } from "../../data/homepageData";
 
 export default function HeroSection() {
   return (
@@ -46,12 +46,13 @@ export default function HeroSection() {
 
         <div className="mt-12 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
           {heroStats.map((item) => (
-            <div
-              key={item}
-              className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-4 text-center text-sm text-slate-200 shadow-lg"
+            <Link
+              key={item.title}
+              href={item.href}
+              className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-4 text-center text-sm text-slate-200 shadow-lg hover:border-yellow-400 hover:text-white transition"
             >
-              {item}
-            </div>
+              {item.title}
+            </Link>
           ))}
         </div>
       </div>

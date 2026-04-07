@@ -1,24 +1,30 @@
 export const heroStats = [
-  "6 Training Modules",
-  "24+ Video Lessons",
-  "100%+ Rate Target",
-  "Selector-Tested Techniques",
-  "Avg 30% Rate Improvement",
-  "Injury Prevention Focused",
+  { title: "6 Training Modules", href: "/training" },
+  { title: "24+ Video Lessons", href: "/training" },
+  { title: "100%+ Rate Target", href: "/progress" },
+  { title: "Selector-Tested Techniques", href: "/mistakes" },
+  { title: "Avg 30% Rate Improvement", href: "/progress" },
+  { title: "Injury Prevention Focused", href: "/mistakes" },
 ];
 
 export const featureCards = [
   {
     title: "6 Structured Modules",
     text: "Covering day one to hitting top rates",
+    href: "/training",
+    buttonText: "Browse Modules",
   },
   {
     title: "Video-Led Lessons",
     text: "Watch, learn, and apply on the floor",
+    href: "/training",
+    buttonText: "Watch Lessons",
   },
   {
     title: "Real Results",
     text: "Selectors hitting 100%+ within weeks",
+    href: "/progress",
+    buttonText: "View Progress",
   },
 ];
 

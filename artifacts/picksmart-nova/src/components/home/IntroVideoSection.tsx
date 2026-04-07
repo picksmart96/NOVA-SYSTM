@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import SectionHeading from "./SectionHeading";
 import { featureCards } from "../../data/homepageData";
 
@@ -12,8 +13,14 @@ export default function IntroVideoSection() {
         />
 
         <div className="mt-10 rounded-3xl overflow-hidden border border-slate-800 bg-slate-900 shadow-2xl">
-          <div className="aspect-video w-full bg-slate-950 flex items-center justify-center text-slate-400">
-            Replace with your intro video embed
+          <div className="aspect-video w-full">
+            <iframe
+              className="w-full h-full"
+              src="https://www.youtube.com/embed/YOUR_VIDEO_ID"
+              title="PickSmart Academy Intro Video"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
           </div>
         </div>
 
@@ -21,10 +28,17 @@ export default function IntroVideoSection() {
           {featureCards.map((card) => (
             <div
               key={card.title}
-              className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg"
+              className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg hover:border-yellow-400 transition"
             >
               <h3 className="text-xl font-bold text-white">{card.title}</h3>
               <p className="mt-2 text-slate-300">{card.text}</p>
+
+              <Link
+                href={card.href}
+                className="mt-5 inline-flex items-center rounded-xl bg-yellow-400 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-yellow-300 transition"
+              >
+                {card.buttonText}
+              </Link>
             </div>
           ))}
         </div>
