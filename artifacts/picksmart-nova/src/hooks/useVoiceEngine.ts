@@ -1,5 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+// ── Preferred voice cache — loaded once at module level, refreshed on voiceschanged ──
+let _preferredVoice: SpeechSynthesisVoice | null = null;
+
+function pickPreferredVoice(): SpeechSynthesisVoice | null {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  return (
+    voices.find((v) => /samantha|aria|ava|zira|karen/i.test(v.name) && v.lang.startsWith("en")) ||
+    voices.find((v) => /samantha|aria|ava|zira|karen/i.test(v.name)) ||
+    voices.find((v) => /female/i.test(v.name)) ||
+    voices.find((v) => v.lang.startsWith("en") && v.default) ||
+    voices[0]
+  );
+}
+
+// Eagerly load; also refresh when browser fires voiceschanged (Firefox / Safari)
+if (typeof window !== "undefined" && "speechSynthesis" in window) {
+  _preferredVoice = pickPreferredVoice();
+  window.speechSynthesis.addEventListener("voiceschanged", () => {
+    _preferredVoice = pickPreferredVoice();
+  });
+}
+
 export const STATUS = {
   IDLE: "idle",
   LISTENING: "listening",
@@ -176,11 +200,8 @@ export function useVoiceEngine({
       utterance.pitch = pitch;
       utterance.lang = lang;
 
-      const voices = window.speechSynthesis.getVoices();
-      const preferredVoice =
-        voices.find((v) => /samantha|zira|karen|female|aria|ava/i.test(v.name)) ||
-        voices[0];
-      if (preferredVoice) utterance.voice = preferredVoice;
+      const voice = _preferredVoice ?? pickPreferredVoice();
+      if (voice) utterance.voice = voice;
 
       utterance.onend = () => {
         setStatus(STATUS.IDLE);
