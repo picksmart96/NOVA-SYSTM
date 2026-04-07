@@ -298,7 +298,6 @@ export default function NovaTrainerPage() {
                 <div className="text-center mb-5">
                   <p className="text-xs uppercase tracking-widest text-slate-500 mb-1">Current Location</p>
                   <p className="text-5xl font-black text-white">{currentStop?.aisle ?? "—"} – {currentStop?.slot ?? "—"}</p>
-                  {currentStop && <p className="text-slate-400 text-sm mt-1">Level {currentStop.level}</p>}
                 </div>
                 <div className="flex gap-2">
                   <input
@@ -360,7 +359,7 @@ export default function NovaTrainerPage() {
               <Box className="h-5 w-5 text-slate-500 shrink-0" />
               <div>
                 <p className="text-xs uppercase tracking-widest text-slate-500 mb-0.5">Next Stop</p>
-                <p className="font-mono font-bold text-white">Aisle {nextStop.aisle} — Slot {nextStop.slot} — Level {nextStop.level}</p>
+                <p className="font-mono font-bold text-white">Aisle {nextStop.aisle} — Slot {nextStop.slot}</p>
               </div>
             </div>
           )}

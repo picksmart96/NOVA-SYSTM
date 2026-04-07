@@ -169,7 +169,7 @@ export default function AssignmentDetailPage() {
                     <tr key={stop.id} className={stop.status === 'picked' ? 'bg-secondary/10' : ''}>
                       <td className="py-3 px-4 font-mono">{stop.stopOrder}</td>
                       <td className="py-3 px-4 font-bold">{stop.aisle}</td>
-                      <td className="py-3 px-4 font-bold">{stop.slot}{stop.level ? `-${stop.level}` : ''}</td>
+                      <td className="py-3 px-4 font-bold">{stop.slot}</td>
                       <td className="py-3 px-4">
                         <span className="bg-secondary px-2 py-1 rounded text-xs font-mono tracking-wider">{stop.checkCode}</span>
                       </td>

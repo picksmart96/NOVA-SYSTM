@@ -195,17 +195,6 @@ export default function SupervisorPage() {
             </div>
           )}
 
-          <div className="mt-6 flex flex-col sm:flex-row gap-3 sm:items-center">
-            <div className="flex-1 rounded-xl bg-slate-950 border border-slate-800 px-4 py-3 text-sm text-slate-300 break-all">
-              {trainerSignupUrl}
-            </div>
-            <button
-              onClick={() => handleCopy(trainerSignupUrl, "Signup URL")}
-              className="rounded-2xl border border-slate-700 px-4 py-3 font-semibold hover:border-yellow-400 transition flex items-center gap-2 shrink-0"
-            >
-              <Copy className="h-4 w-4" /> Copy
-            </button>
-          </div>
         </div>
 
         {/* Tab bar */}
