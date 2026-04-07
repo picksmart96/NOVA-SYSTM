@@ -70,9 +70,19 @@ Full-stack warehouse training and assignment management platform combining a pub
 - `pnpm --filter @workspace/api-server run dev` — run API server
 - `pnpm --filter @workspace/picksmart-nova run dev` — run frontend
 
+## NOVA Help AI Coach
+- **Page**: `/nova-help` — Voice AI Coach section at top, Voice Commands reference, FAQ, Quick Reference cards
+- **Backend**: `artifacts/api-server/src/routes/novaHelp.ts` — `POST /api/nova-help`
+- **AI model**: `gpt-4o-mini` via Replit AI Integrations proxy (`@workspace/integrations-openai-ai-server`)
+- **System prompt**: Warehouse-selecting coach, 1–4 sentence answers, practical trainer tone
+- **Fallback**: `src/lib/novaHelpMatcher.ts` — keyword scorer over 20 local knowledge entries
+- **Wake word**: "Hey NOVA" activates listening; "stop" silences
+- **Voice engine**: `useVoiceEngine` (named export) — Web Speech API for listen/speak cycle
+
 ## Architecture Notes
 - Frontend is pure Vite SPA, no SSR
 - API is OpenAPI-first, codegen via Orval
 - All data is persisted in PostgreSQL
 - Role switching is client-side via Zustand store (for demo — no auth backend)
 - NOVA voice session is simulated (button-click flow, no actual Web Speech API required)
+- NOVA Help AI uses Replit-billed OpenAI credits (no user API key required)

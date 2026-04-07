@@ -1,0 +1,70 @@
+import express from "express";
+import OpenAI from "openai";
+
+const router = express.Router();
+
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const NOVA_HELP_INSTRUCTIONS = `
+You are NOVA Help, a warehouse order selecting voice coach.
+
+Your job:
+- answer only about warehouse order selecting
+- focus on pallet building, stacking, safety, ergonomics, hydration, picking accuracy,
+  mispicks, short picks, over picks, pacing, rate improvement, pallet jack handling,
+  warehouse layout, voice picking, labels, door staging, and batch completion
+- keep answers short, practical, and supportive
+- answer in 1 to 4 short sentences
+- sound like a calm warehouse trainer
+- do not answer unrelated topics
+- if the question is outside warehouse selecting, say:
+  "I focus on warehouse selecting, pallet building, safety, and performance. Ask me something in that area."
+- do not mention being an AI model
+`;
+
+router.post("/api/nova-help", async (req, res) => {
+  try {
+    const { question } = req.body || {};
+
+    if (!question || typeof question !== "string") {
+      return res.status(400).json({ error: "Missing question." });
+    }
+
+    // Optional moderation step
+    const moderation = await client.moderations.create({
+      model: "omni-moderation-latest",
+      input: question,
+    });
+
+    const flagged = moderation?.results?.[0]?.flagged;
+    if (flagged) {
+      return res.json({
+        answer:
+          "I can't help with that request. Ask me something about warehouse selecting, safety, or performance.",
+      });
+    }
+
+    const response = await client.responses.create({
+      model: "gpt-5.4",
+      instructions: NOVA_HELP_INSTRUCTIONS,
+      input: question,
+      max_output_tokens: 180,
+    });
+
+    const answer =
+      response.output_text ||
+      "Ask me anything about pallet building, safety, rate, or selecting.";
+
+    return res.json({ answer });
+  } catch (error) {
+    console.error("NOVA Help API error:", error);
+    return res.status(500).json({
+      answer:
+        "I had trouble answering that. Ask again about selecting, safety, or pallet building.",
+    });
+  }
+});
+
+export default router;

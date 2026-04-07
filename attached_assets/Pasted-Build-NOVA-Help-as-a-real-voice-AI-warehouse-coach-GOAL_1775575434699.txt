@@ -1,0 +1,140 @@
+Build NOVA Help as a real voice AI warehouse coach.
+
+GOAL
+Turn the NOVA Help section into a hands-free AI agent that answers questions about warehouse order selecting, pallet building, safety, productivity, NOVA voice picking, and performance.
+
+IMPORTANT
+This is a browser app, so require one first tap for:
+- microphone permission
+- audio playback permission
+
+After that, NOVA Help should run hands-free.
+
+NOVA HELP BEHAVIOR
+- user taps Start NOVA Help once
+- NOVA says:
+  "Hey. I'm NOVA. Ask me anything about selecting."
+- user can then speak naturally
+- NOVA listens, answers, and automatically listens again after each answer
+- if user says "stop", NOVA stops listening and speaking
+- if user says "hey nova", NOVA wakes again
+
+TOPICS NOVA SHOULD ANSWER
+NOVA should answer only within warehouse selecting topics:
+- pallet building
+- stacking
+- picking accuracy
+- short pick
+- over pick
+- mispick
+- slot check codes
+- pacing
+- rate improvement
+- safety
+- ergonomics
+- hydration
+- pallet jack handling
+- door staging
+- labels
+- batch complete
+- voice picking commands
+- confidence for beginners
+- common mistakes
+- warehouse layout learning
+
+If a question is outside that topic, NOVA should redirect:
+Example:
+"I focus on warehouse selecting, pallet building, safety, and performance. Ask me something in that area."
+
+VOICE STYLE
+Make NOVA sound like a calm, smart warehouse coach.
+Style:
+- short
+- practical
+- supportive
+- direct
+- not overly chatty
+
+Do not try to imitate Alexa exactly.
+Use an Alexa-like smooth female assistant tone if browser voices allow it.
+
+WAKE / STOP BEHAVIOR
+- wake phrase: "hey nova"
+- stop phrase: "stop"
+- if stopped, microphone goes idle
+- if user says hey nova again, restart listening
+
+VOICE ENGINE
+Use browser speech recognition + browser speech synthesis.
+After each NOVA answer:
+- start listening again automatically
+
+STATES
+Add states:
+- idle
+- waiting for wake phrase
+- listening
+- thinking
+- speaking
+- stopped
+- error
+
+UI
+Create a NOVA Help card with:
+- title: NOVA Help
+- subtitle: Ask anything about selecting
+- Start NOVA Help button
+- mic state indicator
+- last heard text
+- current answer
+- wake phrase hint:
+  "Say 'Hey NOVA' to wake me"
+- stop phrase hint:
+  "Say 'stop' anytime to silence me"
+
+KNOWLEDGE SYSTEM
+Build a local warehouse help knowledge base with categories and answer templates.
+
+Create data file:
+src/data/novaHelpKnowledge.js
+
+Include knowledge for:
+- pallet base
+- interlocking
+- balance
+- top layer
+- overhang
+- mispick
+- short pick
+- over pick
+- rate improvement
+- walking pace
+- overthinking
+- next move planning
+- ergonomics
+- breaks and hydration
+- pallet jack handling
+- learning the layout
+- giving up too early
+- door staging
+- labels
+- printer step
+- alpha and bravo pallets
+- check code confirmation
+
+Answer logic:
+- keyword match first
+- if no strong match, give general selecting advice
+- keep answers under 3 or 4 sentences
+
+FILES
+Create or update:
+- src/pages/public/NovaHelpPage.jsx
+- src/hooks/useVoiceEngine.js
+- src/data/novaHelpKnowledge.js
+- src/lib/novaHelpMatcher.js
+
+IMPORTANT
+Make this a real working voice AI help agent for selecting.
+Do not make it a general chatbot.
+Keep it focused on warehouse selector coaching.

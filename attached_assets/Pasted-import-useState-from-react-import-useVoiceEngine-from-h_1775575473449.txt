@@ -1,0 +1,244 @@
+import { useState } from "react";
+import useVoiceEngine from "../../hooks/useVoiceEngine";
+import { matchNovaHelpAnswer } from "../../lib/novaHelpMatcher";
+
+export default function NovaHelpPage() {
+  const [started, setStarted] = useState(false);
+  const [awake, setAwake] = useState(false);
+  const [lastAnswer, setLastAnswer] = useState("");
+  const [lastQuestion, setLastQuestion] = useState("");
+  const [currentPrompt, setCurrentPrompt] = useState(
+    "Say 'Hey NOVA' to wake me."
+  );
+
+  const voice = useVoiceEngine({
+    onHeard: (heard) => {
+      handleVoiceInput(heard);
+    },
+    autoRestart: true,
+    silencePrompt: "No input received.",
+  });
+
+  const speakAndSet = (text) => {
+    setCurrentPrompt(text);
+    setLastAnswer(text);
+    voice.askAndListen(text);
+  };
+
+  const handleVoiceInput = (heard) => {
+    const text = heard.toLowerCase().trim();
+
+    if (!awake) {
+      if (text.includes("hey nova")) {
+        setAwake(true);
+        const greeting =
+          "Hey. I'm NOVA. Ask me anything about selecting.";
+        setCurrentPrompt(greeting);
+        setLastAnswer(greeting);
+        voice.askAndListen(greeting);
+        return;
+      }
+
+      const waitText = "Say Hey NOVA to wake me.";
+      setCurrentPrompt(waitText);
+      voice.askAndListen(waitText);
+      return;
+    }
+
+    if (text === "stop" || text.includes("stop")) {
+      setAwake(false);
+      setCurrentPrompt("NOVA stopped. Say Hey NOVA to wake me again.");
+      setLastAnswer("NOVA stopped. Say Hey NOVA to wake me again.");
+      voice.speak("NOVA stopped. Say Hey NOVA to wake me again.", {
+        restartAfterSpeak: true,
+      });
+      return;
+    }
+
+    if (text.includes("hey nova")) {
+      const greeting = "I'm here. Ask your question.";
+      setCurrentPrompt(greeting);
+      setLastAnswer(greeting);
+      voice.askAndListen(greeting);
+      return;
+    }
+
+    setLastQuestion(text);
+    const answer = matchNovaHelpAnswer(text);
+    setLastAnswer(answer);
+    setCurrentPrompt(answer);
+    voice.askAndListen(answer);
+  };
+
+  const startNovaHelp = async () => {
+    const ok = await voice.initialize();
+    if (!ok) return;
+
+    setStarted(true);
+    const intro =
+      "NOVA Help started. Say Hey NOVA to wake me.";
+    setCurrentPrompt(intro);
+    setLastAnswer(intro);
+    voice.askAndListen(intro);
+  };
+
+  const stopNovaHelp = () => {
+    voice.stopListening();
+    setAwake(false);
+    setStarted(false);
+    setCurrentPrompt("NOVA Help stopped.");
+    setLastAnswer("NOVA Help stopped.");
+  };
+
+  const retryMic = async () => {
+    const ok = await voice.retryMic();
+    if (!ok) return;
+    voice.askAndListen(currentPrompt || "Say Hey NOVA to wake me.");
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white px-6 py-10">
+      <div className="max-w-5xl mx-auto space-y-8">
+        <div className="text-center">
+          <p className="text-yellow-400 text-sm font-semibold uppercase tracking-[0.22em]">
+            Ask NOVA Anything
+          </p>
+          <h1 className="mt-3 text-5xl font-black">NOVA Help</h1>
+          <p className="mt-4 text-lg text-slate-300 max-w-3xl mx-auto">
+            Get instant help with picking strategies, safety tips, and performance advice.
+          </p>
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl text-center">
+          <h2 className="text-2xl font-bold">Warehouse Voice Coach</h2>
+
+          <p className="mt-4 text-yellow-400 font-semibold">
+            Say "Hey NOVA" to wake me
+          </p>
+
+          <p className="mt-3 text-slate-300">
+            Say "Hey NOVA" to wake me up. I’ll keep listening after each answer.
+            Say "stop" anytime to silence me.
+          </p>
+
+          <p className="mt-2 text-sm text-slate-500">
+            "Hey NOVA" to wake · "stop" to silence
+          </p>
+
+          <div className="mt-8 flex flex-wrap justify-center gap-4">
+            {!started ? (
+              <button
+                onClick={startNovaHelp}
+                className="rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
+              >
+                Start NOVA Help
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => voice.startListening()}
+                  className="rounded-2xl border border-slate-700 px-6 py-3 font-semibold hover:border-yellow-400 transition"
+                >
+                  Listen Now
+                </button>
+                <button
+                  onClick={stopNovaHelp}
+                  className="rounded-2xl border border-red-500/30 px-6 py-3 font-semibold text-red-300 hover:bg-red-500/10 transition"
+                >
+                  Stop
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {voice.error ? (
+          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-6">
+            <p className="font-bold text-red-300">Voice Error</p>
+            <p className="mt-2 text-red-200">{voice.error}</p>
+            <button
+              onClick={retryMic}
+              className="mt-4 rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
+            >
+              Retry Mic
+            </button>
+          </div>
+        ) : null}
+
+        <div className="grid md:grid-cols-3 gap-4">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">State</p>
+            <p className="mt-3 text-2xl font-black">
+              {voice.listening
+                ? "Listening"
+                : voice.speaking
+                ? "Speaking"
+                : voice.processing
+                ? "Processing"
+                : awake
+                ? "Awake"
+                : "Idle"}
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Last Heard</p>
+            <p className="mt-3 text-lg font-semibold break-words">
+              {voice.lastHeard || "—"}
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Mic Permission</p>
+            <p className="mt-3 text-lg font-semibold capitalize">
+              {voice.micPermission}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid lg:grid-cols-2 gap-6">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <h3 className="text-2xl font-bold">Current Prompt</h3>
+            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-5">
+              <p className="text-slate-200 text-lg">{currentPrompt}</p>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <h3 className="text-2xl font-bold">Last Question</h3>
+            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-5">
+              <p className="text-slate-200 text-lg">{lastQuestion || "—"}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+          <h3 className="text-2xl font-bold">What NOVA Can Help With</h3>
+          <div className="mt-5 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {[
+              "Pallet building",
+              "Stacking",
+              "Rate improvement",
+              "Short pick",
+              "Over pick",
+              "Mispick",
+              "Safety",
+              "Hydration",
+              "Pallet jack handling",
+              "Door staging",
+              "Labels",
+              "Check codes",
+            ].map((item) => (
+              <div
+                key={item}
+                className="rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-slate-300"
+              >
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

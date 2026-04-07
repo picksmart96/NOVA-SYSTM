@@ -1,0 +1,128 @@
+export interface NovaHelpItem {
+  id: string;
+  keywords: string[];
+  answer: string;
+}
+
+export const novaHelpKnowledge: NovaHelpItem[] = [
+  {
+    id: "pallet-base",
+    keywords: ["base", "bottom", "foundation", "heavy on bottom", "juice"],
+    answer:
+      "Build your base first. Put heavy and strong cases on the bottom. Keep the surface flat, tight, and edge to edge with no gaps.",
+  },
+  {
+    id: "interlock",
+    keywords: ["interlock", "brick", "layers", "tower stacking", "stacking"],
+    answer:
+      "Interlock your layers like bricks. Do not build straight towers. Interlocking helps the pallet hold while turning and moving.",
+  },
+  {
+    id: "balance",
+    keywords: ["balance", "leaning", "weight", "center", "tip"],
+    answer:
+      "Keep weight centered and even on both sides. If the pallet leans, fix it early. A leaning pallet becomes a falling pallet when you drive.",
+  },
+  {
+    id: "top-layer",
+    keywords: ["top", "fragile", "chips", "light items", "top layer"],
+    answer:
+      "Light and fragile items go on top. Keep the top flat and clean with no overhang. A loose top shifts fast during movement.",
+  },
+  {
+    id: "mispick",
+    keywords: ["mispick", "wrong item", "wrong product", "accuracy"],
+    answer:
+      "A mispick happens when you grab the wrong item. Confirm the slot, check the label, and verify the product before you pick. Do not trust appearance alone.",
+  },
+  {
+    id: "short-pick",
+    keywords: ["short pick", "missing quantity", "too few", "count", "short"],
+    answer:
+      "A short pick means you grabbed fewer cases than required. Count each case as you move it and confirm the final number before saying ready.",
+  },
+  {
+    id: "over-pick",
+    keywords: ["over pick", "extra quantity", "too many", "grab extra"],
+    answer:
+      "An over pick means you grabbed more than required. Pick the exact amount NOVA asks for. Do not empty the slot unless the quantity says to.",
+  },
+  {
+    id: "rate",
+    keywords: ["rate", "performance", "speed", "100", "goal", "gold", "improve"],
+    answer:
+      "Rate improves when your movement gets smoother, your pallet stays organized, and you stop wasting seconds between picks. Accuracy and rhythm create real speed.",
+  },
+  {
+    id: "walking",
+    keywords: ["walking", "moving too slow", "pace", "between picks"],
+    answer:
+      "Walk with purpose between picks. Do not stand still while thinking. Listen and move at the same time whenever possible.",
+  },
+  {
+    id: "overthinking",
+    keywords: ["overthinking", "hesitate", "hesitation", "freeze", "overthink"],
+    answer:
+      "Overthinking slows everything down. Confirm the location once, make the pick, and move on. Confidence is built through repetition, not hesitation.",
+  },
+  {
+    id: "ergonomics",
+    keywords: ["ergonomics", "lift", "back", "knees", "twist", "body"],
+    answer:
+      "Bend at the knees, keep the load close, and lift with your legs. Do not twist while carrying. Good body mechanics protect your rate and your back.",
+  },
+  {
+    id: "hydration",
+    keywords: ["water", "hydration", "break", "fatigue", "tired"],
+    answer:
+      "Drink water regularly and use your breaks to recover. Hydration and recovery help you stay sharp and reduce mistakes later in the shift.",
+  },
+  {
+    id: "pallet-jack",
+    keywords: ["pallet jack", "jack", "turning", "driving", "corners"],
+    answer:
+      "Keep the jack close and drive smooth. Slow down before turns and avoid hard stops. Smooth driving protects your pallet and saves time.",
+  },
+  {
+    id: "layout",
+    keywords: ["layout", "aisles", "warehouse map", "getting lost", "navigate"],
+    answer:
+      "Learn the general layout of the building. Knowing where heavy, fragile, and common product lives helps you move faster with less hesitation.",
+  },
+  {
+    id: "mindset",
+    keywords: ["give up", "hard", "struggling", "beginner", "first weeks", "new"],
+    answer:
+      "The first weeks are hard for almost everybody. Focus on progress, not perfection. Stay with it long enough for the basics to click.",
+  },
+  {
+    id: "door-staging",
+    keywords: ["door", "staging", "stage", "dock", "delivery"],
+    answer:
+      "Door staging means delivering the finished pallet to the correct door and confirming the staging code. Pay attention to the door number and code before you leave the lane.",
+  },
+  {
+    id: "labels",
+    keywords: ["label", "alpha", "bravo", "printer", "labels"],
+    answer:
+      "After the last pick, go to the printer, apply the alpha and bravo labels to the correct pallets, then deliver them to the right door in the correct order.",
+  },
+  {
+    id: "check-code",
+    keywords: ["check code", "slot code", "digits", "wrong code", "code"],
+    answer:
+      "The check code confirms you are at the correct slot. NOVA should not continue until the correct code is spoken. This protects accuracy.",
+  },
+  {
+    id: "safety",
+    keywords: ["safety", "safe", "hazard", "injury", "accident", "hurt"],
+    answer:
+      "Safety comes first on every shift. Watch for spills, moving equipment, and obstacles. If something feels unsafe, stop and alert your supervisor.",
+  },
+  {
+    id: "batch",
+    keywords: ["batch", "batch complete", "finish", "done", "complete"],
+    answer:
+      "After your last pick, NOVA will walk you through batch complete: get your labels from the printer, apply them to alpha and bravo pallets, then deliver to the correct door.",
+  },
+];
