@@ -23,11 +23,6 @@ export function useRoleNav(): NavLink[] {
     { href: "/training", label: "Training", group: "public" },
   );
 
-  // Selector+ — My Assignments
-  if (atLeast("selector", role)) {
-    links.push({ href: "/nova", label: "My Assignments", group: "nova" });
-  }
-
   // Trainer+ — Trainer Dashboard (primary role link, shown early)
   if (atLeast("trainer", role)) {
     links.push({ href: "/trainer-portal", label: "Trainer Dashboard", group: "trainer" });

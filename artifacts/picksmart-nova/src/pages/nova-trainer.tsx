@@ -6,23 +6,29 @@ import { SYSTEM_DEFAULTS } from "@/data/systemDefaults";
 import { useVoiceEngine } from "@/hooks/useVoiceEngine";
 import { useAssignmentRunner } from "@/hooks/useAssignmentRunner";
 import { useAppStore } from "@/lib/store";
+import { useTrainerStore } from "@/lib/trainerStore";
 import {
   Headphones, Play, RotateCcw, ChevronRight, Mic,
-  Clock, Activity, Package, AlertTriangle, CheckCircle2, Box
+  Clock, Activity, Package, AlertTriangle, CheckCircle2, Box, User, Lock
 } from "lucide-react";
 
 type VoiceModeOption = "training" | "production" | "ultra_fast";
 
 export default function NovaTrainerPage() {
   const { userId } = useAppStore();
-  const [selectedAssignmentId, setSelectedAssignmentId] = useState(ASSIGNMENTS[0].id);
+  const { selectors } = useTrainerStore();
+
+  const [selectedSelectorId, setSelectedSelectorId] = useState<string>("");
+  const selectedSelector = selectors.find(s => String(s.id) === selectedSelectorId) ?? null;
+  const selectedAssignmentId = selectedSelector?.assignedAssignmentId ?? null;
+  const hasAssignment = !!selectedAssignmentId;
   const [voiceMode, setVoiceMode] = useState<VoiceModeOption>("training");
   const [codeInput, setCodeInput] = useState("");
   const [codeError, setCodeError] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const assignment = ASSIGNMENTS.find(a => a.id === selectedAssignmentId) ?? ASSIGNMENTS[0];
-  const allStops = getStopsForAssignment(selectedAssignmentId);
+  const assignment = (selectedAssignmentId ? ASSIGNMENTS.find(a => a.id === selectedAssignmentId) : null) ?? ASSIGNMENTS[0];
+  const allStops = selectedAssignmentId ? getStopsForAssignment(selectedAssignmentId) : [];
 
   const { transcript, isSpeaking, speak, stop } = useVoiceEngine();
   const runner = useAssignmentRunner();
@@ -160,21 +166,47 @@ export default function NovaTrainerPage() {
         {/* Left: Controls */}
         <div className="xl:col-span-1 space-y-6">
 
-          {/* Assignment Selector */}
+          {/* Selector Picker */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4">Assignment</h2>
-            <select
-              disabled={!isIdle}
-              value={selectedAssignmentId}
-              onChange={e => setSelectedAssignmentId(e.target.value)}
-              className="w-full rounded-xl bg-slate-950 border border-slate-700 text-white px-4 py-3 text-sm font-mono focus:outline-none focus:border-yellow-400 disabled:opacity-50"
-            >
-              {ASSIGNMENTS.map(a => (
-                <option key={a.id} value={a.id}>
-                  #{a.assignmentNumber} — {a.title}
-                </option>
-              ))}
-            </select>
+            <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2">
+              <User className="h-4 w-4" /> Selector
+            </h2>
+            {selectors.length === 0 ? (
+              <p className="text-slate-500 text-sm">No selectors registered. Add one in the Trainer Dashboard.</p>
+            ) : (
+              <select
+                disabled={!isIdle}
+                value={selectedSelectorId}
+                onChange={e => { setSelectedSelectorId(e.target.value); runner.reset(); }}
+                className="w-full rounded-xl bg-slate-950 border border-slate-700 text-white px-4 py-3 text-sm font-mono focus:outline-none focus:border-yellow-400 disabled:opacity-50"
+              >
+                <option value="">— Choose selector —</option>
+                {selectors.map(s => (
+                  <option key={s.id} value={String(s.id)}>
+                    {s.name} ({s.novaId})
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {selectedSelector && (
+              <div className="mt-3">
+                {hasAssignment ? (
+                  <div className="rounded-xl bg-green-500/10 border border-green-500/30 px-4 py-3 text-sm">
+                    <p className="text-green-300 font-bold">Assignment #{assignment.assignmentNumber}</p>
+                    <p className="text-slate-400 text-xs mt-0.5">{assignment.type} · {assignment.totalCases} cases · Aisles {assignment.startAisle}–{assignment.endAisle}</p>
+                  </div>
+                ) : (
+                  <div className="rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm flex items-start gap-2">
+                    <Lock className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-red-300 font-bold">No assignment assigned</p>
+                      <p className="text-slate-400 text-xs mt-0.5">A trainer must assign an assignment to this selector before starting a session.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Voice Mode */}
@@ -246,7 +278,22 @@ export default function NovaTrainerPage() {
             </div>
 
             {/* Action zone */}
-            {isIdle && (
+            {isIdle && !selectedSelector && (
+              <div className="text-center text-slate-500 text-sm">
+                <User className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                Choose a selector on the left to begin.
+              </div>
+            )}
+
+            {isIdle && selectedSelector && !hasAssignment && (
+              <div className="text-center">
+                <Lock className="h-10 w-10 mx-auto mb-3 text-red-400 opacity-80" />
+                <p className="text-red-300 font-bold mb-1">Session Locked</p>
+                <p className="text-slate-500 text-sm">Go to the Trainer Dashboard and assign an assignment to <span className="text-white font-semibold capitalize">{selectedSelector.name}</span> first.</p>
+              </div>
+            )}
+
+            {isIdle && selectedSelector && hasAssignment && (
               <button
                 onClick={handleStart}
                 className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-yellow-400 text-slate-950 font-black text-lg hover:bg-yellow-300 transition shadow-lg shadow-yellow-400/20"

@@ -6,14 +6,15 @@ interface AssignAssignmentModalProps {
   open: boolean;
   onClose: () => void;
   preselectedSelectorId?: number | null;
+  preselectedAssignmentId?: string | null;
 }
 
-export function AssignAssignmentModal({ open, onClose, preselectedSelectorId = null }: AssignAssignmentModalProps) {
+export function AssignAssignmentModal({ open, onClose, preselectedSelectorId = null, preselectedAssignmentId = null }: AssignAssignmentModalProps) {
   const { selectors, assignments, assignAssignment } = useTrainerStore();
   const [selectorId, setSelectorId] = useState<string>(
     preselectedSelectorId ? String(preselectedSelectorId) : ""
   );
-  const [assignmentId, setAssignmentId] = useState("");
+  const [assignmentId, setAssignmentId] = useState(preselectedAssignmentId ?? "");
   const [toast, setToast] = useState<string | null>(null);
 
   if (!open) return null;

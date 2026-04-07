@@ -8,7 +8,7 @@ import { LogSessionModal } from "@/components/nova/LogSessionModal";
 import { SessionCard } from "@/components/nova/SessionCard";
 import {
   Shield, Users, ClipboardList, Zap, BookOpen,
-  MapPin, UserPlus, LogOut
+  MapPin, UserPlus, LogOut, CheckCircle2, AlertCircle, DoorOpen
 } from "lucide-react";
 
 type SelectorLevel = "Beginner" | "Intermediate" | "Advanced";
@@ -30,6 +30,7 @@ export default function TrainerPortalPage() {
   const [showNovaModal, setShowNovaModal] = useState(false);
   const [showLogModal, setShowLogModal] = useState(false);
   const [preselectedSelectorId, setPreselectedSelectorId] = useState<number | null>(null);
+  const [preselectedAssignmentId, setPreselectedAssignmentId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     fullName: "John Smith",
@@ -56,6 +57,12 @@ export default function TrainerPortalPage() {
   };
   const openAssignFor = (id: number) => {
     setPreselectedSelectorId(id);
+    setPreselectedAssignmentId(null);
+    setShowAssignModal(true);
+  };
+  const openAssignForAssignment = (assignmentId: string) => {
+    setPreselectedAssignmentId(assignmentId);
+    setPreselectedSelectorId(null);
     setShowAssignModal(true);
   };
   const openLogFor = (id: number) => {
@@ -304,6 +311,77 @@ export default function TrainerPortalPage() {
           </div>
         </div>
 
+        {/* ── Assignments Panel ── */}
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+          <h2 className="text-2xl font-black mb-6 flex items-center gap-2">
+            <ClipboardList className="h-5 w-5 text-yellow-400" /> Assignments
+          </h2>
+
+          <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {assignments.map((a) => {
+              const assignedTo = selectors.find((s) => s.assignedAssignmentId === a.id);
+              return (
+                <div
+                  key={a.id}
+                  className="rounded-2xl border border-slate-800 bg-slate-950 p-5 flex flex-col gap-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-lg font-black text-white">#{a.assignmentNumber}</p>
+                      <span className={`inline-block mt-1 rounded-full px-2.5 py-0.5 text-xs font-bold border ${
+                        a.type === "PRODUCTION"
+                          ? "bg-orange-500/10 text-orange-300 border-orange-500/30"
+                          : "bg-blue-500/10 text-blue-300 border-blue-500/30"
+                      }`}>
+                        {a.type}
+                      </span>
+                    </div>
+                    {assignedTo ? (
+                      <CheckCircle2 className="h-5 w-5 text-green-400 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="h-5 w-5 text-slate-600 shrink-0 mt-0.5" />
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5 text-xs text-slate-400">
+                    <div className="flex justify-between">
+                      <span>Cases</span><span className="text-white font-bold">{a.totalCases}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Stops</span><span className="text-white font-bold">{a.stops}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Aisles</span><span className="text-white font-bold">{a.startAisle}–{a.endAisle}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="flex items-center gap-1"><DoorOpen className="h-3 w-3" /> Door</span>
+                      <span className="text-yellow-300 font-bold">{a.doorNumber} · {a.doorCode}</span>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-800 pt-3">
+                    {assignedTo ? (
+                      <p className="text-xs text-green-300 font-semibold capitalize truncate">
+                        ✓ {assignedTo.name}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-600 italic">Unassigned</p>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => openAssignForAssignment(a.id)}
+                    className="mt-auto rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold hover:border-yellow-400 hover:text-yellow-400 transition flex items-center justify-center gap-1"
+                  >
+                    <ClipboardList className="h-3 w-3" />
+                    {assignedTo ? "Reassign" : "Assign to Selector"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {/* ── Sessions Panel ── */}
         <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
           <h2 className="text-2xl font-black mb-6 flex items-center gap-2">
@@ -328,8 +406,9 @@ export default function TrainerPortalPage() {
       {/* ── Modals ── */}
       <AssignAssignmentModal
         open={showAssignModal}
-        onClose={() => { setShowAssignModal(false); setPreselectedSelectorId(null); }}
+        onClose={() => { setShowAssignModal(false); setPreselectedSelectorId(null); setPreselectedAssignmentId(null); }}
         preselectedSelectorId={preselectedSelectorId}
+        preselectedAssignmentId={preselectedAssignmentId}
       />
       <ActivateNovaModal
         open={showNovaModal}
