@@ -37,6 +37,7 @@ interface AuthState {
   currentUser: AuthAccount | null;
   accounts: AuthAccount[];
   pendingInvites: PendingInvite[];
+  usedTokens: string[];
 
   login: (username: string, password: string) => boolean;
   logout: () => void;
@@ -56,12 +57,53 @@ const MASTER_ACCOUNT: AuthAccount = {
   createdAt: new Date().toISOString(),
 };
 
+// ── Self-contained invite token helpers ──────────────────────────────────
+// Tokens encode invite data as base64 JSON so they work across devices.
+
+function encodeInviteToken(data: { fullName: string; email: string; role: AuthRole }): string {
+  const payload = {
+    fullName: data.fullName,
+    email: data.email,
+    role: data.role,
+    nonce: Math.random().toString(36).slice(2, 10),
+    createdAt: new Date().toISOString(),
+  };
+  try {
+    const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+    // Convert to URL-safe base64 (no +, /, = in URLs)
+    return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  } catch {
+    return "";
+  }
+}
+
+function decodeInviteToken(token: string): PendingInvite | null {
+  try {
+    // Restore standard base64 from URL-safe base64
+    const b64 = token.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+    const json = decodeURIComponent(escape(atob(padded)));
+    const obj = JSON.parse(json);
+    if (!obj.fullName || !obj.email || !obj.role || !obj.nonce) return null;
+    return {
+      token,
+      fullName: obj.fullName,
+      email: obj.email,
+      role: obj.role as AuthRole,
+      createdAt: obj.createdAt ?? new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       currentUser: null,
       accounts: [MASTER_ACCOUNT],
       pendingInvites: [],
+      usedTokens: [],
 
       login: (username, password) => {
         const found = get().accounts.find(
@@ -93,7 +135,8 @@ export const useAuthStore = create<AuthState>()(
         })),
 
       addInvite: (data) => {
-        const token = Math.random().toString(36).slice(2, 10).toUpperCase();
+        const token = encodeInviteToken(data);
+        // Also store a record for the invites list view (optional UI use)
         set((state) => ({
           pendingInvites: [
             ...state.pendingInvites,
@@ -109,8 +152,16 @@ export const useAuthStore = create<AuthState>()(
         return token;
       },
 
+      getInvite: (token) => {
+        // First check if already used
+        if (get().usedTokens.includes(token)) return undefined;
+        // Decode from token itself (works on any device)
+        return decodeInviteToken(token) ?? undefined;
+      },
+
       acceptInvite: (token, username, password) => {
-        const invite = get().pendingInvites.find((i) => i.token === token);
+        if (get().usedTokens.includes(token)) return false;
+        const invite = decodeInviteToken(token);
         if (!invite) return false;
         const taken = get().accounts.find((a) => a.username === username);
         if (taken) return false;
@@ -128,12 +179,13 @@ export const useAuthStore = create<AuthState>()(
               createdAt: new Date().toISOString(),
             },
           ],
+          // Mark token as used so it can't be reused
+          usedTokens: [...state.usedTokens, token],
+          // Remove from pending list if present
           pendingInvites: state.pendingInvites.filter((i) => i.token !== token),
         }));
         return true;
       },
-
-      getInvite: (token) => get().pendingInvites.find((i) => i.token === token),
     }),
     { name: "picksmart-auth-store" }
   )
