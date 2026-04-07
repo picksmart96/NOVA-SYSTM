@@ -66,7 +66,7 @@ export default function ModulesPage() {
                         DIFFICULTY_COLORS[lesson.difficulty]
                       }`}
                     >
-                      {lesson.difficulty}
+                      {t(`training.difficulty.${lesson.difficulty}`)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -83,7 +83,9 @@ export default function ModulesPage() {
 
                 {/* Card body */}
                 <div className="p-6 flex-1 flex flex-col">
-                  <h3 className="text-xl font-black text-white mb-2">{lesson.moduleTitle}</h3>
+                  <h3 className="text-xl font-black text-white mb-2">
+                    {t(`training.modules.${lesson.moduleId}.title`, lesson.moduleTitle)}
+                  </h3>
 
                   <div className="flex items-center gap-4 text-xs text-slate-500 mb-4">
                     <span className="flex items-center gap-1">

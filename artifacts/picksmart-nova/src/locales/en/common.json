@@ -54,7 +54,20 @@
     "inProgress": "In progress",
     "passedScore": "Passed — {{score}}/{{total}} correct",
     "steps": "steps",
-    "min": "min"
+    "min": "min",
+    "difficulty": {
+      "beginner": "Beginner",
+      "intermediate": "Intermediate",
+      "advanced": "Advanced"
+    },
+    "modules": {
+      "mod-1": { "title": "Beginner Basics" },
+      "mod-2": { "title": "Warehouse Safety Fundamentals" },
+      "mod-3": { "title": "Pallet Building Standards" },
+      "mod-4": { "title": "Pick Path Optimization" },
+      "mod-5": { "title": "Performance and Pace Tracking" },
+      "mod-6": { "title": "Real Shift Simulation" }
+    }
   },
   "mistakes": {
     "heading": "Common Mistakes",

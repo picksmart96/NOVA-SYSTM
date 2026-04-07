@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { systemDefaultsTable, doorCodesTable, slotMasterTable } from "@workspace/db";
-import { eq, ilike, or, cast, sql } from "drizzle-orm";
+import { eq, ilike, or, sql } from "drizzle-orm";
 
 const router = Router();
 
@@ -34,18 +34,24 @@ router.get("/warehouse/slots", async (req, res) => {
     const search = req.query.search as string | undefined;
     let slots;
     if (search && search.trim()) {
+      const term = `%${search.trim()}%`;
       slots = await db
         .select()
         .from(slotMasterTable)
         .where(
           or(
-            ilike(slotMasterTable.checkCode, `%${search}%`),
-            ilike(slotMasterTable.label, `%${search}%`),
-            ilike(slotMasterTable.level ?? "", `%${search}%`)
+            ilike(slotMasterTable.checkCode, term),
+            ilike(slotMasterTable.label, term),
+            sql`${slotMasterTable.aisle}::text ilike ${term}`,
+            sql`${slotMasterTable.slot}::text ilike ${term}`
           )
-        );
+        )
+        .orderBy(slotMasterTable.aisle, slotMasterTable.slot);
     } else {
-      slots = await db.select().from(slotMasterTable);
+      slots = await db
+        .select()
+        .from(slotMasterTable)
+        .orderBy(slotMasterTable.aisle, slotMasterTable.slot);
     }
     res.json(slots);
   } catch (err) {

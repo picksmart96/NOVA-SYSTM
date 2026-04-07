@@ -1,0 +1,104 @@
+export const slotMaster = [
+  // Assignment 251736
+  { id: 1, location: "17-28-A", aisle: 17, slot: 28, level: "A", checkCode: "418", productLabel: "A17-028", status: "Active" },
+  { id: 2, location: "17-66-A", aisle: 17, slot: 66, level: "A", checkCode: "441", productLabel: "A17-066", status: "Active" },
+  { id: 3, location: "17-104-A", aisle: 17, slot: 104, level: "A", checkCode: "452", productLabel: "A17-104", status: "Active" },
+  { id: 4, location: "17-143-A", aisle: 17, slot: 143, level: "A", checkCode: "467", productLabel: "A17-143", status: "Active" },
+
+  { id: 5, location: "21-144-A", aisle: 21, slot: 144, level: "A", checkCode: "493", productLabel: "A21-144", status: "Active" },
+  { id: 6, location: "21-167-A", aisle: 21, slot: 167, level: "A", checkCode: "498", productLabel: "A21-167", status: "Active" },
+  { id: 7, location: "21-189-A", aisle: 21, slot: 189, level: "A", checkCode: "506", productLabel: "A21-189", status: "Active" },
+  { id: 8, location: "21-210-A", aisle: 21, slot: 210, level: "A", checkCode: "511", productLabel: "A21-210", status: "Active" },
+
+  { id: 9, location: "25-119-A", aisle: 25, slot: 119, level: "A", checkCode: "527", productLabel: "A25-119", status: "Active" },
+  { id: 10, location: "25-142-A", aisle: 25, slot: 142, level: "A", checkCode: "533", productLabel: "A25-142", status: "Active" },
+  { id: 11, location: "25-171-A", aisle: 25, slot: 171, level: "A", checkCode: "541", productLabel: "A25-171", status: "Active" },
+  { id: 12, location: "25-198-A", aisle: 25, slot: 198, level: "A", checkCode: "548", productLabel: "A25-198", status: "Active" },
+
+  { id: 13, location: "29-88-A", aisle: 29, slot: 88, level: "A", checkCode: "566", productLabel: "A29-088", status: "Active" },
+  { id: 14, location: "29-117-A", aisle: 29, slot: 117, level: "A", checkCode: "574", productLabel: "A29-117", status: "Active" },
+  { id: 15, location: "29-156-A", aisle: 29, slot: 156, level: "A", checkCode: "583", productLabel: "A29-156", status: "Active" },
+  { id: 16, location: "29-201-A", aisle: 29, slot: 201, level: "A", checkCode: "591", productLabel: "A29-201", status: "Active" },
+
+  { id: 17, location: "31-172-A", aisle: 31, slot: 172, level: "A", checkCode: "604", productLabel: "A31-172", status: "Active" },
+  { id: 18, location: "31-188-A", aisle: 31, slot: 188, level: "A", checkCode: "611", productLabel: "A31-188", status: "Active" },
+  { id: 19, location: "31-205-A", aisle: 31, slot: 205, level: "A", checkCode: "617", productLabel: "A31-205", status: "Active" },
+  { id: 20, location: "31-221-A", aisle: 31, slot: 221, level: "A", checkCode: "624", productLabel: "A31-221", status: "Active" },
+
+  { id: 21, location: "34-204-A", aisle: 34, slot: 204, level: "A", checkCode: "638", productLabel: "A34-204", status: "Active" },
+  { id: 22, location: "34-219-A", aisle: 34, slot: 219, level: "A", checkCode: "644", productLabel: "A34-219", status: "Active" },
+  { id: 23, location: "34-233-A", aisle: 34, slot: 233, level: "A", checkCode: "651", productLabel: "A34-233", status: "Active" },
+  { id: 24, location: "34-247-A", aisle: 34, slot: 247, level: "A", checkCode: "658", productLabel: "A34-247", status: "Active" },
+
+  // Assignment 251737
+  { id: 25, location: "13-44-A", aisle: 13, slot: 44, level: "A", checkCode: "347", productLabel: "A13-044", status: "Active" },
+  { id: 26, location: "13-72-A", aisle: 13, slot: 72, level: "A", checkCode: "354", productLabel: "A13-072", status: "Active" },
+  { id: 27, location: "13-101-A", aisle: 13, slot: 101, level: "A", checkCode: "362", productLabel: "A13-101", status: "Active" },
+  { id: 28, location: "13-132-A", aisle: 13, slot: 132, level: "A", checkCode: "369", productLabel: "A13-132", status: "Active" },
+
+  { id: 29, location: "15-91-A", aisle: 15, slot: 91, level: "A", checkCode: "381", productLabel: "A15-091", status: "Active" },
+  { id: 30, location: "15-116-A", aisle: 15, slot: 116, level: "A", checkCode: "388", productLabel: "A15-116", status: "Active" },
+  { id: 31, location: "15-149-A", aisle: 15, slot: 149, level: "A", checkCode: "396", productLabel: "A15-149", status: "Active" },
+  { id: 32, location: "15-183-A", aisle: 15, slot: 183, level: "A", checkCode: "403", productLabel: "A15-183", status: "Active" },
+
+  { id: 33, location: "19-133-A", aisle: 19, slot: 133, level: "A", checkCode: "422", productLabel: "A19-133", status: "Active" },
+  { id: 34, location: "19-154-A", aisle: 19, slot: 154, level: "A", checkCode: "429", productLabel: "A19-154", status: "Active" },
+  { id: 35, location: "19-176-A", aisle: 19, slot: 176, level: "A", checkCode: "436", productLabel: "A19-176", status: "Active" },
+  { id: 36, location: "19-201-A", aisle: 19, slot: 201, level: "A", checkCode: "444", productLabel: "A19-201", status: "Active" },
+
+  { id: 37, location: "22-156-A", aisle: 22, slot: 156, level: "A", checkCode: "459", productLabel: "A22-156", status: "Active" },
+  { id: 38, location: "22-174-A", aisle: 22, slot: 174, level: "A", checkCode: "466", productLabel: "A22-174", status: "Active" },
+  { id: 39, location: "22-193-A", aisle: 22, slot: 193, level: "A", checkCode: "473", productLabel: "A22-193", status: "Active" },
+  { id: 40, location: "22-215-A", aisle: 22, slot: 215, level: "A", checkCode: "481", productLabel: "A22-215", status: "Active" },
+
+  { id: 41, location: "27-205-A", aisle: 27, slot: 205, level: "A", checkCode: "571", productLabel: "A27-205", status: "Active" },
+  { id: 42, location: "27-218-A", aisle: 27, slot: 218, level: "A", checkCode: "578", productLabel: "A27-218", status: "Active" },
+  { id: 43, location: "27-231-A", aisle: 27, slot: 231, level: "A", checkCode: "586", productLabel: "A27-231", status: "Active" },
+  { id: 44, location: "27-245-A", aisle: 27, slot: 245, level: "A", checkCode: "593", productLabel: "A27-245", status: "Active" },
+
+  { id: 45, location: "30-74-A", aisle: 30, slot: 74, level: "A", checkCode: "612", productLabel: "A30-074", status: "Active" },
+  { id: 46, location: "30-109-A", aisle: 30, slot: 109, level: "A", checkCode: "619", productLabel: "A30-109", status: "Active" },
+  { id: 47, location: "30-147-A", aisle: 30, slot: 147, level: "A", checkCode: "626", productLabel: "A30-147", status: "Active" },
+  { id: 48, location: "30-188-A", aisle: 30, slot: 188, level: "A", checkCode: "634", productLabel: "A30-188", status: "Active" },
+
+  { id: 49, location: "34-211-A", aisle: 34, slot: 211, level: "A", checkCode: "688", productLabel: "A34-211", status: "Active" },
+  { id: 50, location: "34-223-A", aisle: 34, slot: 223, level: "A", checkCode: "694", productLabel: "A34-223", status: "Active" },
+  { id: 51, location: "34-238-A", aisle: 34, slot: 238, level: "A", checkCode: "701", productLabel: "A34-238", status: "Active" },
+  { id: 52, location: "34-252-A", aisle: 34, slot: 252, level: "A", checkCode: "708", productLabel: "A34-252", status: "Active" },
+
+  // Assignment 251738
+  { id: 53, location: "13-37-A", aisle: 13, slot: 37, level: "A", checkCode: "332", productLabel: "A13-037", status: "Active" },
+  { id: 54, location: "13-58-A", aisle: 13, slot: 58, level: "A", checkCode: "339", productLabel: "A13-058", status: "Active" },
+  { id: 55, location: "13-83-A", aisle: 13, slot: 83, level: "A", checkCode: "345", productLabel: "A13-083", status: "Active" },
+  { id: 56, location: "13-111-A", aisle: 13, slot: 111, level: "A", checkCode: "352", productLabel: "A13-111", status: "Active" },
+
+  { id: 57, location: "14-58-A", aisle: 14, slot: 58, level: "A", checkCode: "356", productLabel: "A14-058", status: "Active" },
+  { id: 58, location: "14-87-A", aisle: 14, slot: 87, level: "A", checkCode: "363", productLabel: "A14-087", status: "Active" },
+  { id: 59, location: "14-119-A", aisle: 14, slot: 119, level: "A", checkCode: "371", productLabel: "A14-119", status: "Active" },
+  { id: 60, location: "14-146-A", aisle: 14, slot: 146, level: "A", checkCode: "378", productLabel: "A14-146", status: "Active" },
+
+  { id: 61, location: "18-121-A", aisle: 18, slot: 121, level: "A", checkCode: "417", productLabel: "A18-121", status: "Active" },
+  { id: 62, location: "18-144-A", aisle: 18, slot: 144, level: "A", checkCode: "424", productLabel: "A18-144", status: "Active" },
+  { id: 63, location: "18-169-A", aisle: 18, slot: 169, level: "A", checkCode: "431", productLabel: "A18-169", status: "Active" },
+  { id: 64, location: "18-191-A", aisle: 18, slot: 191, level: "A", checkCode: "439", productLabel: "A18-191", status: "Active" },
+
+  { id: 65, location: "21-142-A", aisle: 21, slot: 142, level: "A", checkCode: "476", productLabel: "A21-142", status: "Active" },
+  { id: 66, location: "21-163-A", aisle: 21, slot: 163, level: "A", checkCode: "483", productLabel: "A21-163", status: "Active" },
+  { id: 67, location: "21-184-A", aisle: 21, slot: 184, level: "A", checkCode: "491", productLabel: "A21-184", status: "Active" },
+  { id: 68, location: "21-206-A", aisle: 21, slot: 206, level: "A", checkCode: "498", productLabel: "A21-206", status: "Active" },
+
+  { id: 69, location: "24-166-A", aisle: 24, slot: 166, level: "A", checkCode: "528", productLabel: "A24-166", status: "Active" },
+  { id: 70, location: "24-181-A", aisle: 24, slot: 181, level: "A", checkCode: "535", productLabel: "A24-181", status: "Active" },
+  { id: 71, location: "24-197-A", aisle: 24, slot: 197, level: "A", checkCode: "542", productLabel: "A24-197", status: "Active" },
+  { id: 72, location: "24-214-A", aisle: 24, slot: 214, level: "A", checkCode: "549", productLabel: "A24-214", status: "Active" },
+
+  { id: 73, location: "29-210-A", aisle: 29, slot: 210, level: "A", checkCode: "589", productLabel: "A29-210", status: "Active" },
+  { id: 74, location: "29-223-A", aisle: 29, slot: 223, level: "A", checkCode: "596", productLabel: "A29-223", status: "Active" },
+  { id: 75, location: "29-237-A", aisle: 29, slot: 237, level: "A", checkCode: "603", productLabel: "A29-237", status: "Active" },
+  { id: 76, location: "29-249-A", aisle: 29, slot: 249, level: "A", checkCode: "610", productLabel: "A29-249", status: "Active" },
+
+  { id: 77, location: "32-198-A", aisle: 32, slot: 198, level: "A", checkCode: "621", productLabel: "A32-198", status: "Active" },
+  { id: 78, location: "32-214-A", aisle: 32, slot: 214, level: "A", checkCode: "628", productLabel: "A32-214", status: "Active" },
+  { id: 79, location: "32-229-A", aisle: 32, slot: 229, level: "A", checkCode: "635", productLabel: "A32-229", status: "Active" },
+  { id: 80, location: "32-244-A", aisle: 32, slot: 244, level: "A", checkCode: "642", productLabel: "A32-244", status: "Active" }
+];

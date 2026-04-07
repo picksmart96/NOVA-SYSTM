@@ -54,7 +54,20 @@
     "inProgress": "En progreso",
     "passedScore": "Aprobado — {{score}}/{{total}} correctas",
     "steps": "pasos",
-    "min": "min"
+    "min": "min",
+    "difficulty": {
+      "beginner": "Principiante",
+      "intermediate": "Intermedio",
+      "advanced": "Avanzado"
+    },
+    "modules": {
+      "mod-1": { "title": "Conceptos Básicos para Principiantes" },
+      "mod-2": { "title": "Fundamentos de Seguridad en Almacén" },
+      "mod-3": { "title": "Estándares de Construcción de Tarimas" },
+      "mod-4": { "title": "Optimización de Ruta de Selección" },
+      "mod-5": { "title": "Seguimiento de Rendimiento y Ritmo" },
+      "mod-6": { "title": "Simulación de Turno Real" }
+    }
   },
   "mistakes": {
     "heading": "Errores Comunes",
