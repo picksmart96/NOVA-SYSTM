@@ -1,0 +1,230 @@
+NOVA Trainer
+
+ES3 Script Mode
+Hands-free voice workflow after one tap. Selector can talk to NOVA without touching the screen again.
+
+NOVA-25917
+·
+soumaila ouedraogo
+✕
+Listen Now
+Reset Session
+Selector ID:
+
+user-001
+No selectors registered yet — type a username manually
+Phase
+
+SIGN_ON_EQUIPMENT
+
+Selector
+
+user-001
+
+Assignment
+
+—
+
+Current Stop
+
+—
+
+Voice State
+
+Listening
+
+Invalid Count
+
+0
+
+Current Prompt
+Listening
+Enter equipment ID.
+
+Heard Response
+
+what is all the selector?
+
+Microphone Permission
+
+granted
+
+Live Session Data
+Equipment ID
+
+—
+
+Max Pallet Count
+
+2
+
+Current Aisle
+
+—
+
+Current Slot
+
+—
+
+Next Stop
+
+—
+
+Failed Safety Item
+
+None
+
+Door
+
+—
+
+Door Code
+
+—
+
+Printer
+
+307
+
+Labels
+
+A 242 · B 578
+
+Command Log
+NOVA
+5:23:37 AM
+Enter equipment ID.
+
+USER
+5:23:37 AM
+What is all the selector?
+
+NOVA
+5:14:16 AM
+Enter equipment ID.
+
+Assigned Work
+#251735
+
+TRAINING
+217 Cases · Aisles 13–32
+
+#251738
+
+PRODUCTION
+260 Cases · Aisles 13–32
+
+ES3 Commands
+help
+repeat labels
+
+Replay label instructions
+
+help
+makeup skips
+
+Retrieve skipped slots
+
+help
+get drops
+
+Retrieve replenishments
+
+help
+close batch
+
+Close current batch
+
+help
+go to aisle [#]
+
+Jump to aisle
+
+basic
+load picks
+
+Load assigned batch
+
+basic
+base items
+
+Review base items
+
+basic
+confirm / yes / affirmative
+
+Confirm current prompt
+
+basic
+no / cancel / negative
+
+Deny current prompt
+
+basic
+previous
+
+Go to previous item
+
+basic
+base complete
+
+Base setup finished
+
+basic
+grab
+
+Confirm pick quantity
+
+basic
+remove pallet
+
+Remove pallet from slot
+
+basic
+skip slot
+
+Skip current slot
+
+basic
+report damage
+
+Start damage flow
+
+basic
+damage [#]
+
+Report damaged case count
+
+basic
+slot empty
+
+Mark slot empty
+
+basic
+recap weights
+
+Replay weight entries
+
+basic
+next
+
+Next list item
+
+basic
+exit list
+
+Exit list mode
+
+basic
+no labels
+
+Label print failed
+
+Quick Controls
+Confirm
+Deny
+Load Picks
+Ready
+Help Count
+
+0
