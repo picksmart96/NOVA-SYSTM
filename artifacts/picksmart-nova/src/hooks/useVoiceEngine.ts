@@ -222,7 +222,7 @@ export function useVoiceEngine({
         // Exponential backoff for service errors: 500ms → 1s → 2s → … cap 30s
         const delay = retries > 0
           ? Math.min(500 * Math.pow(2, Math.min(retries - 1, 5)), 30_000)
-          : 150;
+          : 50;
 
         if (retries > 0) {
           console.log(`[NOVA voice] service backoff ${delay}ms (retry #${retries})`);
@@ -294,7 +294,7 @@ export function useVoiceEngine({
 
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = langRef.current;
-      utterance.rate = 1;
+      utterance.rate = 1.35;
       utterance.pitch = 1;
       const voice = pickPreferredVoice(langRef.current);
       if (voice) utterance.voice = voice;
@@ -307,7 +307,7 @@ export function useVoiceEngine({
         onEnd?.();
         if (shouldRunRef.current) {
           serviceRetryRef.current = 0; // TTS success — reset backoff
-          setTimeout(() => startRecognition(after), 300);
+          setTimeout(() => startRecognition(after), 80);
         } else {
           setStatus(STATUS.STOPPED);
         }
@@ -320,7 +320,7 @@ export function useVoiceEngine({
         if (ttsWatchdogRef.current) clearTimeout(ttsWatchdogRef.current);
         speakingRef.current = false;
         if (shouldRunRef.current) {
-          setTimeout(() => startRecognition(after), 300);
+          setTimeout(() => startRecognition(after), 80);
         } else {
           setError("Speech playback failed.");
           setStatus(STATUS.ERROR);

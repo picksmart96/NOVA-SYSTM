@@ -154,7 +154,7 @@ export default function NovaTrainerSession({
               !voice.speaking
             ) {
               lastSpokenPromptRef.current = newPrompt;
-              voice.speak(newPrompt);
+              voice.speak(newPrompt, { after: "active" });
             }
           }
         } catch {

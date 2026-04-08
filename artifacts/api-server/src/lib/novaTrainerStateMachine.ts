@@ -41,20 +41,36 @@ const DEFAULTS = {
   bravoLabelNumber: "578",
 };
 
+const WORD_DIGITS: Record<string, string> = {
+  zero: "0", one: "1", two: "2", three: "3", four: "4",
+  five: "5", six: "6", seven: "7", eight: "8", nine: "9",
+  cero: "0", uno: "1", dos: "2", tres: "3", cuatro: "4",
+  cinco: "5", seis: "6", siete: "7", ocho: "8", nueve: "9",
+};
+
 function normalize(input = "") {
-  return input.toLowerCase().trim();
+  return input.toLowerCase().trim().replace(/[.,!?;:]+$/, "");
 }
 
 function digitsOnly(input = "") {
-  return normalize(input).replace(/[^0-9]/g, "");
+  const base = normalize(input);
+  // First try replacing number words with digits
+  const wordConverted = base.split(/\s+/).map((w) => WORD_DIGITS[w] ?? w).join("");
+  return wordConverted.replace(/[^0-9]/g, "");
 }
 
 function isConfirm(input = "") {
   const v = normalize(input);
   return (
     v === "yes" ||
+    v === "yeah" ||
+    v === "yep" ||
     v === "confirm" ||
+    v === "confirmed" ||
+    v === "correct" ||
     v === "affirmative" ||
+    v === "that's correct" ||
+    v === "thats correct" ||
     v === "si" ||
     v === "sí" ||
     v === "okay" ||
@@ -64,7 +80,7 @@ function isConfirm(input = "") {
 
 function isDeny(input = "") {
   const v = normalize(input);
-  return v === "no" || v === "cancel" || v === "negative";
+  return v === "no" || v === "nope" || v === "cancel" || v === "negative" || v === "wrong";
 }
 
 function isLoadPicks(input = "") {
