@@ -1,0 +1,543 @@
+Redesign and reorganize the full PickSmart NOVA app so it looks more professional, is easier to understand, and separates public training pages from internal warehouse tools.
+
+GOAL
+Turn the current app into two clear experiences:
+
+1. PUBLIC SITE
+For visitors, selectors learning the system, and people exploring the platform.
+Pages:
+- Home
+- Training
+- Common Mistakes
+- Pricing
+- NOVA Help
+
+2. INTERNAL TOOLS
+For logged-in selector, trainer, supervisor, and owner roles.
+Pages:
+- My Assignments
+- Assignment Detail
+- NOVA Trainer
+- Trainer Dashboard
+- Supervisor Dashboard
+- Users & Access
+- Warehouse Reference
+- Slot Master
+
+IMPORTANT
+Keep the dark navy / slate industrial theme with safety yellow accents.
+Do not remove existing functionality.
+Focus on restructuring, clarity, hierarchy, role-based navigation, and professional UI polish.
+
+==================================================
+1. GLOBAL APP STRUCTURE
+==================================================
+Reorganize the app into:
+- public layout
+- internal dashboard layout
+
+Create:
+- PublicNavbar for public pages
+- InternalNavbar or DashboardSidebar for internal tools
+
+PUBLIC NAVIGATION
+Show only:
+- Home
+- Training
+- Common Mistakes
+- Pricing
+- NOVA Help
+
+INTERNAL NAVIGATION
+Show only for logged-in roles:
+- My Assignments
+- NOVA Trainer
+- Trainer Dashboard
+- Supervisor Dashboard
+- Users & Access
+- Warehouse Reference
+- Slot Master
+
+RULES
+- Hide trainer/supervisor/admin pages from public visitors
+- Keep language switcher visible but clean
+- Move role/account info into a compact profile area
+- Make mobile nav simpler
+
+==================================================
+2. HOME PAGE REDESIGN
+==================================================
+Keep the homepage but improve clarity and hierarchy.
+
+NEW FLOW
+1. Hero
+2. Who this is for
+3. How PickSmart works
+4. Training modules
+5. Results / proof
+6. NOVA Help
+7. Pricing
+8. Final CTA
+9. Footer
+
+HERO
+Keep:
+- Pick Faster.
+- Stay Safer.
+- Hit 100%+.
+
+Subtitle:
+Use one short clear description of the platform.
+
+Reduce hero stat cards to 3 or 4 max.
+
+Add trust row:
+- First module free
+- Built for grocery selectors
+- Beginner-friendly
+
+WHO THIS IS FOR
+Add 3 cards:
+- New Selectors
+- Trainers
+- Supervisors
+
+HOW PICKSMART WORKS
+Add 3-step section:
+- Learn the system
+- Practice with NOVA
+- Improve real performance
+
+RESULTS SECTION
+Keep testimonials but make them cleaner and more believable.
+Reduce repeated claims.
+Keep professional tone.
+
+NOVA HELP SECTION
+Clearly explain:
+- NOVA Help = voice warehouse coach
+- asks and answers warehouse questions only
+
+==================================================
+3. TRAINING PAGE
+==================================================
+Make Training feel like a learning path, not just a grid of cards.
+
+REQUIREMENTS
+- show recommended learning order
+- module cards should show:
+  - module number
+  - title
+  - level
+  - duration
+  - short outcome
+  - Start Module button
+  - video preview box
+- add a progress path feel from beginner to advanced
+
+==================================================
+4. MODULE DETAIL / LESSON PAGES
+==================================================
+Make lesson pages feel like guided learning.
+
+LAYOUT
+Top:
+- lesson title
+- video box
+- lesson goals
+
+Middle:
+- step-by-step lesson cards
+- NOVA voice lesson area
+
+Bottom:
+- yes/no quiz
+- pass/fail result
+- next lesson button
+
+Keep:
+- LessonSession
+- video support
+- voice prompts
+- quiz system
+
+==================================================
+5. COMMON MISTAKES PAGE
+==================================================
+Redesign Common Mistakes to be easier to scan and more structured.
+
+GROUP BY CATEGORY
+- Accuracy
+- Pallet Quality
+- Performance
+- Safety & Health
+- Mindset
+
+Each mistake card should show:
+- title
+- category
+- risk badge
+- short mistake summary
+- short fix summary
+- Start NOVA Coaching button
+- optional video box
+
+When expanded:
+- why it happens
+- fix steps
+- coaching script
+- short yes/no quiz
+
+==================================================
+6. NOVA HELP REDESIGN
+==================================================
+Fix NOVA Help so it behaves like a professional hands-free voice warehouse coach.
+
+REQUIREMENTS
+- route must be /nova-help
+- do not route to My Assignments by mistake
+- user starts once with Start NOVA Help button
+- after first interaction, use hands-free voice flow
+- wake phrases:
+  - hey nova
+  - hola nova
+- stop phrases:
+  - stop
+  - parar
+- when woken:
+  NOVA says:
+  - English: "Hi. I'm NOVA. How can I help you with selecting today?"
+  - Spanish: "Hola. Soy NOVA. ¿Cómo puedo ayudarte con selección hoy?"
+- after each answer, keep listening automatically
+- if stopped, go idle and wait for wake phrase again
+
+NOVA HELP PURPOSE
+- only answer warehouse selecting questions
+- use OpenAI API through backend
+- keep answers short, professional, practical
+- not a general chatbot
+
+UI
+Show:
+- current state
+- current prompt
+- last heard
+- last question
+- mic permission
+- clean voice coach card
+
+==================================================
+7. NOVA TRAINER REDESIGN
+==================================================
+Do not show the full technical dashboard immediately.
+
+NEW FLOW
+STEP 1:
+Show a clean NOVA ID entry page:
+- title:
+  Enter your NOVA ID to access your session
+- input placeholder:
+  NOVA-XXXXX
+- button:
+  Enter NOVA
+- helper text:
+  Your NOVA ID is given to you by your trainer after registration.
+
+STEP 2:
+If NOVA ID is valid, show the full ES3 Script Mode session page.
+
+RULES
+- validate NOVA ID against registered selectors
+- if invalid:
+  show:
+  Invalid NOVA ID. Please check with your trainer.
+- if valid:
+  load selector context and assignments
+
+SESSION SCREEN IMPROVEMENTS
+- make current phase highly visible
+- make current prompt large and readable
+- keep command log collapsible or more compact
+- clearly show:
+  - current assignment
+  - current stop
+  - aisle
+  - slot
+  - door
+  - alpha/bravo labels
+- reduce clutter in side panels
+
+==================================================
+8. MY ASSIGNMENTS PAGE
+==================================================
+Redesign assignment cards for cleaner scanning.
+
+Each card should show:
+- assignment number
+- status badge
+- type badge
+- aisle range
+- cases
+- goal time
+- selector
+- stop count
+- pallet count
+- printer number
+- buttons:
+  - Details
+  - Start Session
+  - Archive
+
+IMPROVEMENTS
+- make assignment number larger
+- group status/type badges together
+- make Details and Start Session stronger CTAs
+- make Archive less visually dominant
+- add optional filters:
+  - active
+  - archived
+  - training
+  - production
+
+==================================================
+9. ASSIGNMENT DETAIL PAGE
+==================================================
+Keep current detail page but improve polish.
+
+LAYOUT
+Top:
+- summary stat cards
+
+Middle:
+- assignment info panel
+- voice flow summary panel
+
+Bottom:
+- stops table
+
+RULES
+- no Level column unless truly needed
+- show door number and door code clearly
+- Start Assignment button should be prominent
+- make stop table easier to scan
+
+==================================================
+10. TRAINER DASHBOARD
+==================================================
+Keep the Base44-style trainer dashboard but polish it.
+
+LAYOUT
+- header with trainer name + role
+- top right:
+  Warehouse Ref
+  Sign out
+- 3 top stats
+- 4 action buttons:
+  Register Selector
+  Activate NOVA
+  Log Session
+  Assign Assignment
+- left column:
+  Register Selector form
+- right column:
+  My Selectors cards
+- bottom:
+  Recent Sessions
+
+SELECTOR CARD
+Show:
+- name
+- NOVA ID
+- age
+- experience
+- level badge
+- NOVA Active badge if active
+- assigned assignment badge if assigned
+- quick actions:
+  Activate NOVA
+  Assign
+  Log Session
+
+==================================================
+11. SUPERVISOR DASHBOARD
+==================================================
+Make this more overview-focused.
+
+LAYOUT
+- header
+- top stats row
+- send trainer invite URL card
+- trainer access requests card
+- active NOVA sessions section
+
+ACTIVE SESSIONS
+Show:
+- selector name
+- NOVA ID
+- assignment title
+- trainer name
+- Stop button
+
+==================================================
+12. USERS & ACCESS PAGE
+==================================================
+Keep all current functionality but improve structure.
+
+SECTIONS
+1. Invite by Role
+2. App Users
+3. NOVA Access (Trainers & Supervisors)
+4. Active Accounts
+5. Owner Analytics
+
+IMPROVEMENTS
+- keep invite flow clean
+- clearly show role access description
+- generated role URL should be visible and easy to copy
+- active account cards should be easier to scan
+- deactivation button should be clear but not overwhelming
+
+==================================================
+13. WAREHOUSE REFERENCE PAGE
+==================================================
+Keep tabs:
+- Slots
+- Doors
+- Defaults
+
+IMPROVEMENTS
+- keep search at top
+- stronger table readability
+- consistent copy buttons
+- visually emphasize codes and defaults
+- keep:
+  printer 307
+  alpha 242
+  bravo 578
+  door codes 355→641, 370→714, 340→581
+
+==================================================
+14. SLOT MASTER PAGE
+==================================================
+Update Slot Master to use the real slot data from assignments:
+- 251736
+- 251737
+- 251738
+
+RULES
+- remove old wrong slots
+- use only real current slots
+- keep searchable by:
+  - aisle
+  - slot
+  - check code
+  - product label
+- keep a consistent level format
+- status should be Active
+
+==================================================
+15. PRICING PAGE
+==================================================
+Improve pricing clarity.
+
+REQUIREMENTS
+- label plans clearly:
+  - Best for individuals
+  - Best for active selectors
+  - Best for teams/trainers
+- make one plan visually primary
+- keep features short and readable
+- improve comparison clarity
+
+==================================================
+16. FOOTER
+==================================================
+Expand footer into grouped link columns:
+- Training
+- NOVA
+- Team Tools
+- Company
+
+Add:
+- short platform summary
+- cleaner grouped links
+
+==================================================
+17. BILINGUAL SUPPORT
+==================================================
+Keep English / Spanish toggle and finish translation across app.
+
+REQUIREMENTS
+- translate all nav
+- all buttons
+- all form labels
+- all dashboards
+- NOVA Help prompts
+- NOVA Trainer prompts
+- Home page content
+- Training / Common Mistakes / Pricing pages
+
+NOVA HELP
+- support English and Spanish
+- wake:
+  - hey nova
+  - hola nova
+- stop:
+  - stop
+  - parar
+- backend should answer in selected language
+
+==================================================
+18. DESIGN SYSTEM / POLISH
+==================================================
+Standardize visual system across the app.
+
+RULES
+- use one consistent button system
+- use one consistent card system
+- use one consistent badge style system
+- increase spacing between sections
+- reduce repeated heavy stat blocks
+- keep yellow only for primary actions and important highlights
+- keep headings consistent in size and spacing
+- improve readability on mobile
+
+==================================================
+19. TECHNICAL REFACTOR
+==================================================
+Refactor where needed for maintainability.
+
+SUGGESTED FILE STRUCTURE
+- public layout components
+- internal layout components
+- shared UI components
+- page-specific sections
+- voice components
+- admin components
+- dashboard components
+
+Split large files if needed:
+- NovaTrainerPage -> entry page + session component
+- HomePage -> hero, how it works, testimonials, pricing sections
+- UsersAccessPage -> invite, account list, analytics sections
+
+==================================================
+20. PRIORITY ORDER
+==================================================
+Implement in this order:
+1. Fix navbar and routing
+2. Split public vs internal experience
+3. Redesign homepage
+4. Fix NOVA Help route and voice assistant behavior
+5. Redesign NOVA Trainer entry screen
+6. Polish My Assignments and Assignment Detail
+7. Polish Trainer Dashboard
+8. Polish Supervisor Dashboard
+9. Polish Users & Access
+10. Finish translation and bilingual NOVA
+
+IMPORTANT
+This is a visual and structural redesign, not a removal of working features.
+Keep the current dark navy / slate industrial style.
+Keep existing data and warehouse workflows.
+Improve professionalism, clarity, readability, and role separation across the full app.

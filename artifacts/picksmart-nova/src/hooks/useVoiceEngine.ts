@@ -102,6 +102,12 @@ export function useVoiceEngine({
   const manuallyStoppedRef = useRef(false);
   const isStartingRef = useRef(false);
 
+  // Always-current refs — updated via useEffect so they're never stale in callbacks
+  const onHeardRef = useRef(onHeard);
+  const silencePromptRef = useRef(silencePrompt);
+  useEffect(() => { onHeardRef.current = onHeard; });
+  useEffect(() => { silencePromptRef.current = silencePrompt; });
+
   const [status, setStatus] = useState<StatusValue>(STATUS.IDLE);
   const [transcript, setTranscript] = useState("");
   const [lastHeard, setLastHeard] = useState("");
@@ -228,6 +234,9 @@ export function useVoiceEngine({
 
   const askAndListen = useCallback(
     (text: string, opts: SpeakOptions = {}) => {
+      // Ensure the keep-listening flag is ON so recognition restarts after the utterance
+      shouldKeepListeningRef.current = true;
+      manuallyStoppedRef.current = false;
       speak(text, { ...opts, restartAfterSpeak: true });
     },
     [speak]
@@ -282,11 +291,17 @@ export function useVoiceEngine({
       setError("");
 
       if (!heard) {
-        speak(silencePrompt, { restartAfterSpeak: true });
+        // If silencePrompt is empty, just silently restart — don't speak an empty utterance
+        if (silencePromptRef.current) {
+          speak(silencePromptRef.current, { restartAfterSpeak: true });
+        } else if (shouldKeepListeningRef.current) {
+          scheduleRestart(200);
+        }
         return;
       }
 
-      onHeard?.(heard, raw);
+      // Use the ref so we always call the latest handler, never a stale closure
+      onHeardRef.current?.(heard, raw);
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -302,7 +317,12 @@ export function useVoiceEngine({
       }
 
       if (errType === "no-speech") {
-        speak(silencePrompt, { restartAfterSpeak: true });
+        // Silently restart if no silencePrompt set — keeps mic open without speaking
+        if (silencePromptRef.current) {
+          speak(silencePromptRef.current, { restartAfterSpeak: true });
+        } else if (shouldKeepListeningRef.current) {
+          scheduleRestart(300);
+        }
         return;
       }
 
@@ -333,7 +353,9 @@ export function useVoiceEngine({
     setInitialized(true);
     setStatus(STATUS.IDLE);
     return true;
-  }, [autoRestart, lang, onHeard, scheduleRestart, silencePrompt, speak]);
+  // onHeard and silencePrompt are accessed via refs inside — no need in deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRestart, lang, scheduleRestart, speak]);
 
   const shutdown = useCallback(() => {
     stopListening();
