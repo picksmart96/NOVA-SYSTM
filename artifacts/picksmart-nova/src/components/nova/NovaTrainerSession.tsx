@@ -98,9 +98,12 @@ export default function NovaTrainerSession({
   const voiceStateLabel = useMemo(() => {
     if (serverError || voice.error) return "Error";
     if (voice.speaking) return "Speaking";
+    if (voice.pttRecording) return "Recording…";
+    if (voice.thinking) return "Processing…";
     if (voice.listening) return "Listening";
+    if (voice.pttMode) return "Tap to Talk";
     return "Idle";
-  }, [serverError, voice.error, voice.speaking, voice.listening]);
+  }, [serverError, voice.error, voice.speaking, voice.pttRecording, voice.thinking, voice.listening, voice.pttMode]);
 
 
   const connectSocket = () => {
@@ -254,8 +257,12 @@ export default function NovaTrainerSession({
 
   const micIcon = voice.speaking
     ? "🔊"
+    : voice.pttRecording
+    ? "⏺"
     : voice.listening
     ? "🎙️"
+    : voice.pttMode
+    ? "👆"
     : "⏸";
 
   return (
@@ -269,7 +276,6 @@ export default function NovaTrainerSession({
           <span className="text-xs text-slate-400">{selector.fullName ?? selector.name}</span>
         </div>
         <div className="flex items-center gap-3">
-          {/* mic status dot */}
           <span className="text-base leading-none">{micIcon}</span>
           {!connected && (
             <span className="text-xs text-red-400">Offline</span>
@@ -299,8 +305,12 @@ export default function NovaTrainerSession({
         <div className={`flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold ${
           voice.speaking
             ? "bg-yellow-500/15 text-yellow-300"
+            : voice.pttRecording
+            ? "bg-red-500/20 text-red-300"
             : voice.listening
             ? "bg-green-500/15 text-green-300"
+            : voice.pttMode
+            ? "bg-blue-500/15 text-blue-300"
             : "bg-slate-800 text-slate-400"
         }`}>
           <span className="text-sm">{micIcon}</span>
@@ -320,6 +330,35 @@ export default function NovaTrainerSession({
           <div className="w-full rounded-2xl border border-slate-800 bg-slate-950 px-5 py-3 text-center">
             <p className="text-xs text-slate-500 mb-1">You said</p>
             <p className="text-sm font-semibold text-slate-300">{heardResponse}</p>
+          </div>
+        )}
+
+        {/* Push-to-talk button — shown when browser voice doesn't work */}
+        {voice.pttMode && started && (
+          <div className="w-full flex flex-col items-center gap-2">
+            <button
+              onMouseDown={() => voice.startPTT()}
+              onMouseUp={() => voice.stopPTT()}
+              onTouchStart={(e) => { e.preventDefault(); voice.startPTT(); }}
+              onTouchEnd={(e) => { e.preventDefault(); voice.stopPTT(); }}
+              disabled={voice.speaking || voice.thinking}
+              className={`w-full h-20 rounded-3xl text-lg font-black transition-all select-none ${
+                voice.pttRecording
+                  ? "bg-red-500 text-white shadow-[0_0_30px_rgba(239,68,68,0.5)] scale-95"
+                  : voice.speaking || voice.thinking
+                  ? "bg-slate-700 text-slate-500 cursor-not-allowed"
+                  : "bg-yellow-400 text-slate-950 hover:bg-yellow-300 active:scale-95"
+              }`}
+            >
+              {voice.pttRecording
+                ? "⏺  Recording… Release to send"
+                : voice.thinking
+                ? "⏳  Processing…"
+                : voice.speaking
+                ? "🔊  NOVA is speaking…"
+                : "🎙️  Hold to Talk"}
+            </button>
+            <p className="text-xs text-slate-600">Press and hold while speaking, then release</p>
           </div>
         )}
 

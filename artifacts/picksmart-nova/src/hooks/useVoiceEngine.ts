@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-// ─── Status constants ───────────────────────────────────────────────────────
 export const STATUS = {
   IDLE: "idle",
   WAKE_LISTENING: "wake_listening",
@@ -9,11 +8,12 @@ export const STATUS = {
   SPEAKING: "speaking",
   STOPPED: "stopped",
   ERROR: "error",
+  PTT_READY: "ptt_ready",
+  PTT_RECORDING: "ptt_recording",
 } as const;
 
 type StatusValue = (typeof STATUS)[keyof typeof STATUS];
 
-// ─── Types ───────────────────────────────────────────────────────────────────
 type SpeakOptions = {
   after?: "wake" | "active";
   restartAfterSpeak?: boolean;
@@ -28,7 +28,6 @@ type UseVoiceEngineOptions = {
   silencePrompt?: string;
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecognition = any;
 
@@ -55,13 +54,22 @@ function pickPreferredVoice(lang: string): SpeechSynthesisVoice | null {
   );
 }
 
+// ── Transcribe via server ─────────────────────────────────────────────────────
+async function transcribeBlob(blob: Blob): Promise<string> {
+  const formData = new FormData();
+  formData.append("audio", blob, "recording.webm");
+  const res = await fetch("/api/transcribe", { method: "POST", body: formData });
+  if (!res.ok) return "";
+  const data = await res.json() as { text?: string };
+  return (data.text ?? "").toLowerCase().trim();
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 export function useVoiceEngine({
   onHeard,
   lang = "en-US",
   silenceTimeoutMs = 7000,
 }: UseVoiceEngineOptions = {}) {
-  // ── Refs ──────────────────────────────────────────────────────────────────
   const recognitionRef = useRef<AnyRecognition>(null);
   const shouldRunRef = useRef(false);
   const speakingRef = useRef(false);
@@ -69,20 +77,22 @@ export function useVoiceEngine({
   const recognitionActiveRef = useRef(false);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ttsWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Counts consecutive service errors (network + aborted) — drives backoff
   const serviceRetryRef = useRef(0);
   const modeRef = useRef<"wake" | "active">("wake");
   const langRef = useRef(lang);
   const onHeardRef = useRef(onHeard);
-  // Self-reference so handlers inside fresh recognition instances can call
-  // the latest startRecognition without capturing a stale closure
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const startRecognitionRef = useRef<((mode: "wake" | "active") => void) | null>(null);
+
+  // PTT refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const pttProcessingRef = useRef(false);
 
   useEffect(() => { onHeardRef.current = onHeard; });
   useEffect(() => { langRef.current = lang; }, [lang]);
 
-  // ── State ─────────────────────────────────────────────────────────────────
   const [status, setStatus] = useState<StatusValue>(STATUS.IDLE);
   const [supported, setSupported] = useState(false);
   const [initialized, setInitialized] = useState(false);
@@ -91,8 +101,11 @@ export function useVoiceEngine({
   const [lastHeard, setLastHeard] = useState("");
   const [currentPrompt, setCurrentPrompt] = useState("");
   const [transcript, setTranscript] = useState("");
+  // PTT mode — activated when SpeechRecognition keeps aborting
+  const [pttMode, setPttMode] = useState(false);
+  const [pttRecording, setPttRecording] = useState(false);
+  const pttModeRef = useRef(false);
 
-  // ── Timers ────────────────────────────────────────────────────────────────
   const clearSilenceTimer = useCallback(() => {
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
@@ -109,12 +122,10 @@ export function useVoiceEngine({
     }, silenceTimeoutMs);
   }, [clearSilenceTimer, silenceTimeoutMs]);
 
-  // ── Kill current recognition instance cleanly ─────────────────────────────
   const killCurrentRecognition = useCallback(() => {
     clearSilenceTimer();
     const old = recognitionRef.current;
     if (!old) return;
-    // Detach handlers first so stale onend can't trigger a restart
     old.onstart = null;
     old.onresult = null;
     old.onerror = null;
@@ -125,18 +136,30 @@ export function useVoiceEngine({
     try { old.abort(); } catch { /* ignore */ }
   }, [clearSilenceTimer]);
 
-  // ── Core: create a brand-new recognition instance and start it ────────────
-  // Chrome strongly prefers fresh instances — reusing one object across many
-  // start() calls causes "aborted" errors after the first session.
+  // ── Switch to PTT mode permanently ───────────────────────────────────────
+  const activatePTT = useCallback(() => {
+    if (pttModeRef.current) return;
+    pttModeRef.current = true;
+    setPttMode(true);
+    shouldRunRef.current = false;
+    killCurrentRecognition();
+    setStatus(STATUS.PTT_READY);
+    console.log("[NOVA voice] switching to push-to-talk mode (SpeechRecognition unavailable)");
+  }, [killCurrentRecognition]);
+
+  // ── Core: create recognition instance ────────────────────────────────────
   const startRecognition = useCallback(
     (mode: "wake" | "active" = "wake") => {
+      if (pttModeRef.current) return;
       if (!shouldRunRef.current || speakingRef.current) return;
       if (restartingRef.current || recognitionActiveRef.current) return;
 
       const Recognition = getRecognitionClass();
-      if (!Recognition) return;
+      if (!Recognition) {
+        activatePTT();
+        return;
+      }
 
-      // Discard the previous instance before creating a new one
       if (recognitionRef.current) {
         const old = recognitionRef.current;
         old.onstart = null;
@@ -153,7 +176,6 @@ export function useVoiceEngine({
       rec.continuous = false;
       rec.maxAlternatives = 1;
 
-      // ── Event handlers (all use stable refs — no stale closures) ──────────
       rec.onstart = () => {
         restartingRef.current = false;
         recognitionActiveRef.current = true;
@@ -164,7 +186,7 @@ export function useVoiceEngine({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       rec.onresult = async (event: any) => {
         clearSilenceTimer();
-        serviceRetryRef.current = 0; // successful transcript — reset backoff
+        serviceRetryRef.current = 0;
         const raw: string = event?.results?.[0]?.[0]?.transcript ?? "";
         const heard = raw.toLowerCase().trim();
         console.log("[NOVA voice] heard:", JSON.stringify(heard));
@@ -174,7 +196,6 @@ export function useVoiceEngine({
           setStatus(STATUS.THINKING);
           await onHeardRef.current(heard, raw);
         }
-        // onend fires next and handles restart
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -189,23 +210,24 @@ export function useVoiceEngine({
           setError("Microphone permission was denied.");
           setStatus(STATUS.ERROR);
           shouldRunRef.current = false;
-          return; // onend fires but shouldRunRef is false
+          return;
         }
 
-        // "network" and "aborted" are both service-level failures
-        // — treat equally with exponential backoff
         if (code === "network" || code === "aborted") {
           serviceRetryRef.current++;
-          return; // onend handles restart with backoff
+          // After 3 consecutive aborts, switch permanently to PTT
+          if (serviceRetryRef.current >= 3) {
+            activatePTT();
+            return;
+          }
+          return;
         }
 
-        // no-speech → user just didn't speak, not a service error
         if (code === "no-speech") {
           serviceRetryRef.current = 0;
-          return; // onend restarts at normal 150ms
+          return;
         }
 
-        // Other errors — show to user but still let onend restart
         setError(`Voice error: ${code}`);
       };
 
@@ -213,13 +235,13 @@ export function useVoiceEngine({
         clearSilenceTimer();
         restartingRef.current = false;
         recognitionActiveRef.current = false;
-        recognitionRef.current = null; // instance is done — will be replaced on next start
+        recognitionRef.current = null;
         const retries = serviceRetryRef.current;
         console.log("[NOVA voice] recognition ended — speaking:", speakingRef.current, "shouldRun:", shouldRunRef.current, "retries:", retries);
 
+        if (pttModeRef.current) return;
         if (!shouldRunRef.current || speakingRef.current) return;
 
-        // Exponential backoff for service errors: 500ms → 1s → 2s → … cap 30s
         const delay = retries > 0
           ? Math.min(500 * Math.pow(2, Math.min(retries - 1, 5)), 30_000)
           : 50;
@@ -246,22 +268,106 @@ export function useVoiceEngine({
         restartingRef.current = false;
       }
     },
-    [clearSilenceTimer, startSilenceTimer],
+    [clearSilenceTimer, startSilenceTimer, activatePTT],
   );
 
-  // Keep the self-reference always fresh
   useEffect(() => { startRecognitionRef.current = startRecognition; }, [startRecognition]);
 
-  // ── Stop current recognition (graceful — onend fires, will restart) ───────
   const stopRecognition = useCallback(() => {
     clearSilenceTimer();
     try { recognitionRef.current?.stop(); } catch { /* ignore */ }
   }, [clearSilenceTimer]);
 
-  // ── Abort current recognition (hard stop — onend fires, no restart) ───────
   const abortRecognition = useCallback(() => {
     killCurrentRecognition();
   }, [killCurrentRecognition]);
+
+  // ── PTT: start recording ─────────────────────────────────────────────────
+  const startPTT = useCallback(async () => {
+    if (!pttModeRef.current || speakingRef.current || pttProcessingRef.current) return;
+    if (mediaRecorderRef.current?.state === "recording") return;
+
+    try {
+      let stream = micStreamRef.current;
+      if (!stream || stream.getTracks().every((t) => t.readyState === "ended")) {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micStreamRef.current = stream;
+      }
+
+      audioChunksRef.current = [];
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : "audio/ogg";
+
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.start(100);
+      setPttRecording(true);
+      setStatus(STATUS.PTT_RECORDING);
+      console.log("[NOVA voice] PTT recording started");
+    } catch (err) {
+      console.error("[NOVA voice] PTT start failed:", err);
+      setError("Could not access microphone.");
+      setStatus(STATUS.ERROR);
+    }
+  }, []);
+
+  // ── PTT: stop recording and transcribe ───────────────────────────────────
+  const stopPTT = useCallback(async () => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state !== "recording") return;
+    if (pttProcessingRef.current) return;
+
+    pttProcessingRef.current = true;
+    setPttRecording(false);
+    setStatus(STATUS.THINKING);
+
+    recorder.stop();
+
+    await new Promise<void>((resolve) => {
+      recorder.onstop = () => resolve();
+      setTimeout(resolve, 1000);
+    });
+
+    const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType });
+    audioChunksRef.current = [];
+    mediaRecorderRef.current = null;
+
+    console.log("[NOVA voice] PTT transcribing blob", blob.size, "bytes");
+
+    if (blob.size < 1000) {
+      console.log("[NOVA voice] PTT blob too small — no speech detected");
+      setPttRecording(false);
+      setStatus(STATUS.PTT_READY);
+      pttProcessingRef.current = false;
+      return;
+    }
+
+    try {
+      const text = await transcribeBlob(blob);
+      console.log("[NOVA voice] PTT heard:", JSON.stringify(text));
+      if (text) {
+        setLastHeard(text);
+        setTranscript(text);
+        if (onHeardRef.current) {
+          await onHeardRef.current(text, text);
+        }
+      }
+    } catch (err) {
+      console.error("[NOVA voice] PTT transcription error:", err);
+      setError("Transcription failed. Try again.");
+    }
+
+    pttProcessingRef.current = false;
+    setStatus(STATUS.PTT_READY);
+  }, []);
 
   // ── Speak ─────────────────────────────────────────────────────────────────
   const speak = useCallback(
@@ -275,7 +381,7 @@ export function useVoiceEngine({
 
       if (!("speechSynthesis" in window)) {
         onEnd?.();
-        if (shouldRunRef.current) startRecognition(after);
+        if (shouldRunRef.current && !pttModeRef.current) startRecognition(after);
         return;
       }
 
@@ -283,13 +389,11 @@ export function useVoiceEngine({
       clearSilenceTimer();
       if (ttsWatchdogRef.current) clearTimeout(ttsWatchdogRef.current);
 
-      // Stop current recognition cleanly (onend fires but speakingRef=true → no restart)
-      stopRecognition();
+      if (!pttModeRef.current) stopRecognition();
       setStatus(STATUS.SPEAKING);
       console.log("[NOVA voice] TTS speaking →", text.slice(0, 60));
 
       try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
-      // Chrome bug: may be stuck paused after cancel()
       try { if (window.speechSynthesis.paused) window.speechSynthesis.resume(); } catch { /* ignore */ }
 
       const utterance = new SpeechSynthesisUtterance(text);
@@ -305,8 +409,10 @@ export function useVoiceEngine({
         if (ttsWatchdogRef.current) clearTimeout(ttsWatchdogRef.current);
         speakingRef.current = false;
         onEnd?.();
-        if (shouldRunRef.current) {
-          serviceRetryRef.current = 0; // TTS success — reset backoff
+        if (pttModeRef.current) {
+          setStatus(STATUS.PTT_READY);
+        } else if (shouldRunRef.current) {
+          serviceRetryRef.current = 0;
           setTimeout(() => startRecognition(after), 80);
         } else {
           setStatus(STATUS.STOPPED);
@@ -319,7 +425,10 @@ export function useVoiceEngine({
         if (!speakingRef.current) return;
         if (ttsWatchdogRef.current) clearTimeout(ttsWatchdogRef.current);
         speakingRef.current = false;
-        if (shouldRunRef.current) {
+        onEnd?.();
+        if (pttModeRef.current) {
+          setStatus(STATUS.PTT_READY);
+        } else if (shouldRunRef.current) {
           setTimeout(() => startRecognition(after), 80);
         } else {
           setError("Speech playback failed.");
@@ -337,17 +446,25 @@ export function useVoiceEngine({
       } catch (err) {
         console.error("[NOVA voice] speechSynthesis.speak threw:", err);
         speakingRef.current = false;
-        setStatus(STATUS.ERROR);
-        setError("Unable to start speech playback.");
+        onEnd?.();
+        if (pttModeRef.current) {
+          setStatus(STATUS.PTT_READY);
+        } else {
+          setStatus(STATUS.ERROR);
+          setError("Unable to start speech playback.");
+        }
       }
     },
     [clearSilenceTimer, startRecognition, stopRecognition],
   );
 
-  // ── Initialize (mic permission + first start) ─────────────────────────────
+  // ── Initialize ────────────────────────────────────────────────────────────
   const initialize = useCallback(async (): Promise<boolean> => {
-    // Already have mic — just ensure recognition is running
     if (micPermission === "granted" && initialized) {
+      if (pttModeRef.current) {
+        setStatus(STATUS.PTT_READY);
+        return true;
+      }
       shouldRunRef.current = true;
       if (!speakingRef.current && !restartingRef.current && !recognitionActiveRef.current) {
         startRecognition(modeRef.current);
@@ -358,12 +475,11 @@ export function useVoiceEngine({
     const Recognition = getRecognitionClass();
     if (!Recognition) {
       setSupported(false);
-      setError("This browser does not support voice mode. Try Chrome.");
-      setStatus(STATUS.ERROR);
-      return false;
+      // No SpeechRecognition at all — go straight to PTT if mic available
+    } else {
+      setSupported(true);
     }
 
-    setSupported(true);
     setError("");
 
     try {
@@ -376,32 +492,41 @@ export function useVoiceEngine({
       return false;
     }
 
-    shouldRunRef.current = true;
     setInitialized(true);
     serviceRetryRef.current = 0;
     console.log("[NOVA voice] initialized");
-    // Don't call startRecognition here — caller will call speak() which handles it
-    return true;
-  }, [initialized, micPermission, startRecognition]);
 
-  // ── Mode switches ─────────────────────────────────────────────────────────
+    if (!Recognition) {
+      activatePTT();
+    } else {
+      shouldRunRef.current = true;
+    }
+
+    return true;
+  }, [initialized, micPermission, startRecognition, activatePTT]);
+
   const startWakeMode = useCallback(() => {
+    if (pttModeRef.current) return;
     shouldRunRef.current = true;
     startRecognition("wake");
   }, [startRecognition]);
 
   const startActiveMode = useCallback(() => {
+    if (pttModeRef.current) return;
     shouldRunRef.current = true;
     startRecognition("active");
   }, [startRecognition]);
 
-  // ── Stop / shutdown ────────────────────────────────────────────────────────
   const stopAll = useCallback(() => {
     shouldRunRef.current = false;
     killCurrentRecognition();
     try { window.speechSynthesis?.cancel(); } catch { /* ignore */ }
     speakingRef.current = false;
-    setStatus(STATUS.STOPPED);
+    if (pttModeRef.current) {
+      setStatus(STATUS.PTT_READY);
+    } else {
+      setStatus(STATUS.STOPPED);
+    }
   }, [killCurrentRecognition]);
 
   const retryMic = useCallback(async () => {
@@ -410,15 +535,15 @@ export function useVoiceEngine({
     setMicPermission("unknown");
     shouldRunRef.current = false;
     serviceRetryRef.current = 0;
+    pttModeRef.current = false;
+    setPttMode(false);
     return initialize();
   }, [initialize, killCurrentRecognition]);
 
-  // ── Cleanup on unmount ────────────────────────────────────────────────────
   useEffect(() => {
     return () => { stopAll(); };
   }, [stopAll]);
 
-  // ── Compat aliases ────────────────────────────────────────────────────────
   const askAndListen = useCallback(
     (text: string) => speak(text, { after: "active" }),
     [speak],
@@ -432,7 +557,6 @@ export function useVoiceEngine({
   );
   const hardStopListening = useCallback(() => stopAll(), [stopAll]);
 
-  // ── Derived state ──────────────────────────────────────────────────────────
   const listening =
     status === STATUS.WAKE_LISTENING || status === STATUS.ACTIVE_LISTENING;
   const speaking = status === STATUS.SPEAKING;
@@ -465,6 +589,11 @@ export function useVoiceEngine({
       scheduleRestart,
       hardStopListening,
       processing: thinking,
+      // PTT
+      pttMode,
+      pttRecording,
+      startPTT,
+      stopPTT,
     }),
     [
       status,
@@ -490,6 +619,10 @@ export function useVoiceEngine({
       shutdown,
       scheduleRestart,
       hardStopListening,
+      pttMode,
+      pttRecording,
+      startPTT,
+      stopPTT,
     ],
   );
 }
