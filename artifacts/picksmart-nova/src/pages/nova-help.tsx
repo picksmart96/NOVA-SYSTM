@@ -1,179 +1,220 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import useVoiceEngine, { UseVoiceEngineReturn } from "@/hooks/useVoiceEngine";
-import { askNovaHelp } from "@/lib/novaHelpApi";
+import { askNovaHelp, transcribeAudio } from "@/lib/novaHelpApi";
 
-const WAKE_WORDS = ["hey nova", "hola nova"];
-const STOP_WORDS = ["stop", "parar", "detener"];
+// ─── TTS helper ─────────────────────────────────────────────────────────────
+function speakText(text: string, lang: string) {
+  if (!("speechSynthesis" in window)) return;
+  try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = lang;
+  u.rate = 1;
+  u.pitch = 1;
+  // Pick a preferred voice
+  const voices = window.speechSynthesis.getVoices();
+  const root = lang.split("-")[0];
+  const preferred =
+    voices.find((v) => /samantha|aria|ava|zira|karen/i.test(v.name) && v.lang.startsWith(root)) ||
+    voices.find((v) => /samantha|aria|ava|zira|karen/i.test(v.name)) ||
+    voices.find((v) => v.lang.startsWith(root));
+  if (preferred) u.voice = preferred;
+  window.speechSynthesis.speak(u);
+}
+
+// ─── Page ────────────────────────────────────────────────────────────────────
+type Phase = "idle" | "recording" | "transcribing" | "thinking" | "speaking" | "ready";
 
 export default function NovaHelpPage() {
   const { i18n } = useTranslation();
   const isSpanish = i18n.language?.startsWith("es");
+  const ttsLang = isSpanish ? "es-ES" : "en-US";
 
-  const [started, setStarted] = useState(false);
-  const [awake, setAwake] = useState(false);
+  const [phase, setPhase] = useState<Phase>("idle");
   const [lastQuestion, setLastQuestion] = useState("");
-  const [prompt, setPrompt] = useState(
-    isSpanish ? "Di Hola NOVA para activarme." : "Say Hey NOVA to wake me.",
-  );
-  const [activityLog, setActivityLog] = useState<string[]>([]);
+  const [answer, setAnswer] = useState("");
+  const [textInput, setTextInput] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [log, setLog] = useState<string[]>([]);
 
-  const voiceRef = useRef<UseVoiceEngineReturn | null>(null);
-  const awakeRef = useRef(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const addLog = (msg: string) => {
-    const ts = new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    setActivityLog((prev) => [`${ts} ${msg}`, ...prev].slice(0, 12));
+    const ts = new Date().toLocaleTimeString("en-US", { hour12: false });
+    setLog((prev) => [`${ts}  ${msg}`, ...prev].slice(0, 10));
   };
 
-  const handleVoiceInput = async (heard: string) => {
-    const v = voiceRef.current;
-    if (!v) return;
-    const text = heard.toLowerCase().trim();
-    // Strip punctuation so Chrome's "hey, nova." still matches "hey nova"
-    const clean = text.replace(/[.,!?;:'"()]/g, " ").replace(/\s+/g, " ").trim();
-    addLog(`🎤 Heard: "${text}"`);
+  // ── Handle a question (text or transcribed) ───────────────────────────────
+  const handleQuestion = useCallback(
+    async (question: string) => {
+      const q = question.trim();
+      if (!q) return;
+      setLastQuestion(q);
+      setAnswer("");
+      setErrorMsg("");
+      setPhase("thinking");
+      addLog(`🤔 "${q.slice(0, 50)}${q.length > 50 ? "…" : ""}"`);
 
-    const wakeMatched = WAKE_WORDS.some((w) => clean.includes(w));
-    const stopMatched = STOP_WORDS.some((w) => clean === w || clean.includes(w));
-
-    if (!awakeRef.current) {
-      if (wakeMatched) {
-        awakeRef.current = true;
-        setAwake(true);
-        const greeting = isSpanish
-          ? "Hola. Soy NOVA. ¿Cómo puedo ayudarte con selección hoy?"
-          : "Hi. I'm NOVA. How can I help you with selecting today?";
-        setPrompt(greeting);
-        addLog("✅ Wake word matched — greeting");
-        v.speak(greeting, { after: "active" });
-        return;
+      try {
+        const response = await askNovaHelp(q, isSpanish ? "es" : "en");
+        setAnswer(response);
+        setPhase("speaking");
+        addLog(`💬 NOVA answered (${response.length} chars)`);
+        speakText(response, ttsLang);
+        // After speaking the answer, return to ready state
+        // Use a timeout approximating speech duration (avg 14 chars/sec)
+        const approxMs = Math.max(2000, (response.length / 14) * 1000);
+        setTimeout(() => setPhase("ready"), approxMs);
+      } catch {
+        const fallback = isSpanish
+          ? "Tuve un problema. Pregúntame de nuevo."
+          : "I had trouble answering. Try asking again.";
+        setAnswer(fallback);
+        setPhase("ready");
+        addLog("❌ Error getting answer");
       }
-      addLog("⏳ Waiting for wake word…");
-      // Don't call startWakeMode() — onend already handles the restart automatically
-      return;
-    }
-
-    if (stopMatched) {
-      awakeRef.current = false;
-      setAwake(false);
-      const stopText = isSpanish
-        ? "NOVA detenida. Di Hola NOVA para activarme otra vez."
-        : "NOVA stopped. Say Hey NOVA to wake me again.";
-      setPrompt(stopText);
-      addLog("🛑 Stop word — going to wake mode");
-      v.speak(stopText, { after: "wake" });
-      return;
-    }
-
-    if (wakeMatched) {
-      const helloAgain = isSpanish ? "Estoy aquí. ¿Cómo puedo ayudarte?" : "I'm here. How can I help?";
-      setPrompt(helloAgain);
-      addLog("👋 Re-wake");
-      v.speak(helloAgain, { after: "active" });
-      return;
-    }
-
-    setLastQuestion(text);
-    setPrompt(isSpanish ? "Pensando..." : "Thinking...");
-    addLog(`🤔 Asking AI: "${text}"`);
-
-    try {
-      const answer = await askNovaHelp(text, isSpanish ? "es" : "en");
-      setPrompt(answer);
-      addLog(`💬 AI answered (${answer.length} chars)`);
-      v.speak(answer, { after: "active" });
-    } catch {
-      const fallback = isSpanish
-        ? "Tuve un problema respondiendo. Pregúntame otra vez."
-        : "I had trouble answering that. Ask me again.";
-      setPrompt(fallback);
-      addLog("❌ AI error — fallback spoken");
-      v.speak(fallback, { after: "active" });
-    }
-  };
-
-  const voice = useVoiceEngine({
-    lang: isSpanish ? "es-ES" : "en-US",
-    onHeard: async (heard) => {
-      await handleVoiceInput(heard);
     },
-  });
+    [isSpanish, ttsLang],
+  );
 
-  // Always sync ref so handleVoiceInput uses the latest voice object
-  voiceRef.current = voice;
+  // ── Voice recording (Whisper) ─────────────────────────────────────────────
+  const startRecording = async () => {
+    setErrorMsg("");
+    addLog("🎤 Requesting microphone…");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
 
-  // Log state transitions
-  const prevStatusRef = useRef(voice.status);
-  useEffect(() => {
-    if (voice.status !== prevStatusRef.current) {
-      addLog(`🔄 ${prevStatusRef.current} → ${voice.status}`);
-      prevStatusRef.current = voice.status;
+      // Use webm if supported, otherwise ogg/mp4 fallback
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : MediaRecorder.isTypeSupported("audio/ogg")
+          ? "audio/ogg"
+          : "audio/mp4";
+
+      const recorder = new MediaRecorder(stream, { mimeType });
+      chunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start(250); // collect chunks every 250ms
+      setPhase("recording");
+      addLog("🔴 Recording started — tap again to send");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMsg(
+        isSpanish
+          ? `Micrófono no disponible: ${msg}`
+          : `Microphone unavailable: ${msg}`,
+      );
+      addLog(`❌ Mic error: ${msg}`);
     }
-  }, [voice.status]);
+  };
 
-  const startNovaHelp = async () => {
-    addLog("▶ Starting NOVA Help…");
-    const ok = await voice.initialize();
-    if (!ok) {
-      addLog(`❌ initialize() returned false — mic: ${voice.micPermission}`);
+  const stopAndTranscribe = async () => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) return;
+
+    setPhase("transcribing");
+    addLog("⏳ Transcribing audio…");
+
+    await new Promise<void>((resolve) => {
+      recorder.onstop = () => resolve();
+      recorder.stop();
+    });
+
+    // Stop all tracks to release mic indicator
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+
+    const audioBlob = new Blob(chunksRef.current, {
+      type: mediaRecorderRef.current?.mimeType ?? "audio/webm",
+    });
+    chunksRef.current = [];
+    mediaRecorderRef.current = null;
+
+    if (audioBlob.size < 500) {
+      setErrorMsg(
+        isSpanish
+          ? "No se captó audio. Intenta de nuevo."
+          : "No audio captured. Please try again.",
+      );
+      setPhase("ready");
+      addLog("⚠️ Recording too short");
       return;
     }
-    setStarted(true);
-    awakeRef.current = false;
-    setAwake(false);
-    const intro = isSpanish
-      ? "Ayuda NOVA iniciada. Di Hola NOVA para activarme."
-      : "NOVA Help started. Say Hey NOVA to wake me.";
-    setPrompt(intro);
-    addLog("🔊 Speaking intro…");
-    voice.speak(intro, { after: "wake" });
+
+    addLog(`📤 Sending ${Math.round(audioBlob.size / 1024)}KB to Whisper…`);
+    const transcript = await transcribeAudio(audioBlob, isSpanish ? "es" : "en");
+
+    if (!transcript) {
+      setErrorMsg(
+        isSpanish
+          ? "No pude entender el audio. Escribe tu pregunta abajo."
+          : "Couldn't understand the audio. Try typing your question below.",
+      );
+      setPhase("ready");
+      addLog("⚠️ Transcription returned empty");
+      return;
+    }
+
+    addLog(`✅ Heard: "${transcript}"`);
+    await handleQuestion(transcript);
   };
 
-  const stopNovaHelp = () => {
-    voice.stopAll();
-    setStarted(false);
-    awakeRef.current = false;
-    setAwake(false);
-    setPrompt(isSpanish ? "Ayuda NOVA detenida." : "NOVA Help stopped.");
-    addLog("⏹ Stopped");
+  const handleMicButton = () => {
+    if (phase === "recording") {
+      stopAndTranscribe();
+    } else if (phase === "idle" || phase === "ready") {
+      startRecording();
+    }
   };
 
-  const retryMic = async () => {
-    addLog("🔄 Retrying mic…");
-    const ok = await voice.retryMic();
-    if (!ok) { addLog("❌ Retry failed"); return; }
-    setStarted(true);
-    const wakeText = isSpanish ? "Di Hola NOVA para activarme." : "Say Hey NOVA to wake me.";
-    setPrompt(wakeText);
-    voice.speak(wakeText, { after: "wake" });
+  // ── Text submit ───────────────────────────────────────────────────────────
+  const handleTextSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const q = textInput.trim();
+    if (!q || phase === "recording" || phase === "transcribing" || phase === "thinking") return;
+    setTextInput("");
+    await handleQuestion(q);
   };
 
-  const stateLabel = voice.error
-    ? "Error"
-    : voice.speaking
-      ? isSpanish ? "Hablando" : "Speaking"
-      : voice.thinking
-        ? isSpanish ? "Pensando" : "Thinking"
-        : voice.status === "active_listening"
-          ? isSpanish ? "Escuchando" : "Listening"
-          : voice.status === "wake_listening"
-            ? isSpanish ? "Esperando activación" : "Wake Listening"
-            : awake
-              ? isSpanish ? "Despierta" : "Awake"
-              : isSpanish ? "Inactiva" : "Idle";
+  // Activate voices list on first load
+  useEffect(() => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.getVoices();
+      window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    }
+    setPhase("ready");
+  }, []);
 
-  const stateColor =
-    voice.error ? "text-red-400"
-    : voice.speaking ? "text-yellow-400"
-    : voice.thinking ? "text-blue-400"
-    : voice.status === "active_listening" ? "text-green-400"
-    : voice.status === "wake_listening" ? "text-cyan-400"
-    : "text-slate-400";
+  // ── UI helpers ────────────────────────────────────────────────────────────
+  const isBusy = phase === "transcribing" || phase === "thinking" || phase === "speaking";
+  const isRecording = phase === "recording";
+
+  const phaseLabel: Record<Phase, string> = {
+    idle: isSpanish ? "Listo" : "Ready",
+    ready: isSpanish ? "Listo" : "Ready",
+    recording: isSpanish ? "Grabando… toca para enviar" : "Recording… tap to send",
+    transcribing: isSpanish ? "Transcribiendo audio…" : "Transcribing audio…",
+    thinking: isSpanish ? "NOVA está pensando…" : "NOVA is thinking…",
+    speaking: isSpanish ? "NOVA está hablando…" : "NOVA is speaking…",
+  };
+
+  const phaseColor: Record<Phase, string> = {
+    idle: "text-slate-400",
+    ready: "text-green-400",
+    recording: "text-red-400",
+    transcribing: "text-yellow-400",
+    thinking: "text-blue-400",
+    speaking: "text-yellow-400",
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-white px-6 py-10">
-      <div className="max-w-5xl mx-auto space-y-8">
+      <div className="max-w-3xl mx-auto space-y-8">
 
         {/* Header */}
         <div className="text-center">
@@ -181,138 +222,131 @@ export default function NovaHelpPage() {
             {isSpanish ? "Pregunta a NOVA" : "Ask NOVA Anything"}
           </p>
           <h1 className="mt-3 text-5xl font-black">NOVA Help</h1>
-          <p className="mt-4 text-lg text-slate-300 max-w-3xl mx-auto">
+          <p className="mt-4 text-slate-300 text-lg max-w-xl mx-auto">
             {isSpanish
-              ? "Obtén ayuda inmediata sobre selección, seguridad y rendimiento."
-              : "Get instant help with picking strategies, safety tips, and performance advice."}
+              ? "Toca el micrófono para hablar, o escribe tu pregunta abajo."
+              : "Tap the mic to speak, or type your question below."}
           </p>
         </div>
 
-        {/* Voice panel */}
-        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl text-center">
-          <h2 className="text-2xl font-bold">
-            {isSpanish ? "Asistente de voz para almacén" : "Warehouse Voice Coach"}
-          </h2>
-          <p className="mt-4 text-yellow-400 font-semibold">
-            {isSpanish ? '"Hola NOVA" para activarme' : '"Hey NOVA" to wake me'}
-          </p>
-          <p className="mt-3 text-slate-300">
-            {isSpanish
-              ? 'Seguiré escuchando después de cada respuesta. Di "parar" para silenciarme.'
-              : 'I\'ll keep listening after each answer. Say "stop" anytime to silence me.'}
-          </p>
-
-          {/* Live state indicator */}
-          <div className={`mt-5 text-sm font-bold uppercase tracking-wider ${stateColor}`}>
-            ● {stateLabel}
-          </div>
-
-          <div className="mt-6 flex flex-wrap justify-center gap-4">
-            {!started ? (
-              <button
-                onClick={startNovaHelp}
-                className="rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
-              >
-                {isSpanish ? "Iniciar Ayuda NOVA" : "Start NOVA Help"}
-              </button>
+        {/* Big mic button */}
+        <div className="flex flex-col items-center gap-4">
+          <button
+            onClick={handleMicButton}
+            disabled={isBusy}
+            className={[
+              "w-36 h-36 rounded-full flex items-center justify-center text-5xl",
+              "transition-all duration-200 shadow-2xl border-4 focus:outline-none",
+              isRecording
+                ? "bg-red-500 border-red-300 animate-pulse scale-110"
+                : isBusy
+                  ? "bg-slate-700 border-slate-600 opacity-60 cursor-not-allowed"
+                  : "bg-yellow-400 border-yellow-300 hover:scale-105 active:scale-95 cursor-pointer",
+            ].join(" ")}
+            aria-label={isRecording ? "Stop recording" : "Start recording"}
+          >
+            {isBusy ? (
+              <span className="text-slate-300 text-4xl animate-spin">⟳</span>
+            ) : isRecording ? (
+              <span>⏹</span>
             ) : (
-              <>
-                <button
-                  onClick={() => { addLog("👂 Manual listen"); voice.startWakeMode(); }}
-                  className="rounded-2xl border border-slate-700 px-6 py-3 font-semibold hover:border-yellow-400 transition"
-                >
-                  {isSpanish ? "Escuchar ahora" : "Listen Now"}
-                </button>
-                <button
-                  onClick={stopNovaHelp}
-                  className="rounded-2xl border border-red-500/30 px-6 py-3 font-semibold text-red-300 hover:bg-red-500/10 transition"
-                >
-                  {isSpanish ? "Detener" : "Stop"}
-                </button>
-              </>
+              <span>🎤</span>
             )}
-          </div>
+          </button>
+
+          <p className={`text-sm font-semibold uppercase tracking-widest ${phaseColor[phase]}`}>
+            ● {phaseLabel[phase]}
+          </p>
+
+          {isRecording && (
+            <p className="text-xs text-red-300 animate-pulse">
+              {isSpanish ? "Toca de nuevo para detener y enviar" : "Tap again to stop & send"}
+            </p>
+          )}
         </div>
 
-        {/* Error panel */}
-        {voice.error ? (
-          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-6">
-            <p className="font-bold text-red-300">
-              {isSpanish ? "Error de voz" : "Voice Error"}
-            </p>
-            <p className="mt-2 text-red-200">{voice.error}</p>
-            <button
-              onClick={retryMic}
-              className="mt-4 rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
-            >
-              {isSpanish ? "Reintentar micrófono" : "Retry Mic"}
-            </button>
+        {/* Error */}
+        {errorMsg && (
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-red-200 text-sm">
+            {errorMsg}
           </div>
-        ) : null}
+        )}
 
-        {/* Status grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
-            <p className="text-sm text-slate-400">{isSpanish ? "Estado" : "State"}</p>
-            <p className={`mt-3 text-xl font-black ${stateColor}`}>{stateLabel}</p>
-          </div>
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
-            <p className="text-sm text-slate-400">
-              {isSpanish ? "Última escucha" : "Last Heard"}
-            </p>
-            <p className="mt-3 text-base font-semibold break-words">
-              {voice.lastHeard || "—"}
-            </p>
-          </div>
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
-            <p className="text-sm text-slate-400">
-              {isSpanish ? "Permiso de micrófono" : "Mic"}
-            </p>
-            <p className={`mt-3 text-base font-semibold capitalize ${voice.micPermission === "granted" ? "text-green-400" : voice.micPermission === "denied" ? "text-red-400" : "text-slate-400"}`}>
-              {voice.micPermission}
-            </p>
-          </div>
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
-            <p className="text-sm text-slate-400">
-              {isSpanish ? "Modo" : "Wake Mode"}
-            </p>
-            <p className={`mt-3 text-base font-semibold ${awake ? "text-yellow-400" : "text-slate-400"}`}>
-              {awake
-                ? isSpanish ? "Activa" : "Active"
-                : isSpanish ? "Esperando" : "Waiting"}
-            </p>
-          </div>
-        </div>
-
-        {/* Current prompt + last question */}
-        <div className="grid lg:grid-cols-2 gap-6">
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-            <h3 className="text-xl font-bold mb-4">
-              {isSpanish ? "Respuesta actual" : "Current Prompt"}
-            </h3>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
-              <p className="text-slate-200 text-lg">{prompt}</p>
+        {/* NOVA answer */}
+        {answer && (
+          <div className="rounded-3xl border border-yellow-400/20 bg-slate-900 p-6 shadow-lg">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-full bg-yellow-400 flex items-center justify-center text-slate-950 font-black text-sm">
+                N
+              </div>
+              <p className="text-sm font-semibold text-yellow-400 uppercase tracking-widest">
+                NOVA
+              </p>
+              {phase === "speaking" && (
+                <span className="text-xs text-yellow-400 animate-pulse ml-auto">
+                  🔊 {isSpanish ? "hablando…" : "speaking…"}
+                </span>
+              )}
             </div>
+            <p className="text-white text-lg leading-relaxed">{answer}</p>
           </div>
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-            <h3 className="text-xl font-bold mb-4">
-              {isSpanish ? "Última pregunta" : "Last Question"}
-            </h3>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
-              <p className="text-slate-200 text-lg">{lastQuestion || "—"}</p>
-            </div>
+        )}
+
+        {/* Last question */}
+        {lastQuestion && (
+          <div className="rounded-3xl border border-slate-700 bg-slate-900/50 px-6 py-4">
+            <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">
+              {isSpanish ? "Tu pregunta" : "Your question"}
+            </p>
+            <p className="text-slate-300">{lastQuestion}</p>
           </div>
-        </div>
+        )}
+
+        {/* Text input */}
+        <form onSubmit={handleTextSubmit} className="flex gap-3">
+          <input
+            type="text"
+            value={textInput}
+            onChange={(e) => setTextInput(e.target.value)}
+            disabled={isBusy || isRecording}
+            placeholder={
+              isSpanish
+                ? "Escribe tu pregunta sobre el almacén…"
+                : "Type your warehouse question…"
+            }
+            className={[
+              "flex-1 rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3",
+              "text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400",
+              "transition disabled:opacity-50",
+            ].join(" ")}
+          />
+          <button
+            type="submit"
+            disabled={!textInput.trim() || isBusy || isRecording}
+            className="rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {isSpanish ? "Enviar" : "Ask"}
+          </button>
+        </form>
+
+        <p className="text-center text-xs text-slate-600">
+          {isSpanish
+            ? "NOVA responde sobre selección, seguridad, tarimas y rendimiento."
+            : "NOVA answers questions about selecting, safety, pallets, and performance."}
+        </p>
 
         {/* Activity log */}
-        {activityLog.length > 0 && (
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">
+        {log.length > 0 && (
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <p className="text-xs text-slate-500 uppercase tracking-widest mb-3">
               Activity Log
-            </h3>
+            </p>
             <div className="space-y-1 font-mono text-xs">
-              {activityLog.map((line, i) => (
-                <div key={i} className={`text-slate-300 ${i === 0 ? "text-white" : "opacity-70"}`}>
+              {log.map((line, i) => (
+                <div
+                  key={i}
+                  className={i === 0 ? "text-white" : "text-slate-500"}
+                >
                   {line}
                 </div>
               ))}
