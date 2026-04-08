@@ -381,9 +381,296 @@ function ActivityLog() {
   );
 }
 
+// ── Handbook ──────────────────────────────────────────────────────────────────
+function H2({ children }: { children: React.ReactNode }) {
+  return <h2 className="mt-10 mb-4 text-2xl font-black text-white border-b border-slate-800 pb-2">{children}</h2>;
+}
+function H3({ children }: { children: React.ReactNode }) {
+  return <h3 className="mt-6 mb-2 text-lg font-bold text-yellow-400">{children}</h3>;
+}
+function P({ children }: { children: React.ReactNode }) {
+  return <p className="text-slate-300 text-sm leading-relaxed mb-3">{children}</p>;
+}
+function Note({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="my-3 rounded-xl border border-yellow-400/20 bg-yellow-400/5 px-4 py-3 text-sm text-yellow-300">
+      {children}
+    </div>
+  );
+}
+function TableWrap({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="overflow-x-auto my-4 rounded-2xl border border-slate-800">
+      <table className="w-full text-sm text-left">{children}</table>
+    </div>
+  );
+}
+function Th({ children }: { children: React.ReactNode }) {
+  return <th className="px-4 py-3 bg-slate-900 text-xs font-bold uppercase tracking-widest text-slate-400">{children}</th>;
+}
+function Td({ children }: { children: React.ReactNode }) {
+  return <td className="px-4 py-3 text-slate-300 border-t border-slate-800">{children}</td>;
+}
+function TdY({ children }: { children: React.ReactNode }) {
+  return <td className="px-4 py-3 font-bold text-yellow-400 border-t border-slate-800">{children}</td>;
+}
+function Ul({ items }: { items: string[] }) {
+  return (
+    <ul className="mb-4 space-y-1">
+      {items.map((item) => (
+        <li key={item} className="flex items-start gap-2 text-slate-300 text-sm">
+          <span className="text-yellow-400 mt-0.5">•</span> {item}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function HandbookSection() {
+  return (
+    <div className="max-w-4xl mx-auto">
+      <div className="mb-8">
+        <p className="text-yellow-400 text-xs font-bold uppercase tracking-[0.22em]">Reference</p>
+        <h1 className="mt-2 text-4xl font-black">PickSmart NOVA — User Handbook</h1>
+        <p className="mt-2 text-slate-400">Complete guide to using the platform.</p>
+      </div>
+
+      {/* What is it */}
+      <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 mb-6">
+        <P>PickSmart NOVA is a warehouse training platform built for grocery selectors and warehouse teams. It combines voice-directed picking simulation, AI coaching, team dashboards, and training modules — all in one place.</P>
+      </div>
+
+      {/* Getting Access */}
+      <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 mb-6">
+        <H2>1. Getting Access</H2>
+        <H3>Step 1 — Visit the Site</H3>
+        <P>The Home page and Pricing page are open to everyone — no account needed.</P>
+        <H3>Step 2 — Choose a Plan</H3>
+        <TableWrap>
+          <thead><tr><Th>Plan</Th><Th>Best For</Th><Th>What's Included</Th></tr></thead>
+          <tbody>
+            <tr><TdY>Personal</TdY><Td>Individual selectors</Td><Td>Training, NOVA Help, NOVA Trainer, Common Mistakes, Leaderboard, Selector Nation</Td></tr>
+            <tr><TdY>Company</TdY><Td>Warehouses and teams</Td><Td>Everything in Personal + Trainer Dashboard + Supervisor Dashboard + Team tools</Td></tr>
+          </tbody>
+        </TableWrap>
+        <H3>Step 3 — Checkout</H3>
+        <P>Review what's included and click <strong className="text-white">Complete Personal Subscription</strong> or <strong className="text-white">Complete Company Subscription</strong>.</P>
+        <Note>You must be signed in to complete checkout. If you aren't signed in yet, click Sign in first.</Note>
+      </div>
+
+      {/* Signing In */}
+      <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 mb-6">
+        <H2>2. Signing In</H2>
+        <Ul items={[
+          "Click Sign in in the top-right corner",
+          "Enter your username and password",
+          "Click Sign in",
+        ]} />
+        <Note>Every time you close the browser or refresh the page, you will need to sign in again. This is by design for security.</Note>
+      </div>
+
+      {/* Navigation */}
+      <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 mb-6">
+        <H2>3. Navigation Menu</H2>
+        <H3>Personal Plan</H3>
+        <TableWrap>
+          <thead><tr><Th>Link</Th><Th>What It Does</Th></tr></thead>
+          <tbody>
+            {[["Home","Public landing page"],["Training","Training modules"],["NOVA Help","AI voice coach"],["Common Mistakes","Mistakes guide and coaching"],["Selector Nation","Community page"]].map(([l,d])=>(
+              <tr key={l}><TdY>{l}</TdY><Td>{d}</Td></tr>
+            ))}
+          </tbody>
+        </TableWrap>
+        <H3>Company Plan (extra links by role)</H3>
+        <TableWrap>
+          <thead><tr><Th>Link</Th><Th>Who Sees It</Th><Th>What It Does</Th></tr></thead>
+          <tbody>
+            {[
+              ["NOVA Trainer","All company","ES3 voice simulation trainer"],
+              ["Trainer Dashboard","Trainer+","Manage selector training"],
+              ["Supervisor Dashboard","Supervisor+","Team overview and tracking"],
+              ["My Progress","All","Personal progress tracking"],
+              ["Leaderboard","All","Ranked selector leaderboard"],
+              ["Assignment Control","Trainer+","Create and assign picking jobs"],
+              ["Slot Master","Trainer+","Manage slot assignments"],
+              ["Warehouse Reference","Trainer+","Tower map and aisle reference"],
+              ["Live Tracking","Supervisor+","Real-time selector tracking"],
+            ].map(([l,w,d])=>(
+              <tr key={l}><TdY>{l}</TdY><Td>{w}</Td><Td>{d}</Td></tr>
+            ))}
+          </tbody>
+        </TableWrap>
+        <H3>Owner Only</H3>
+        <TableWrap>
+          <thead><tr><Th>Link</Th><Th>What It Does</Th></tr></thead>
+          <tbody>
+            <tr><TdY>Control Center</TdY><Td>Full admin dashboard</Td></tr>
+            <tr><TdY>Users & Access</TdY><Td>Invite and manage user accounts</Td></tr>
+          </tbody>
+        </TableWrap>
+      </div>
+
+      {/* NOVA Help */}
+      <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 mb-6">
+        <H2>4. NOVA Help — AI Voice Coach</H2>
+        <P>NOVA Help is your personal AI coach. Ask it anything about picking, warehouse operations, building techniques, or voice commands. It works in both English and Spanish.</P>
+        <H3>How to Use</H3>
+        <Ul items={[
+          "Click the microphone button and speak — or type in the text box",
+          "NOVA Help answers your question instantly",
+          "Ask follow-up questions just like a conversation",
+        ]} />
+        <H3>Example Questions</H3>
+        <Ul items={[
+          '"What aisle is slot 25 in?"',
+          '"How do I build a stable pallet?"',
+          '"What does NOVA say when I confirm a pick?"',
+          '"¿Cómo confirmo un pick?" (Spanish works too)',
+        ]} />
+      </div>
+
+      {/* NOVA Trainer */}
+      <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 mb-6">
+        <H2>5. NOVA Trainer — Voice Simulation</H2>
+        <P>Simulates the ES3 voice-directed picking system. Walks you through a full picking session using real commands and responses. Company plan only.</P>
+        <H3>How to Start</H3>
+        <Ul items={[
+          "Go to NOVA Trainer in the menu",
+          "Enter your NOVA ID (e.g. NOVA-25917) or select from the list",
+          "Click Begin Session — NOVA starts automatically",
+        ]} />
+        <H3>Session Steps</H3>
+        <TableWrap>
+          <thead><tr><Th>Step</Th><Th>What NOVA Expects</Th></tr></thead>
+          <tbody>
+            {[
+              ["Sign On","Your equipment number"],
+              ["Confirm Equipment","Confirm the number NOVA repeats"],
+              ["Max Pallet Count","How many pallets you can hold"],
+              ["Safety Check","Answer 9 safety questions"],
+              ["Load Picks",'Say "load picks" when ready'],
+              ["Pick Summary","NOVA reads your assignments"],
+              ["Setup Alpha / Bravo","Confirm your staging doors"],
+              ["Pick Check","NOVA gives slot and quantity"],
+              ["Pick Ready",'Say "ready" when pick is complete'],
+              ["Complete","NOVA closes out each door"],
+            ].map(([s,w])=>(
+              <tr key={s}><TdY>{s}</TdY><Td>{w}</Td></tr>
+            ))}
+          </tbody>
+        </TableWrap>
+        <H3>Key Voice Commands</H3>
+        <TableWrap>
+          <thead><tr><Th>Say</Th><Th>When</Th></tr></thead>
+          <tbody>
+            {[
+              ["Equipment number (e.g. zero one)","When asked for equipment"],
+              ["Correct / Yes","To confirm"],
+              ["No / Incorrect","To deny or repeat"],
+              ["Load picks","When picks are ready"],
+              ["Ready","When a pick is complete"],
+              ["Stop","End the session"],
+            ].map(([s,w])=>(
+              <tr key={s}><TdY>{s}</TdY><Td>{w}</Td></tr>
+            ))}
+          </tbody>
+        </TableWrap>
+        <Note>If your microphone isn't working, use the text box at the bottom to type commands manually and click Send.</Note>
+      </div>
+
+      {/* Session Lock */}
+      <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 mb-6">
+        <H2>6. Session Lock</H2>
+        <H3>To Lock</H3>
+        <Ul items={["Click your avatar (top-right) → 🔒 Lock session","Or: Exit a NOVA Trainer session"]} />
+        <H3>To Unlock</H3>
+        <Ul items={["Enter your password on the lock screen and click Unlock","If you forgot your password, click Sign out instead"]} />
+      </div>
+
+      {/* Owner section */}
+      <div className="rounded-3xl border border-yellow-400/20 bg-yellow-400/5 p-8 mb-6">
+        <H2>7. Owner Admin Tools</H2>
+        <H3>Control Center (/owner)</H3>
+        <Ul items={[
+          "Stats — Total subscribers, active users, sessions, banned users",
+          "User Management — Search, filter, change roles, ban/unban, remove accounts",
+          "Invite Management — Generate invite links by role",
+          "Plan Control — Manage Personal and Company plan visibility",
+          "Admin Movement Log — Audit log of all platform actions",
+          "Handbook — This guide",
+        ]} />
+        <H3>Users & Access (/users-access)</H3>
+        <Ul items={[
+          "Create and manage user accounts directly",
+          "View pending invites",
+          "Manage NOVA access and active accounts",
+        ]} />
+        <Note>Control Center and Users & Access are only visible to the owner account. No other user — including Company subscribers — can see or access them.</Note>
+        <H3>Inviting Users</H3>
+        <Ul items={[
+          "Go to Control Center → Invite Management",
+          "Enter the person's full name and email",
+          "Select their role (Selector, Trainer, or Supervisor)",
+          "Click Generate Invite Link",
+          "Copy the link and send it to them",
+        ]} />
+      </div>
+
+      {/* Roles table */}
+      <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 mb-6">
+        <H2>8. Roles & Plans at a Glance</H2>
+        <H3>Roles</H3>
+        <TableWrap>
+          <thead><tr><Th>Role</Th><Th>Can Access</Th></tr></thead>
+          <tbody>
+            {[
+              ["Selector","Training, NOVA Help, NOVA Trainer, Mistakes, Leaderboard, Selector Nation"],
+              ["Trainer","Everything Selector has + Trainer Dashboard, Assignment Control, Slot Master, Warehouse Ref, Voice Commands"],
+              ["Supervisor","Everything Trainer has + Supervisor Dashboard, Live Tracking"],
+              ["Owner","Everything + Control Center + Users & Access"],
+            ].map(([r,a])=>(
+              <tr key={r}><TdY>{r}</TdY><Td>{a}</Td></tr>
+            ))}
+          </tbody>
+        </TableWrap>
+        <H3>Plans</H3>
+        <TableWrap>
+          <thead><tr><Th>Feature</Th><Th>Personal</Th><Th>Company</Th></tr></thead>
+          <tbody>
+            {[
+              ["Training","✓","✓"],
+              ["NOVA Help","✓","✓"],
+              ["Common Mistakes","✓","✓"],
+              ["Selector Nation","✓","✓"],
+              ["NOVA Trainer","✗","✓"],
+              ["Leaderboard","✗","✓"],
+              ["Trainer Dashboard","✗","✓ (trainer role)"],
+              ["Supervisor Dashboard","✗","✓ (supervisor role)"],
+              ["Control Center","✗ (owner only)","✗ (owner only)"],
+              ["Users & Access","✗ (owner only)","✗ (owner only)"],
+            ].map(([f,p,c])=>(
+              <tr key={f}>
+                <Td>{f}</Td>
+                <td className={`px-4 py-3 border-t border-slate-800 font-bold text-sm ${p==="✓"?"text-green-400":p.startsWith("✗")?"text-red-400":"text-slate-300"}`}>{p}</td>
+                <td className={`px-4 py-3 border-t border-slate-800 font-bold text-sm ${c==="✓"||c.startsWith("✓")?"text-green-400":c.startsWith("✗")?"text-red-400":"text-slate-300"}`}>{c}</td>
+              </tr>
+            ))}
+          </tbody>
+        </TableWrap>
+      </div>
+
+      <p className="text-center text-xs text-slate-600 pb-6">PickSmart Academy — Voice Training System</p>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
+const TABS = ["Dashboard", "Handbook"] as const;
+type Tab = typeof TABS[number];
+
 export default function OwnerPage() {
   const stats = ADMIN_STATS;
+  const [activeTab, setActiveTab] = useState<Tab>("Dashboard");
 
   return (
     <div className="min-h-screen bg-slate-950 text-white px-4 sm:px-6 py-10">
@@ -398,27 +685,52 @@ export default function OwnerPage() {
           </p>
         </div>
 
-        {/* Top stat cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
-          <StatCard label="Total Subscribers" value={stats.totalSubscribers} />
-          <StatCard label="Personal" value={stats.personalSubscribers} />
-          <StatCard label="Company" value={stats.companySubscribers} />
-          <StatCard label="Active Today" value={stats.activeUsersToday} />
-          <StatCard label="Total Sessions" value={stats.totalSessions} />
-          <StatCard label="Banned Users" value={stats.bannedUsers} tone="danger" />
+        {/* Tab bar */}
+        <div className="flex gap-2 border-b border-slate-800 pb-0">
+          {TABS.map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-5 py-2.5 text-sm font-bold rounded-t-xl transition -mb-px border-b-2 ${
+                activeTab === tab
+                  ? "border-yellow-400 text-yellow-400 bg-slate-900"
+                  : "border-transparent text-slate-500 hover:text-white"
+              }`}
+            >
+              {tab === "Dashboard" ? "📊 Dashboard" : "📖 Handbook"}
+            </button>
+          ))}
         </div>
 
-        {/* User Management (full width) */}
-        <UserManagement />
+        {/* Dashboard tab */}
+        {activeTab === "Dashboard" && (
+          <>
+            {/* Top stat cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
+              <StatCard label="Total Subscribers" value={stats.totalSubscribers} />
+              <StatCard label="Personal" value={stats.personalSubscribers} />
+              <StatCard label="Company" value={stats.companySubscribers} />
+              <StatCard label="Active Today" value={stats.activeUsersToday} />
+              <StatCard label="Total Sessions" value={stats.totalSessions} />
+              <StatCard label="Banned Users" value={stats.bannedUsers} tone="danger" />
+            </div>
 
-        {/* Side-by-side: Invite + Plan Control */}
-        <div className="grid xl:grid-cols-2 gap-6">
-          <InviteManagement />
-          <PlanControl />
-        </div>
+            {/* User Management (full width) */}
+            <UserManagement />
 
-        {/* Activity Log */}
-        <ActivityLog />
+            {/* Side-by-side: Invite + Plan Control */}
+            <div className="grid xl:grid-cols-2 gap-6">
+              <InviteManagement />
+              <PlanControl />
+            </div>
+
+            {/* Activity Log */}
+            <ActivityLog />
+          </>
+        )}
+
+        {/* Handbook tab */}
+        {activeTab === "Handbook" && <HandbookSection />}
 
       </div>
     </div>
