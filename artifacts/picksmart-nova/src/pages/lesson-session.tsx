@@ -5,6 +5,7 @@ import { useProgressStore } from "@/lib/progressStore";
 import { NovaLessonGuide } from "@/components/training/NovaLessonGuide";
 import { LessonStepCard } from "@/components/training/LessonStepCard";
 import { LessonTest } from "@/components/training/LessonTest";
+import { LessonVideoPlayer } from "@/components/training/LessonVideoPlayer";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 
 type Phase = "welcome" | "lesson" | "test";
@@ -198,14 +199,19 @@ export default function LessonSessionPage() {
         {/* NOVA Guide */}
         <NovaLessonGuide message={novaMessage || `Welcome to ${lesson.moduleTitle}.`} isSpeaking={isSpeaking} />
 
-        {/* Welcome phase: Ready button */}
+        {/* Welcome phase: video + Ready button */}
         {phase === "welcome" && (
-          <button
-            onClick={handleReady}
-            className="w-full py-5 rounded-2xl bg-yellow-400 text-slate-950 font-black text-xl hover:bg-yellow-300 transition-all shadow-lg shadow-yellow-400/20 active:scale-[0.98]"
-          >
-            Ready
-          </button>
+          <div className="space-y-5">
+            {/* Training video for this module */}
+            <LessonVideoPlayer moduleId={moduleId} />
+
+            <button
+              onClick={handleReady}
+              className="w-full py-5 rounded-2xl bg-yellow-400 text-slate-950 font-black text-xl hover:bg-yellow-300 transition-all shadow-lg shadow-yellow-400/20 active:scale-[0.98]"
+            >
+              Ready — Start Lesson
+            </button>
+          </div>
         )}
 
         {/* Lesson phase: steps */}
