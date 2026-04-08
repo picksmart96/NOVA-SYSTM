@@ -18,8 +18,8 @@ function Avatar({ name, size = "md" }: { name?: string; size?: "sm" | "md" | "lg
 
 function SidebarCard({ title, children }: { title?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-lg">
-      {title ? <h3 className="text-lg font-bold text-white mb-4">{title}</h3> : null}
+    <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
+      {title ? <h3 className="text-lg font-bold text-slate-900 mb-4">{title}</h3> : null}
       <div className={title ? "space-y-3" : ""}>{children}</div>
     </div>
   );
@@ -27,9 +27,9 @@ function SidebarCard({ title, children }: { title?: string; children: React.Reac
 
 function StatBlock({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-3 text-center">
-      <p className="text-xl font-black text-white">{value}</p>
-      <p className="mt-1 text-xs text-slate-400">{label}</p>
+    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-center">
+      <p className="text-xl font-black text-slate-900">{value}</p>
+      <p className="mt-1 text-xs text-slate-500">{label}</p>
     </div>
   );
 }
@@ -60,8 +60,8 @@ function ReactionButton({
       onClick={onClick}
       className={`rounded-xl border px-3 py-2 text-sm transition ${
         active
-          ? "border-yellow-400 bg-yellow-500/10 text-yellow-300"
-          : "border-slate-700 text-slate-300 hover:border-yellow-400 hover:text-white"
+          ? "border-yellow-500 bg-yellow-50 text-yellow-700 font-semibold"
+          : "border-gray-200 text-slate-600 hover:border-yellow-400 hover:text-slate-900"
       }`}
     >
       {emoji} {label}{count > 0 ? ` ${count}` : ""}
@@ -104,14 +104,14 @@ function PostCard({
   const EMOJIS = ["😀","😂","😎","🔥","💪","👏","🙌","❤️","👍","😮","😅","🎧","📦","🚚","🙏","✅"];
 
   return (
-    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-lg">
+    <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
       {/* Header */}
       <div className="flex items-start gap-3">
         <Avatar name={author?.name || "U"} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-bold text-white">{author?.name}</h3>
-            <span className="rounded-full bg-yellow-500/20 px-2.5 py-1 text-xs font-bold text-yellow-300">
+            <h3 className="font-bold text-slate-900">{author?.name}</h3>
+            <span className="rounded-full bg-yellow-100 px-2.5 py-1 text-xs font-bold text-yellow-700">
               {author?.level}
             </span>
           </div>
@@ -120,7 +120,7 @@ function PostCard({
         {isOwn && (
           <button
             onClick={() => onDelete(post.id)}
-            className="text-xs text-slate-600 hover:text-red-400 transition ml-auto shrink-0"
+            className="text-xs text-slate-400 hover:text-red-500 transition ml-auto shrink-0"
           >
             Delete
           </button>
@@ -128,20 +128,20 @@ function PostCard({
       </div>
 
       {/* Content */}
-      <p className="mt-4 whitespace-pre-wrap text-slate-200 leading-7">{post.content}</p>
+      <p className="mt-4 whitespace-pre-wrap text-slate-800 leading-7">{post.content}</p>
 
       {post.imageUrl && (
         <img
           src={post.imageUrl}
           alt="Post"
-          className="mt-4 max-h-96 w-full rounded-2xl object-cover border border-slate-800"
+          className="mt-4 max-h-96 w-full rounded-2xl object-cover border border-gray-200"
         />
       )}
 
       {post.hashtags?.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
           {post.hashtags.map((tag) => (
-            <span key={tag} className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-300">
+            <span key={tag} className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-slate-600">
               {tag}
             </span>
           ))}
@@ -155,7 +155,7 @@ function PostCard({
         <ReactionButton emoji="😂" label="Funny" count={post.reactions.funny.length} active={hasReaction("funny")} onClick={() => onReact(post.id, "funny")} />
         <ReactionButton emoji="😮" label="Wow" count={post.reactions.wow.length} active={hasReaction("wow")} onClick={() => onReact(post.id, "wow")} />
         <ReactionButton emoji="😡" label="Frustrated" count={post.reactions.frustrated.length} active={hasReaction("frustrated")} onClick={() => onReact(post.id, "frustrated")} />
-        <ReactionButton emoji={isSaved ? "🔖" : "🔖"} label={isSaved ? "Saved" : "Save"} active={isSaved} onClick={() => onSave(post.id)} />
+        <ReactionButton emoji="🔖" label={isSaved ? "Saved" : "Save"} active={isSaved} onClick={() => onSave(post.id)} />
         <ReactionButton emoji="🚩" label="Report" onClick={() => onReport(post.id)} />
       </div>
 
@@ -165,9 +165,9 @@ function PostCard({
           {post.comments.map((item) => {
             const ca = getUserById(item.authorId);
             return (
-              <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-3">
-                <p className="font-semibold text-white text-sm">{ca?.name}</p>
-                <p className="mt-1 text-sm text-slate-300">{item.text}</p>
+              <div key={item.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                <p className="font-semibold text-slate-900 text-sm">{ca?.name}</p>
+                <p className="mt-1 text-sm text-slate-700">{item.text}</p>
               </div>
             );
           })}
@@ -181,7 +181,7 @@ function PostCard({
           onChange={(e) => setComment(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submitComment()}
           placeholder="Write a comment..."
-          className="flex-1 rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-yellow-400 text-sm"
+          className="flex-1 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-yellow-400 text-sm"
         />
         <button
           onClick={submitComment}
@@ -196,7 +196,7 @@ function PostCard({
         {EMOJIS.map((emoji) => (
           <button
             key={emoji}
-            className="rounded-xl border border-slate-700 px-2 py-1.5 transition hover:border-yellow-400"
+            className="rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5 transition hover:border-yellow-400 hover:bg-yellow-50"
             onClick={() => setComment((prev) => `${prev}${emoji}`)}
           >
             {emoji}
@@ -263,21 +263,21 @@ export default function SelectorBreakingNewsPage() {
   const menuItems = ["Home Feed", "Profile", "Saved Posts", "Notifications", "Groups", "Community Policy"];
 
   return (
-    <div className="min-h-screen bg-slate-950 px-4 py-6 text-white md:px-6">
+    <div className="min-h-screen bg-white px-4 py-6 text-slate-900 md:px-6">
       <div className="mx-auto max-w-7xl space-y-6">
 
         {/* Header */}
         <div className="text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-yellow-400">Community</p>
-          <h1 className="mt-3 text-4xl font-black md:text-5xl">Selector Breaking News</h1>
-          <p className="mt-3 text-lg text-slate-300">Built for selectors. Powered by community.</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-yellow-600">Community</p>
+          <h1 className="mt-3 text-4xl font-black text-slate-900 md:text-5xl">Selector Breaking News</h1>
+          <p className="mt-3 text-lg text-slate-500">Built for selectors. Powered by community.</p>
         </div>
 
         {/* Search */}
-        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-4 shadow-lg">
+        <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
           <input
             placeholder="Search posts, people, hashtags"
-            className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-yellow-400"
+            className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-yellow-400"
           />
         </div>
 
@@ -290,13 +290,13 @@ export default function SelectorBreakingNewsPage() {
               <div className="flex items-center gap-4">
                 <Avatar name={currentUser?.name} size="lg" />
                 <div>
-                  <h2 className="text-lg font-bold">{currentUser?.name}</h2>
-                  <span className="mt-2 inline-flex rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-bold text-yellow-300">
+                  <h2 className="text-lg font-bold text-slate-900">{currentUser?.name}</h2>
+                  <span className="mt-2 inline-flex rounded-full bg-yellow-100 px-3 py-1 text-xs font-bold text-yellow-700">
                     {currentUser?.level}
                   </span>
                 </div>
               </div>
-              <p className="mt-4 text-sm text-slate-300">{currentUser?.bio}</p>
+              <p className="mt-4 text-sm text-slate-600">{currentUser?.bio}</p>
               <div className="mt-5 grid grid-cols-3 gap-3">
                 <StatBlock label="Following" value={currentUser?.following.length || 0} />
                 <StatBlock label="Followers" value={currentUser?.followers.length || 0} />
@@ -311,8 +311,8 @@ export default function SelectorBreakingNewsPage() {
                   onClick={() => setActiveMenu(item)}
                   className={`block w-full rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition ${
                     activeMenu === item
-                      ? "border-yellow-400 bg-yellow-400/10 text-yellow-300"
-                      : "border-slate-800 bg-slate-950 text-slate-300 hover:border-yellow-400 hover:text-white"
+                      ? "border-yellow-400 bg-yellow-50 text-yellow-700"
+                      : "border-gray-100 bg-gray-50 text-slate-700 hover:border-yellow-300 hover:text-slate-900"
                   }`}
                 >
                   {item}
@@ -321,7 +321,7 @@ export default function SelectorBreakingNewsPage() {
             </SidebarCard>
 
             <SidebarCard title="Community Policy">
-              <div className="space-y-2 text-sm text-slate-300">
+              <div className="space-y-2 text-sm text-slate-600">
                 <p>✅ Work-related and appropriate content only</p>
                 <p>✅ Respect all members</p>
                 <p>🚫 No nudity, hate, threats, or illegal content</p>
@@ -334,7 +334,7 @@ export default function SelectorBreakingNewsPage() {
           {/* Feed */}
           <div className="space-y-6">
             {activeMenu !== "Community Policy" && activeMenu !== "Profile" && (
-              <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-lg">
+              <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm">
                 <div className="flex items-start gap-3">
                   <Avatar name={currentUser?.name} />
                   <div className="flex-1 space-y-3">
@@ -343,19 +343,19 @@ export default function SelectorBreakingNewsPage() {
                       onChange={(e) => setPostText(e.target.value)}
                       rows={4}
                       placeholder="What's going on in your shift?"
-                      className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-yellow-400 text-sm resize-none"
+                      className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-yellow-400 text-sm resize-none"
                     />
                     <input
                       value={imageUrl}
                       onChange={(e) => setImageUrl(e.target.value)}
                       placeholder="Add image URL (optional)"
-                      className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-yellow-400 text-sm"
+                      className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-yellow-400 text-sm"
                     />
                     <input
                       value={hashtagInput}
                       onChange={(e) => setHashtagInput(e.target.value)}
                       placeholder="Add hashtags: selectorlife stackingtips"
-                      className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-yellow-400 text-sm"
+                      className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-yellow-400 text-sm"
                     />
                   </div>
                 </div>
@@ -372,7 +372,7 @@ export default function SelectorBreakingNewsPage() {
             )}
 
             {activeMenu === "Saved Posts" && displayedPosts.length === 0 && (
-              <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-400">
+              <div className="rounded-3xl border border-gray-200 bg-white p-8 text-center text-slate-500">
                 No saved posts yet. Hit 🔖 on any post to save it here.
               </div>
             )}
@@ -398,7 +398,7 @@ export default function SelectorBreakingNewsPage() {
               <SidebarCard title="Trending Hashtags">
                 <div className="flex flex-wrap gap-2">
                   {trendingHashtags.map((tag) => (
-                    <span key={tag} className="rounded-full border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300">
+                    <span key={tag} className="rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-slate-700">
                       {tag}
                     </span>
                   ))}
@@ -414,8 +414,8 @@ export default function SelectorBreakingNewsPage() {
                       <div className="flex items-center gap-3 min-w-0">
                         <Avatar name={member.name} size="sm" />
                         <div className="min-w-0">
-                          <p className="font-semibold text-sm truncate">{member.name}</p>
-                          <p className="text-xs text-slate-400">{member.followers.length} followers</p>
+                          <p className="font-semibold text-sm text-slate-900 truncate">{member.name}</p>
+                          <p className="text-xs text-slate-500">{member.followers.length} followers</p>
                         </div>
                       </div>
                       <button
@@ -437,11 +437,11 @@ export default function SelectorBreakingNewsPage() {
                     <div key={member.id} className="flex items-center gap-3">
                       <div className="relative">
                         <Avatar name={member.name} size="sm" />
-                        <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-400 border-2 border-slate-900" />
+                        <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-400 border-2 border-white" />
                       </div>
                       <div>
-                        <p className="font-semibold text-sm">{member.name}</p>
-                        <p className="text-xs text-green-300">{member.statusText || "Online"}</p>
+                        <p className="font-semibold text-sm text-slate-900">{member.name}</p>
+                        <p className="text-xs text-green-600">{member.statusText || "Online"}</p>
                       </div>
                     </div>
                   ))}
@@ -450,7 +450,7 @@ export default function SelectorBreakingNewsPage() {
             )}
 
             <SidebarCard title="Announcements">
-              <div className="space-y-3 text-sm text-slate-300">
+              <div className="space-y-3 text-sm text-slate-600">
                 <p>Only appropriate, work-related pictures are allowed on Selector Breaking News.</p>
                 <p>Owner dashboard controls reports, posts, warnings, suspensions, and bans.</p>
               </div>
