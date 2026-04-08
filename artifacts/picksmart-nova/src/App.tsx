@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/layout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { SubscriptionRoute } from "@/components/SubscriptionRoute";
 import NotFound from "@/pages/not-found";
 
 import HomePage from "@/pages/home";
@@ -47,38 +47,15 @@ const queryClient = new QueryClient();
 function Router() {
   return (
     <Switch>
-      {/* Auth — full screen, no layout */}
+      {/* ── Fully public — no login or subscription needed ── */}
       <Route path="/login">
         <LoginPage />
       </Route>
       <Route path="/invite/:token">
         <InvitePage />
       </Route>
-
-      {/* Public */}
       <Route path="/">
         <Layout><HomePage /></Layout>
-      </Route>
-      <Route path="/training">
-        <Layout><ModulesPage /></Layout>
-      </Route>
-      <Route path="/training/lesson/:id">
-        <LessonSessionPage />
-      </Route>
-      <Route path="/training/:id">
-        <Layout><ModuleDetailPage /></Layout>
-      </Route>
-      <Route path="/mistakes">
-        <Layout><CommonMistakesPage /></Layout>
-      </Route>
-      <Route path="/mistakes/coaching/:id">
-        <MistakeCoachingPage />
-      </Route>
-      <Route path="/progress">
-        <Layout><ProgressPage /></Layout>
-      </Route>
-      <Route path="/leaderboard">
-        <Layout><LeaderboardPage /></Layout>
       </Route>
       <Route path="/pricing">
         <Layout><PricingPage /></Layout>
@@ -92,84 +69,165 @@ function Router() {
       <Route path="/checkout/company">
         <Layout><CompanyCheckoutPage /></Layout>
       </Route>
-      <Route path="/selector-nation">
-        <Layout><SelectorNationPage /></Layout>
-      </Route>
 
-      {/* NOVA — selector+ */}
-      <Route path="/nova">
-        <Layout><MyAssignmentsPage /></Layout>
+      {/* ── Subscription required — selector+ ── */}
+      <Route path="/training">
+        <Layout>
+          <SubscriptionRoute path="/training">
+            <ModulesPage />
+          </SubscriptionRoute>
+        </Layout>
       </Route>
-      <Route path="/nova/assignments/:id">
-        <Layout><AssignmentDetailPage /></Layout>
+      <Route path="/training/lesson/:id">
+        <SubscriptionRoute path="/training/lesson/:id">
+          <LessonSessionPage />
+        </SubscriptionRoute>
       </Route>
-      <Route path="/nova/voice/:id">
-        <VoiceSessionPage />
+      <Route path="/training/:id">
+        <Layout>
+          <SubscriptionRoute path="/training/:id">
+            <ModuleDetailPage />
+          </SubscriptionRoute>
+        </Layout>
       </Route>
-      <Route path="/selector">
-        <ProtectedRoute path="/selector" requiredRole="selector">
-          <Layout><SelectorPortalPage /></Layout>
-        </ProtectedRoute>
+      <Route path="/mistakes">
+        <Layout>
+          <SubscriptionRoute path="/mistakes">
+            <CommonMistakesPage />
+          </SubscriptionRoute>
+        </Layout>
       </Route>
-      <Route path="/nova-trainer">
-        <NovaTrainerPage />
+      <Route path="/mistakes/coaching/:id">
+        <SubscriptionRoute path="/mistakes/coaching/:id">
+          <MistakeCoachingPage />
+        </SubscriptionRoute>
+      </Route>
+      <Route path="/progress">
+        <Layout>
+          <SubscriptionRoute path="/progress">
+            <ProgressPage />
+          </SubscriptionRoute>
+        </Layout>
+      </Route>
+      <Route path="/leaderboard">
+        <Layout>
+          <SubscriptionRoute path="/leaderboard">
+            <LeaderboardPage />
+          </SubscriptionRoute>
+        </Layout>
+      </Route>
+      <Route path="/selector-nation">
+        <Layout>
+          <SubscriptionRoute path="/selector-nation">
+            <SelectorNationPage />
+          </SubscriptionRoute>
+        </Layout>
       </Route>
       <Route path="/nova-help">
-        <Layout><NovaHelpPage /></Layout>
+        <Layout>
+          <SubscriptionRoute path="/nova-help">
+            <NovaHelpPage />
+          </SubscriptionRoute>
+        </Layout>
+      </Route>
+      <Route path="/nova-trainer">
+        <SubscriptionRoute path="/nova-trainer">
+          <NovaTrainerPage />
+        </SubscriptionRoute>
+      </Route>
+      <Route path="/selector">
+        <SubscriptionRoute path="/selector">
+          <Layout><SelectorPortalPage /></Layout>
+        </SubscriptionRoute>
+      </Route>
+
+      {/* NOVA assignment pages */}
+      <Route path="/nova">
+        <Layout>
+          <SubscriptionRoute path="/nova">
+            <MyAssignmentsPage />
+          </SubscriptionRoute>
+        </Layout>
+      </Route>
+      <Route path="/nova/assignments/:id">
+        <Layout>
+          <SubscriptionRoute path="/nova/assignments/:id">
+            <AssignmentDetailPage />
+          </SubscriptionRoute>
+        </Layout>
+      </Route>
+      <Route path="/nova/voice/:id">
+        <SubscriptionRoute path="/nova/voice/:id">
+          <VoiceSessionPage />
+        </SubscriptionRoute>
       </Route>
 
       {/* Trainer tools */}
       <Route path="/nova/control">
-        <Layout><AssignmentControlPage /></Layout>
+        <Layout>
+          <SubscriptionRoute path="/nova/control" requiredRole="trainer">
+            <AssignmentControlPage />
+          </SubscriptionRoute>
+        </Layout>
       </Route>
       <Route path="/nova/warehouse">
-        <Layout><WarehouseReferencePage /></Layout>
+        <Layout>
+          <SubscriptionRoute path="/nova/warehouse" requiredRole="trainer">
+            <WarehouseReferencePage />
+          </SubscriptionRoute>
+        </Layout>
       </Route>
       <Route path="/nova/slots">
-        <Layout><SlotMasterPage /></Layout>
+        <Layout>
+          <SubscriptionRoute path="/nova/slots" requiredRole="trainer">
+            <SlotMasterPage />
+          </SubscriptionRoute>
+        </Layout>
       </Route>
       <Route path="/nova/voice-commands">
-        <Layout><VoiceCommandsPage /></Layout>
+        <Layout>
+          <SubscriptionRoute path="/nova/voice-commands" requiredRole="trainer">
+            <VoiceCommandsPage />
+          </SubscriptionRoute>
+        </Layout>
       </Route>
-
-      {/* ── PROTECTED ROUTES ── */}
       <Route path="/trainer-portal">
         <Layout>
-          <ProtectedRoute path="/trainer-portal" requiredRole="trainer">
+          <SubscriptionRoute path="/trainer-portal" requiredRole="trainer">
             <TrainerPortalPage />
-          </ProtectedRoute>
+          </SubscriptionRoute>
         </Layout>
       </Route>
 
+      {/* Supervisor tools */}
       <Route path="/nova/tracking">
         <Layout>
-          <ProtectedRoute path="/nova/tracking" requiredRole="supervisor">
+          <SubscriptionRoute path="/nova/tracking" requiredRole="supervisor">
             <LiveTrackingPage />
-          </ProtectedRoute>
+          </SubscriptionRoute>
         </Layout>
       </Route>
-
       <Route path="/supervisor">
         <Layout>
-          <ProtectedRoute path="/supervisor" requiredRole="supervisor">
+          <SubscriptionRoute path="/supervisor" requiredRole="supervisor">
             <SupervisorPage />
-          </ProtectedRoute>
+          </SubscriptionRoute>
         </Layout>
       </Route>
 
+      {/* Owner-only */}
       <Route path="/users-access">
         <Layout>
-          <ProtectedRoute path="/users-access" requiredRole="owner">
+          <SubscriptionRoute path="/users-access" requiredRole="owner">
             <UsersAccessPage />
-          </ProtectedRoute>
+          </SubscriptionRoute>
         </Layout>
       </Route>
-
       <Route path="/owner">
         <Layout>
-          <ProtectedRoute path="/owner" requiredRole="owner">
+          <SubscriptionRoute path="/owner" requiredRole="owner">
             <OwnerPage />
-          </ProtectedRoute>
+          </SubscriptionRoute>
         </Layout>
       </Route>
 
