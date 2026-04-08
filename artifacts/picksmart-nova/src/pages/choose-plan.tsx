@@ -2,85 +2,103 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuthStore } from "@/lib/authStore";
 
-function CheckIcon() {
+function CheckIcon({ color = "text-yellow-400" }: { color?: string }) {
   return (
-    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 shrink-0 mt-0.5">
+    <svg viewBox="0 0 20 20" fill="currentColor" className={`h-4 w-4 shrink-0 mt-0.5 ${color}`}>
       <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
     </svg>
   );
 }
 
-type Cycle = "monthly" | "yearly";
-type PlanKey = "personal" | "company";
+type PlanKey = "selector" | "pro_monthly" | "pro_annual";
 
-const PLANS = {
-  personal: {
-    key: "personal" as PlanKey,
-    name: "Single Professional",
-    tagline: "For individual selectors",
-    description: "Everything you need to train, improve your rate, and build a warehouse career you're proud of.",
+const PLANS = [
+  {
+    key: "selector" as PlanKey,
+    name: "Selector",
+    tagline: "Train individual warehouse selectors",
+    price: "$10",
+    period: "per selector",
+    note: "",
+    badge: null,
+    highlight: false,
     features: [
-      "Full training module library",
-      "NOVA Help — AI voice coach",
-      "NOVA Trainer — ES3 voice picking simulation",
-      "Common Mistakes coaching",
-      "Leaderboard",
-      "Selector Breaking News community",
+      "Access for 1 selector",
+      "All 6 training modules",
+      "Progress tracking",
+      "Performance reports",
+      "Trainer support",
     ],
-    monthly: { amount: "$25", period: "month", note: "Billed monthly. Cancel anytime." },
-    yearly: { amount: "$240", period: "year", note: "Just $20/month. 2 months free.", badge: "Save $60" },
+    cta: "Start Training",
+    sub: "personal" as "personal" | "company",
   },
-  company: {
-    key: "company" as PlanKey,
-    name: "Company",
-    tagline: "For teams and warehouse operations",
-    description: "Give your entire team the tools to train consistently, track progress, and operate with precision.",
+  {
+    key: "pro_monthly" as PlanKey,
+    name: "Pro Monthly",
+    tagline: "Full access to all training",
+    price: "$29.99",
+    period: "month",
+    note: "",
+    badge: "Most Popular",
+    highlight: true,
     features: [
-      "Everything in Single Professional",
-      "Unlimited team members",
-      "Trainer Dashboard",
-      "Supervisor Dashboard",
-      "Assignment management",
-      "Live team tracking",
+      "All 6 training modules",
+      "Video lessons & demonstrations",
+      "Advanced speed techniques",
+      "Pallet building masterclass",
+      "Rate improvement strategies",
+      "New content added monthly",
     ],
-    monthly: { amount: "$1,660", period: "week", note: "Billed weekly. Cancel anytime." },
-    yearly: { amount: "$75,000", period: "year", note: "~$1,442/week. Best value.", badge: "Save ~$11,320" },
+    cta: "Go Pro",
+    sub: "personal" as "personal" | "company",
   },
-};
-
-const CAREER_STATS = [
-  { value: "3×", label: "faster onboarding with voice training" },
-  { value: "40%", label: "fewer picking errors reported" },
-  { value: "100%", label: "bilingual — English & Spanish" },
-  { value: "24/7", label: "NOVA AI coach always available" },
+  {
+    key: "pro_annual" as PlanKey,
+    name: "Pro Annual",
+    tagline: "Best value — save over 40%",
+    price: "$199.99",
+    period: "year",
+    note: "",
+    badge: "Best Value",
+    highlight: false,
+    features: [
+      "Everything in Pro Monthly",
+      "Save $81 per year",
+      "Priority support",
+      "Early access to new modules",
+      "Certification badge",
+    ],
+    cta: "Get Best Value",
+    sub: "company" as "personal" | "company",
+  },
 ];
 
 export default function InvestInCareerPage() {
   const [, navigate] = useLocation();
   const { currentUser, updateSubscription } = useAuthStore();
 
-  const [cycle, setCycle] = useState<Cycle>("monthly");
-  const [selected, setSelected] = useState<PlanKey>("personal");
+  const [selected, setSelected] = useState<PlanKey>("pro_monthly");
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const selectedPlan = PLANS.find((p) => p.key === selected)!;
 
   function handleInvest() {
     if (!currentUser) { navigate("/login?redirect=/choose-plan"); return; }
     setLoading(true);
     setTimeout(() => {
-      updateSubscription(selected);
+      updateSubscription(selectedPlan.sub);
       setDone(true);
       setTimeout(() => navigate("/training"), 2000);
     }, 900);
   }
 
   if (done) {
-    const plan = PLANS[selected];
     return (
       <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
         <div className="text-center space-y-5 max-w-md">
           <div className="text-6xl">🎉</div>
-          <h2 className="text-3xl font-black">{plan.name} Plan Active!</h2>
+          <h2 className="text-3xl font-black">{selectedPlan.name} Active!</h2>
           <p className="text-slate-400 text-lg">Your investment is locked in. Taking you to your training hub…</p>
           <div className="rounded-2xl border border-yellow-400/30 bg-yellow-400/5 px-6 py-4 text-yellow-300 text-sm font-semibold">
             Welcome to PickSmart NOVA. Let's build something great.
@@ -92,113 +110,92 @@ export default function InvestInCareerPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white px-6 py-14">
-      <div className="max-w-5xl mx-auto space-y-14">
+      <div className="max-w-5xl mx-auto space-y-12">
 
         {/* Hero */}
-        <div className="text-center space-y-5">
-          <p className="text-yellow-400 text-xs font-bold uppercase tracking-[0.25em]">Your future starts here</p>
-          <h1 className="text-5xl sm:text-6xl font-black leading-tight">
-            Invest in Your Career
-          </h1>
+        <div className="text-center space-y-4">
+          <p className="text-yellow-400 text-xs font-bold uppercase tracking-[0.25em]">Simple Pricing</p>
+          <h1 className="text-5xl sm:text-6xl font-black leading-tight">Invest in Your Career</h1>
           <p className="text-slate-400 text-xl max-w-2xl mx-auto leading-relaxed">
-            PickSmart NOVA is the training platform built by warehouse people, for warehouse people. Pick your plan and level up.
+            Start free or unlock everything with Pro. Most selectors make back the cost in their first week of better rates.
           </p>
         </div>
 
-        {/* Career stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {CAREER_STATS.map((stat) => (
-            <div key={stat.label} className="rounded-3xl border border-slate-800 bg-slate-900 p-5 text-center">
-              <p className="text-4xl font-black text-yellow-400">{stat.value}</p>
-              <p className="mt-2 text-xs text-slate-400 leading-snug">{stat.label}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Billing toggle */}
-        <div className="flex justify-center">
-          <div className="flex rounded-2xl border border-slate-700 bg-slate-900 p-1">
-            <button
-              onClick={() => setCycle("monthly")}
-              className={`rounded-xl px-8 py-3 text-sm font-bold transition ${
-                cycle === "monthly" ? "bg-yellow-400 text-slate-950" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Monthly / Weekly
-            </button>
-            <button
-              onClick={() => setCycle("yearly")}
-              className={`flex items-center gap-2 rounded-xl px-8 py-3 text-sm font-bold transition ${
-                cycle === "yearly" ? "bg-yellow-400 text-slate-950" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Yearly
-              {cycle !== "yearly" && (
-                <span className="rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-bold text-green-400">
-                  Best value
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-
         {/* Plan cards */}
-        <div className="grid md:grid-cols-2 gap-6">
-          {(Object.values(PLANS) as typeof PLANS[PlanKey][]).map((plan) => {
-            const price = plan[cycle];
+        <div className="grid md:grid-cols-3 gap-6">
+          {PLANS.map((plan) => {
             const isSelected = selected === plan.key;
             return (
               <button
                 key={plan.key}
                 onClick={() => setSelected(plan.key)}
-                className={`text-left rounded-3xl border-2 p-8 shadow-2xl transition-all ${
+                className={`relative text-left rounded-3xl border-2 p-8 shadow-2xl transition-all flex flex-col ${
                   isSelected
-                    ? "border-yellow-400 bg-slate-900 ring-2 ring-yellow-400/30 scale-[1.01]"
+                    ? "border-yellow-400 bg-slate-900 ring-2 ring-yellow-400/30 scale-[1.02]"
+                    : plan.highlight
+                    ? "border-slate-600 bg-slate-900 hover:border-slate-500"
                     : "border-slate-800 bg-slate-900 hover:border-slate-600"
                 }`}
               >
-                {/* Selection indicator */}
-                <div className="flex items-center justify-between mb-5">
-                  <p className="text-yellow-400 text-xs font-bold uppercase tracking-widest">{plan.tagline}</p>
-                  <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition ${
+                {/* Badge */}
+                {plan.badge && (
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                    <span className={`rounded-full px-4 py-1 text-xs font-black ${
+                      plan.badge === "Most Popular"
+                        ? "bg-yellow-400 text-slate-950"
+                        : "bg-green-500 text-white"
+                    }`}>
+                      {plan.badge}
+                    </span>
+                  </div>
+                )}
+
+                {/* Selection ring */}
+                <div className="flex items-start justify-between mb-5">
+                  <p className="text-yellow-400 text-xs font-bold uppercase tracking-widest leading-snug max-w-[80%]">
+                    {plan.tagline}
+                  </p>
+                  <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 transition ml-2 ${
                     isSelected ? "border-yellow-400 bg-yellow-400" : "border-slate-600"
                   }`}>
                     {isSelected && (
-                      <svg viewBox="0 0 12 12" fill="currentColor" className="h-3 w-3 text-slate-950">
-                        <path d="M10 3L5 8.5 2 5.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                      <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3 text-slate-950">
+                        <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     )}
                   </div>
                 </div>
 
-                <h2 className="text-3xl font-black">{plan.name}</h2>
-                <p className="mt-2 text-slate-400 text-sm leading-relaxed">{plan.description}</p>
+                <h2 className="text-2xl font-black">{plan.name}</h2>
 
                 {/* Price */}
-                <div className={`mt-6 rounded-2xl border p-5 transition ${
+                <div className={`mt-5 rounded-2xl border p-5 transition ${
                   isSelected ? "border-yellow-400/40 bg-yellow-400/5" : "border-slate-800 bg-slate-950"
                 }`}>
-                  <div className="flex items-end gap-2">
-                    <span className="text-5xl font-black text-white">{price.amount}</span>
-                    <span className="text-slate-400 text-base pb-1.5">/{price.period}</span>
+                  <div className="flex items-end gap-1.5">
+                    <span className="text-4xl font-black text-white">{plan.price}</span>
+                    <span className="text-slate-400 text-sm pb-1.5">/{plan.period}</span>
                   </div>
-                  <p className="mt-2 text-sm text-slate-400">{price.note}</p>
-                  {"badge" in price && price.badge && (
-                    <span className="mt-3 inline-flex rounded-full bg-green-500/20 px-3 py-1 text-xs font-bold text-green-400">
-                      {price.badge}
-                    </span>
-                  )}
                 </div>
 
                 {/* Features */}
-                <ul className="mt-6 space-y-2.5">
+                <ul className="mt-6 space-y-2.5 flex-1">
                   {plan.features.map((f) => (
                     <li key={f} className={`flex items-start gap-2 text-sm ${isSelected ? "text-slate-200" : "text-slate-400"}`}>
-                      <span className="text-yellow-400"><CheckIcon /></span>
+                      <CheckIcon color={isSelected ? "text-yellow-400" : "text-slate-500"} />
                       {f}
                     </li>
                   ))}
                 </ul>
+
+                {/* Card CTA */}
+                <div className={`mt-7 rounded-2xl px-4 py-3 text-center text-sm font-black transition ${
+                  isSelected
+                    ? "bg-yellow-400 text-slate-950"
+                    : "border border-slate-700 text-slate-400 group-hover:border-yellow-400"
+                }`}>
+                  {plan.cta}
+                </div>
               </button>
             );
           })}
@@ -209,16 +206,18 @@ export default function InvestInCareerPage() {
           <div>
             <h2 className="text-2xl font-black">Ready to invest in yourself?</h2>
             <p className="mt-2 text-slate-400 text-base">
-              You're selecting the <span className="text-yellow-400 font-bold">{PLANS[selected].name}</span> plan —{" "}
+              You selected{" "}
+              <span className="text-yellow-400 font-bold">{selectedPlan.name}</span>
+              {" — "}
               <span className="text-white font-bold">
-                {PLANS[selected][cycle].amount}/{PLANS[selected][cycle].period}
+                {selectedPlan.price}/{selectedPlan.period}
               </span>
             </p>
           </div>
 
           {!currentUser && (
             <p className="text-sm text-amber-400 bg-amber-400/10 rounded-2xl px-4 py-3">
-              You need to be signed in to invest.{" "}
+              You need to be signed in to get started.{" "}
               <button onClick={() => navigate("/login?redirect=/choose-plan")} className="underline font-bold">
                 Sign in first
               </button>
@@ -239,18 +238,15 @@ export default function InvestInCareerPage() {
                 Activating your plan…
               </span>
             ) : (
-              `Invest Now — ${PLANS[selected][cycle].amount}/${PLANS[selected][cycle].period}`
+              `${selectedPlan.cta} — ${selectedPlan.price}/${selectedPlan.period}`
             )}
           </button>
 
-          <p className="text-xs text-slate-600">
-            Secure activation · Cancel anytime · No hidden fees
-          </p>
+          <p className="text-xs text-slate-600">Secure activation · Cancel anytime · No hidden fees</p>
         </div>
 
-        {/* Back link */}
         <p className="text-center text-sm text-slate-600">
-          Want to compare plans?{" "}
+          Want to compare?{" "}
           <button onClick={() => navigate("/pricing")} className="text-yellow-400 hover:underline font-semibold">
             View pricing details
           </button>
