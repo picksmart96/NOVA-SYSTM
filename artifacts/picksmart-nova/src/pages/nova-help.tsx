@@ -24,13 +24,18 @@ function speakText(text: string, lang: string, onEnd?: () => void) {
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Phase = "idle" | "wake_listening" | "listening" | "recording" | "transcribing" | "thinking" | "speaking";
+type Phase =
+  | "idle" | "wake_listening" | "listening" | "recording"
+  | "transcribing" | "thinking" | "speaking";
+
 interface LogEntry { time: string; role: "NOVA" | "USER"; text: string; }
 
-// ─── Silence / VAD config ─────────────────────────────────────────────────────
-const SILENCE_THRESHOLD = 8;     // RMS below this = silence
-const SILENCE_DURATION  = 1400;  // ms of silence before auto-stop
-const MIN_RECORD_MS     = 500;   // minimum ms before silence detection fires
+// ─── VAD constants ────────────────────────────────────────────────────────────
+const SILENCE_THRESHOLD = 8;    // RMS below this = silence
+const SILENCE_DURATION  = 1400; // ms of silence before auto-stop
+const MIN_RECORD_MS     = 500;  // minimum recording before silence detection fires
+const BARGE_THRESHOLD   = 22;   // RMS above this while NOVA speaks = user talking
+const BARGE_SPEECH_MS   = 280;  // ms of continuous speech to trigger barge-in
 
 // ─── Signal Icon ─────────────────────────────────────────────────────────────
 function SignalIcon({ phase, volume }: { phase: Phase; volume: number }) {
@@ -59,7 +64,6 @@ function SignalIcon({ phase, volume }: { phase: Phase; volume: number }) {
     ? "bg-yellow-900/30"
     : "bg-[#1a1a2e]";
 
-  // Scale the outer rings based on live mic volume while recording
   const volumeScale = phase === "recording" ? 1 + (volume / 100) * 0.4 : 1;
 
   return (
@@ -80,8 +84,7 @@ function SignalIcon({ phase, volume }: { phase: Phase; volume: number }) {
         </>
       )}
       <div className={`w-36 h-36 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${bgColor} ${borderColor}`}>
-        {phase === "speaking" ? (
-          // Stop icon when speaking — tap to interrupt
+        {isSpeaking ? (
           <svg viewBox="0 0 48 48" className="w-10 h-10 text-purple-300" fill="currentColor">
             <rect x="13" y="13" width="22" height="22" rx="4" />
           </svg>
@@ -94,8 +97,6 @@ function SignalIcon({ phase, volume }: { phase: Phase; volume: number }) {
           </svg>
         )}
       </div>
-
-      {/* Live volume bar — only during recording */}
       {phase === "recording" && (
         <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-24 h-1.5 rounded-full bg-white/10 overflow-hidden">
           <div
@@ -108,7 +109,6 @@ function SignalIcon({ phase, volume }: { phase: Phase; volume: number }) {
   );
 }
 
-// ─── Browser support check ────────────────────────────────────────────────────
 function checkMediaRecorderSupport(): boolean {
   return typeof window !== "undefined" && !!window.MediaRecorder && !!navigator.mediaDevices?.getUserMedia;
 }
@@ -117,37 +117,40 @@ function checkMediaRecorderSupport(): boolean {
 export default function NovaHelpPage() {
   const { i18n } = useTranslation();
   const isSpanish = i18n.language?.startsWith("es");
-  const ttsLang = isSpanish ? "es-ES" : "en-US";
+  const ttsLang   = isSpanish ? "es-ES" : "en-US";
 
-  const [phase, setPhase] = useState<Phase>("idle");
+  const [phase, setPhase]             = useState<Phase>("idle");
   const [sessionActive, setSessionActive] = useState(false);
-  const [wakeMode, setWakeMode] = useState(false);
-  const [answer, setAnswer] = useState("");
-  const [lastHeard, setLastHeard] = useState("");
+  const [wakeMode, setWakeMode]       = useState(false);
+  const [answer, setAnswer]           = useState("");
+  const [lastHeard, setLastHeard]     = useState("");
   const [lastQuestion, setLastQuestion] = useState("");
-  const [textInput, setTextInput] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
-  const [log, setLog] = useState<LogEntry[]>([]);
-  const [browserSupported] = useState(checkMediaRecorderSupport);
-  const [volume, setVolume] = useState(0);
+  const [textInput, setTextInput]     = useState("");
+  const [errorMsg, setErrorMsg]       = useState("");
+  const [log, setLog]                 = useState<LogEntry[]>([]);
+  const [browserSupported]            = useState(checkMediaRecorderSupport);
+  const [volume, setVolume]           = useState(0);
 
+  // ── Main recording refs ────────────────────────────────────────────────────
   const mediaRecorderRef   = useRef<MediaRecorder | null>(null);
   const chunksRef          = useRef<Blob[]>([]);
   const streamRef          = useRef<MediaStream | null>(null);
   const audioCtxRef        = useRef<AudioContext | null>(null);
-  const vadActiveRef       = useRef(false);       // VAD loop running?
+  const vadActiveRef       = useRef(false);
   const silenceStartRef    = useRef<number | null>(null);
-  const recordStartTimeRef = useRef<number>(0);
+  const recordStartRef     = useRef<number>(0);
+  const speechDetectedRef  = useRef(false);  // true once voice > threshold during recording
   const sessionActiveRef   = useRef(false);
   const wakeModeRef        = useRef(false);
-  const phaseRef           = useRef<Phase>("idle");
+
+  // ── Barge-in refs (mic-while-speaking) ────────────────────────────────────
+  const bargeCtxRef        = useRef<AudioContext | null>(null);
+  const bargeStreamRef     = useRef<MediaStream | null>(null);
+  const bargeVadRef        = useRef(false);
 
   const now = () => new Date().toLocaleTimeString("en-US", { hour12: true, hour: "numeric", minute: "2-digit", second: "2-digit" });
   const addLog = (role: "NOVA" | "USER", text: string) =>
     setLog((prev) => [{ time: now(), role, text }, ...prev].slice(0, 40));
-
-  // Keep phaseRef in sync
-  useEffect(() => { phaseRef.current = phase; }, [phase]);
 
   const voiceStateKey: VoiceStateKey =
     phase === "wake_listening" ? "wake_listening"
@@ -158,7 +161,7 @@ export default function NovaHelpPage() {
     : phase === "speaking"     ? "speaking"
     : "idle";
 
-  // ── Cleanup audio context ──────────────────────────────────────────────────
+  // ── Stop main VAD ──────────────────────────────────────────────────────────
   const stopVAD = useCallback(() => {
     vadActiveRef.current = false;
     silenceStartRef.current = null;
@@ -169,10 +172,78 @@ export default function NovaHelpPage() {
     }
   }, []);
 
-  // ── Core: start recording from mic ─────────────────────────────────────────
+  // ── Stop barge-in listener ─────────────────────────────────────────────────
+  const stopBargeIn = useCallback(() => {
+    bargeVadRef.current = false;
+    if (bargeCtxRef.current) {
+      try { bargeCtxRef.current.close(); } catch { /* ignore */ }
+      bargeCtxRef.current = null;
+    }
+    bargeStreamRef.current?.getTracks().forEach((t) => t.stop());
+    bargeStreamRef.current = null;
+  }, []);
+
+  // Forward ref for startRecording — needed inside startBargeIn callback
+  const startRecordingRef = useRef<(() => Promise<void>) | null>(null);
+
+  // ── Start barge-in listener (runs WHILE NOVA speaks) ──────────────────────
+  const startBargeIn = useCallback(async () => {
+    if (bargeCtxRef.current) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true } as MediaTrackConstraints,
+      });
+      bargeStreamRef.current = stream;
+      const ctx = new AudioContext();
+      bargeCtxRef.current = ctx;
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      ctx.createMediaStreamSource(stream).connect(analyser);
+      const buf = new Uint8Array(analyser.frequencyBinCount);
+      bargeVadRef.current = true;
+      let speechStart: number | null = null;
+
+      const tick = () => {
+        if (!bargeVadRef.current) return;
+        analyser.getByteTimeDomainData(buf);
+        let sumSq = 0;
+        for (const v of buf) sumSq += (v - 128) ** 2;
+        const rms = Math.sqrt(sumSq / buf.length);
+
+        if (rms > BARGE_THRESHOLD) {
+          if (!speechStart) speechStart = Date.now();
+          else if (Date.now() - speechStart > BARGE_SPEECH_MS) {
+            // User started talking — cancel NOVA immediately
+            stopBargeIn();
+            try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+            if (sessionActiveRef.current) {
+              setPhase("listening");
+              setTimeout(() => {
+                if (sessionActiveRef.current) startRecordingRef.current?.();
+              }, 80);
+            }
+            return;
+          }
+        } else {
+          speechStart = null;
+        }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    } catch {
+      // Barge-in not available — tap-to-stop still works
+    }
+  }, [stopBargeIn]);
+
+  // ── Core: stop recording and transcribe ───────────────────────────────────
+  // Defined before startRecording so startRecording can reference it
+  const stopAndTranscribeRef = useRef<(() => Promise<void>) | null>(null);
+
+  // ── Core: start recording from mic ────────────────────────────────────────
   const startRecording = useCallback(async () => {
-    if (mediaRecorderRef.current) return; // already recording
+    if (mediaRecorderRef.current) return;
     setErrorMsg("");
+    speechDetectedRef.current = false;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -188,17 +259,16 @@ export default function NovaHelpPage() {
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       mediaRecorderRef.current = recorder;
       recorder.start(200);
-      recordStartTimeRef.current = Date.now();
+      recordStartRef.current = Date.now();
       setPhase("recording");
 
-      // ── Web Audio VAD ─────────────────────────────────────────────────────
+      // Web Audio VAD
       try {
         const ctx = new AudioContext();
         audioCtxRef.current = ctx;
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 512;
-        const src = ctx.createMediaStreamSource(stream);
-        src.connect(analyser);
+        ctx.createMediaStreamSource(stream).connect(analyser);
         const buf = new Uint8Array(analyser.frequencyBinCount);
         vadActiveRef.current = true;
         silenceStartRef.current = null;
@@ -206,44 +276,40 @@ export default function NovaHelpPage() {
         const tick = () => {
           if (!vadActiveRef.current) return;
           analyser.getByteTimeDomainData(buf);
-
-          // RMS level
           let sumSq = 0;
           for (const v of buf) sumSq += (v - 128) ** 2;
           const rms = Math.sqrt(sumSq / buf.length);
           setVolume(Math.round(rms));
 
-          const elapsed = Date.now() - recordStartTimeRef.current;
+          const elapsed = Date.now() - recordStartRef.current;
 
-          if (rms < SILENCE_THRESHOLD) {
-            if (elapsed > MIN_RECORD_MS) {
-              if (!silenceStartRef.current) silenceStartRef.current = Date.now();
-              else if (Date.now() - silenceStartRef.current > SILENCE_DURATION) {
-                // Silence detected — auto-stop
-                vadActiveRef.current = false;
-                stopAndTranscribe();
-                return;
-              }
-            }
-          } else {
+          if (rms >= SILENCE_THRESHOLD) {
+            speechDetectedRef.current = true;
             silenceStartRef.current = null;
+          } else if (elapsed > MIN_RECORD_MS && speechDetectedRef.current) {
+            // Only count silence after we've heard speech
+            if (!silenceStartRef.current) silenceStartRef.current = Date.now();
+            else if (Date.now() - silenceStartRef.current > SILENCE_DURATION) {
+              vadActiveRef.current = false;
+              stopAndTranscribeRef.current?.();
+              return;
+            }
           }
-
           requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);
-      } catch {
-        // VAD not available — manual mode only
-      }
+      } catch { /* VAD not available */ }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMsg(isSpanish ? `Micrófono no disponible: ${msg}` : `Microphone unavailable: ${msg}`);
       setPhase(wakeModeRef.current ? "wake_listening" : "listening");
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSpanish]);
 
-  // ── Core: stop recording and transcribe ────────────────────────────────────
+  // Assign forward ref
+  useEffect(() => { startRecordingRef.current = startRecording; }, [startRecording]);
+
+  // ── Core: stop recording and transcribe ───────────────────────────────────
   const stopAndTranscribe = useCallback(async () => {
     const recorder = mediaRecorderRef.current;
     if (!recorder || recorder.state === "inactive") return;
@@ -261,27 +327,46 @@ export default function NovaHelpPage() {
     chunksRef.current = [];
     mediaRecorderRef.current = null;
 
-    if (audioBlob.size < 300) {
-      // Too short — auto restart
+    // Speech gate — only send if user actually spoke
+    if (!speechDetectedRef.current || audioBlob.size < 300) {
       if (sessionActiveRef.current) {
         setPhase(wakeModeRef.current ? "wake_listening" : "listening");
-        setTimeout(() => { if (sessionActiveRef.current) startRecording(); }, 200);
+        setTimeout(() => { if (sessionActiveRef.current) startRecording(); }, 300);
       }
       return;
     }
 
     const transcript = await transcribeAudio(audioBlob, isSpanish ? "es" : "en");
     if (!transcript?.trim()) {
-      // Nothing understood — auto restart
       if (sessionActiveRef.current) {
         setPhase(wakeModeRef.current ? "wake_listening" : "listening");
-        setTimeout(() => { if (sessionActiveRef.current) startRecording(); }, 200);
+        setTimeout(() => { if (sessionActiveRef.current) startRecording(); }, 300);
       }
       return;
     }
 
     setLastHeard(transcript);
     addLog("USER", transcript);
+
+    // ── Stop word check — first, highest priority ──────────────────────────
+    if (detectStopWord(transcript)) {
+      try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+      stopBargeIn();
+      const stopReply = isSpanish
+        ? "Sesión pausada. Di 'Hola NOVA' para continuar."
+        : "Session paused. Say 'Hey NOVA' to continue.";
+      addLog("NOVA", stopReply);
+      setAnswer(stopReply);
+      setPhase("speaking");
+      speakText(stopReply, ttsLang, () => {
+        wakeModeRef.current = true;
+        setWakeMode(true);
+        setPhase("wake_listening");
+        setTimeout(() => { if (sessionActiveRef.current) startRecording(); }, 150);
+      });
+      setTimeout(() => { if (sessionActiveRef.current) startBargeIn(); }, 400);
+      return;
+    }
 
     // ── Wake word check ────────────────────────────────────────────────────
     if (wakeModeRef.current) {
@@ -296,40 +381,28 @@ export default function NovaHelpPage() {
         setAnswer(greet);
         setPhase("speaking");
         speakText(greet, ttsLang, () => {
+          stopBargeIn();
           if (sessionActiveRef.current) {
             setPhase("listening");
             setTimeout(() => { if (sessionActiveRef.current) startRecording(); }, 150);
           }
         });
+        setTimeout(() => { if (sessionActiveRef.current) startBargeIn(); }, 400);
       } else {
         // Not a wake word — keep listening
         setPhase("wake_listening");
-        setTimeout(() => { if (sessionActiveRef.current) startRecording(); }, 150);
+        setTimeout(() => { if (sessionActiveRef.current) startRecording(); }, 200);
       }
-      return;
-    }
-
-    // ── Stop word check ────────────────────────────────────────────────────
-    if (detectStopWord(transcript)) {
-      const stopReply = isSpanish
-        ? "Sesión pausada. Di 'Hola NOVA' para continuar."
-        : "Session paused. Say 'Hey NOVA' to continue.";
-      addLog("NOVA", stopReply);
-      setAnswer(stopReply);
-      setPhase("speaking");
-      speakText(stopReply, ttsLang, () => {
-        wakeModeRef.current = true;
-        setWakeMode(true);
-        setPhase("wake_listening");
-        setTimeout(() => { if (sessionActiveRef.current) startRecording(); }, 150);
-      });
       return;
     }
 
     // ── Normal question ────────────────────────────────────────────────────
     await handleQuestion(transcript);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSpanish, ttsLang, stopVAD]);
+  }, [isSpanish, ttsLang, stopVAD, stopBargeIn, startBargeIn, startRecording]);
+
+  // Assign forward ref
+  useEffect(() => { stopAndTranscribeRef.current = stopAndTranscribe; }, [stopAndTranscribe]);
 
   // ── Ask NOVA AI ────────────────────────────────────────────────────────────
   const handleQuestion = useCallback(
@@ -347,11 +420,14 @@ export default function NovaHelpPage() {
         setPhase("speaking");
         addLog("NOVA", response);
         speakText(response, ttsLang, () => {
+          stopBargeIn();
           if (sessionActiveRef.current) {
             setPhase("listening");
             setTimeout(() => { if (sessionActiveRef.current) startRecording(); }, 150);
           }
         });
+        // Start barge-in 400ms after TTS begins (avoids picking up TTS start click)
+        setTimeout(() => { if (sessionActiveRef.current) startBargeIn(); }, 400);
       } catch {
         const fallback = isSpanish
           ? "Tuve un problema. Pregúntame de nuevo."
@@ -362,7 +438,7 @@ export default function NovaHelpPage() {
       }
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  [isSpanish, ttsLang],
+  [isSpanish, ttsLang, startBargeIn, stopBargeIn, startRecording],
   );
 
   // ── Session start ──────────────────────────────────────────────────────────
@@ -381,14 +457,15 @@ export default function NovaHelpPage() {
       ? "Sesión activa. Di Hola NOVA para comenzar."
       : "Session active. Say Hey NOVA to begin.";
     addLog("NOVA", wakeHint);
-    // Greet then auto-start mic — no tap needed
     speakText(wakeHint, ttsLang, () => {
+      stopBargeIn();
       if (sessionActiveRef.current) {
         setPhase("wake_listening");
         setTimeout(() => { if (sessionActiveRef.current) startRecording(); }, 150);
       }
     });
     setPhase("speaking");
+    setTimeout(() => { if (sessionActiveRef.current) startBargeIn(); }, 400);
   };
 
   // ── Session end ────────────────────────────────────────────────────────────
@@ -396,6 +473,7 @@ export default function NovaHelpPage() {
     sessionActiveRef.current = false;
     wakeModeRef.current = false;
     stopVAD();
+    stopBargeIn();
     if (mediaRecorderRef.current) {
       try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
       mediaRecorderRef.current = null;
@@ -415,11 +493,12 @@ export default function NovaHelpPage() {
   // ── Stop TTS immediately (tap while speaking) ──────────────────────────────
   const stopSpeaking = useCallback(() => {
     try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+    stopBargeIn();
     if (sessionActiveRef.current) {
       setPhase("listening");
       setTimeout(() => { if (sessionActiveRef.current) startRecording(); }, 150);
     }
-  }, [startRecording]);
+  }, [stopBargeIn, startRecording]);
 
   // ── Mic button tap — manual override ──────────────────────────────────────
   const handleMic = () => {
@@ -434,7 +513,7 @@ export default function NovaHelpPage() {
     }
   };
 
-  // ── Text submit (bypasses wake word) ──────────────────────────────────────
+  // ── Text submit ────────────────────────────────────────────────────────────
   const handleTextSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     const q = textInput.trim();
@@ -452,21 +531,21 @@ export default function NovaHelpPage() {
     await handleQuestion(q);
   };
 
-  // Load TTS voices on mount
+  // Load TTS voices on mount; cleanup on unmount
   useEffect(() => {
     if ("speechSynthesis" in window) {
       window.speechSynthesis.getVoices();
       window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
     }
-    return () => { stopVAD(); };
-  }, [stopVAD]);
+    return () => { stopVAD(); stopBargeIn(); };
+  }, [stopVAD, stopBargeIn]);
 
   // ── Labels ────────────────────────────────────────────────────────────────
   const micLabel =
     phase === "recording"
-      ? isSpanish ? "🔴 Toca para enviar" : "🔴 Tap to send"
+      ? isSpanish ? "🔴 Grabando — pausa para enviar" : "🔴 Recording — pause to send"
       : phase === "speaking"
-      ? isSpanish ? "⏹ Toca para parar" : "⏹ Tap to stop"
+      ? isSpanish ? "⏹ Habla o toca para parar" : "⏹ Speak or tap to stop"
       : phase === "wake_listening"
       ? isSpanish ? "Escuchando… di Hola NOVA" : "Listening… say Hey NOVA"
       : phase === "listening"
@@ -482,13 +561,13 @@ export default function NovaHelpPage() {
     : phase === "wake_listening"
     ? isSpanish ? "Di 'Hola NOVA' para activar" : "Say 'Hey NOVA' to activate"
     : phase === "recording"
-    ? isSpanish ? "Grabando… para cuando termines" : "Recording… pause when done"
+    ? isSpanish ? "Grabando… pausa cuando termines" : "Recording… pause when done"
     : phase === "transcribing"
     ? isSpanish ? "Transcribiendo…" : "Transcribing…"
     : phase === "thinking"
     ? isSpanish ? "NOVA pensando…" : "NOVA thinking…"
     : phase === "speaking"
-    ? isSpanish ? "NOVA hablando — toca para parar" : "NOVA speaking — tap to stop"
+    ? isSpanish ? "Habla para interrumpir • toca para parar" : "Speak or tap to stop NOVA"
     : isSpanish ? "Escuchando…" : "Listening…";
 
   return (
@@ -539,8 +618,8 @@ export default function NovaHelpPage() {
           </p>
           <p className={`text-sm font-medium ${
             phase === "wake_listening" ? "text-indigo-400"
-            : phase === "recording" ? "text-violet-400"
-            : phase === "speaking" ? "text-purple-400"
+            : phase === "recording"   ? "text-violet-400"
+            : phase === "speaking"    ? "text-purple-400"
             : "text-slate-400"
           }`}>
             {phaseTitle}
@@ -552,11 +631,11 @@ export default function NovaHelpPage() {
           )}
         </div>
 
-        {/* Browser not supported warning */}
+        {/* Browser not supported */}
         {!browserSupported && (
           <div className="w-full rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-5 py-4 text-yellow-300 text-sm text-center">
             {isSpanish
-              ? "El modo de voz en vivo tiene limitaciones en este navegador. Usa Chrome para mejores resultados."
+              ? "El modo de voz tiene limitaciones en este navegador. Usa Chrome."
               : "Live voice mode is limited on this browser. Try Chrome for best results."}
           </div>
         )}
@@ -568,7 +647,17 @@ export default function NovaHelpPage() {
           </div>
         )}
 
-        {/* Info panels — shown during active session */}
+        {/* Big STOP button while NOVA speaks */}
+        {sessionActive && phase === "speaking" && (
+          <button
+            onClick={stopSpeaking}
+            className="w-full py-4 rounded-xl bg-red-600/20 hover:bg-red-600/40 border border-red-500/40 hover:border-red-500/70 text-red-300 font-bold text-base tracking-wide transition-all duration-200 active:scale-95"
+          >
+            {isSpanish ? "⏹ Parar" : "⏹ Stop"}
+          </button>
+        )}
+
+        {/* Info panels */}
         {sessionActive && (
           <div className="w-full space-y-3">
             {lastHeard && (
@@ -626,7 +715,7 @@ export default function NovaHelpPage() {
           </div>
         )}
 
-        {/* Start button / Text input */}
+        {/* Start / text input */}
         {!sessionActive ? (
           <button
             onClick={startSession}

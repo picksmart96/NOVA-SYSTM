@@ -1,0 +1,129 @@
+import express from "express";
+import OpenAI from "openai";
+import { buildPalletAdviceFromAisles } from "../src/lib/novaBuildCoach.js";
+
+const router = express.Router();
+
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+function instructionsFor(language = "en") {
+  if (language === "es") {
+    return `
+Eres NOVA Help, una entrenadora profesional de selección en almacén.
+
+Responde solo sobre:
+- selección
+- construcción de tarimas
+- seguridad
+- ritmo
+- errores comunes
+- staging
+- check codes
+- flujo de trabajo de selección
+
+Mantén respuestas:
+- cortas
+- prácticas
+- profesionales
+- útiles
+
+Si la pregunta no es de almacén, responde:
+"Me enfoco en selección de almacén, tarimas, seguridad y rendimiento. Pregúntame algo en esa área."
+`;
+  }
+
+  return `
+You are NOVA Help, a professional warehouse selecting coach.
+
+Answer only about:
+- warehouse selecting
+- pallet building
+- safety
+- pace
+- common mistakes
+- staging
+- check codes
+- workflow
+
+Keep answers:
+- short
+- practical
+- professional
+- useful
+
+If the question is outside warehouse work, say:
+"I focus on warehouse selecting, pallet building, safety, and performance. Ask me something in that area."
+`;
+}
+
+function extractAislesFromQuestion(question = "") {
+  const matches = question.match(/\b(1[3-9]|2[0-9]|3[0-4])\b/g) || [];
+  return [...new Set(matches.map(Number))];
+}
+
+function isBuildQuestion(question = "") {
+  const text = question.toLowerCase();
+  return (
+    text.includes("how should i build") ||
+    text.includes("how do i build") ||
+    text.includes("how to build") ||
+    text.includes("start my base") ||
+    text.includes("what should i put on the base") ||
+    text.includes("how should i stack") ||
+    text.includes("assignment build") ||
+    text.includes("build this pallet")
+  );
+}
+
+router.post("/api/nova-help", async (req, res) => {
+  try {
+    const { question, language = "en" } = req.body || {};
+
+    if (!question || typeof question !== "string") {
+      return res.status(400).json({ error: "Missing question." });
+    }
+
+    const aisles = extractAislesFromQuestion(question);
+
+    if (isBuildQuestion(question) && aisles.length > 0) {
+      const result = buildPalletAdviceFromAisles(aisles);
+
+      if (language === "es") {
+        return res.json({
+          answer: `Para los pasillos ${aisles.join(", ")}, ${result.advice}`
+        });
+      }
+
+      return res.json({
+        answer: `For aisles ${aisles.join(", ")}, ${result.advice}`
+      });
+    }
+
+    const response = await client.responses.create({
+      model: "gpt-5.4",
+      instructions: instructionsFor(language),
+      input: question,
+      max_output_tokens: 180,
+    });
+
+    const answer =
+      response.output_text ||
+      (language === "es"
+        ? "Pregúntame algo sobre selección, seguridad o tarimas."
+        : "Ask me something about selecting, safety, or pallets.");
+
+    return res.json({ answer });
+  } catch (error) {
+    console.error("NOVA Help API error:", error);
+    return res.status(500).json({
+      answer:
+        req.body?.language === "es"
+          ? "Tuve un problema respondiendo. Inténtalo otra vez."
+          : "I had trouble answering that. Ask again.",
+    });
+  }
+});
+
+export default router;
