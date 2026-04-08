@@ -4,6 +4,66 @@ import { askNovaHelp, transcribeAudio } from "@/lib/novaHelpApi";
 import { detectWakeWord, detectStopWord } from "@/lib/novaModeRouter";
 import { NovaVoiceStatus, type VoiceStateKey } from "@/components/nova/NovaVoiceStatus";
 
+// ─── Safety check script (mirrors NOVA Trainer exactly) ─────────────────────
+const SAFETY_ITEMS_EN = [
+  "Brakes okay?",
+  "Battery guard okay?",
+  "Horn okay?",
+  "Wheels okay?",
+  "Hydraulics okay?",
+  "Controls okay?",
+  "Steering okay?",
+  "Welds okay?",
+  "Electric wiring okay?",
+];
+
+const SAFETY_ITEMS_ES = [
+  "¿Frenos bien?",
+  "¿Guardia de batería bien?",
+  "¿Bocina bien?",
+  "¿Ruedas bien?",
+  "¿Hidráulicos bien?",
+  "¿Controles bien?",
+  "¿Dirección bien?",
+  "¿Soldaduras bien?",
+  "¿Cableado eléctrico bien?",
+];
+
+function isSafetyTrigger(text: string): boolean {
+  const t = text.toLowerCase();
+  return (
+    t.includes("safety check") ||
+    t.includes("safety inspection") ||
+    t.includes("do my safety") ||
+    t.includes("run safety") ||
+    t.includes("start safety") ||
+    t.includes("do safety") ||
+    t.includes("safety walkthrough") ||
+    t.includes("revisión de seguridad") ||
+    t.includes("inspección de seguridad") ||
+    t.includes("chequeo de seguridad") ||
+    t.includes("hacer seguridad") ||
+    t.includes("iniciar seguridad")
+  );
+}
+
+function isSafetyConfirm(text: string): boolean {
+  const t = text.toLowerCase().trim().replace(/[.,!?;:]+$/, "");
+  const has = (...terms: string[]) => terms.some((x) => t.includes(x));
+  return (
+    has("yes", "yeah", "yep", "yea", "okay", "ok", "correct", "affirmative",
+        "right", "sure", "go", "confirm", "that's", "thats") ||
+    t === "si" || t === "sí" || has("sí", "si ", " si", "bueno", "listo", "correcto")
+  );
+}
+
+function isSafetyDeny(text: string): boolean {
+  const t = text.toLowerCase().trim().replace(/[.,!?;:]+$/, "");
+  return t === "no" || t.startsWith("no ") || t.includes("nope") ||
+    t.includes("negative") || t.includes("fail") || t.includes("bad") ||
+    t.includes("broken") || t.includes("not okay") || t.includes("not ok");
+}
+
 // ─── TTS ─────────────────────────────────────────────────────────────────────
 function speakText(text: string, lang: string, onEnd?: () => void) {
   if (!("speechSynthesis" in window)) { onEnd?.(); return; }
@@ -167,6 +227,12 @@ export default function NovaHelpPage() {
   const wakeVadRef        = useRef(false);
   const wakeCapturingRef  = useRef(false);  // true while recording a short clip
 
+  // ── Safety check mode refs ────────────────────────────────────────────────
+  const safetyModeRef     = useRef(false);
+  const safetyIndexRef    = useRef(0);
+  const [safetyMode, setSafetyMode]   = useState(false);
+  const [safetyIndex, setSafetyIndex] = useState(0);
+
   // ── Barge-in refs ─────────────────────────────────────────────────────────
   const bargeCtxRef       = useRef<AudioContext | null>(null);
   const bargeStreamRef    = useRef<MediaStream | null>(null);
@@ -223,6 +289,8 @@ export default function NovaHelpPage() {
   const startRecordingRef        = useRef<(() => Promise<void>) | null>(null);
   const stopAndTranscribeRef     = useRef<(() => Promise<void>) | null>(null);
   const startWakeListenerRef     = useRef<(() => Promise<void>) | null>(null);
+  const handleSafetyCheckInputRef = useRef<((t: string) => void) | null>(null);
+  const startSafetyCheckRef       = useRef<(() => void) | null>(null);
 
   // ── Activate NOVA after wake word confirmed ────────────────────────────────
   const activateNova = useCallback(() => {
@@ -488,10 +556,100 @@ export default function NovaHelpPage() {
       return;
     }
 
+    // ── Safety check mode — intercept all input ───────────────────────────
+    if (safetyModeRef.current) {
+      handleSafetyCheckInputRef.current?.(transcript);
+      return;
+    }
+
+    // ── Safety check trigger ───────────────────────────────────────────────
+    if (isSafetyTrigger(transcript)) {
+      startSafetyCheckRef.current?.();
+      return;
+    }
+
     // ── Normal question ───────────────────────────────────────────────────
     await handleQuestion(transcript);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSpanish, ttsLang, stopVAD, stopBargeIn]);
+
+  // ── Safety check mode ────────────────────────────────────────────────────
+  // Speaks `text`, then when done starts recording again
+  const safetySpeak = useCallback((text: string, onDone?: () => void) => {
+    addLog("NOVA", text);
+    setAnswer(text);
+    setPhase("speaking");
+    speakText(text, ttsLang, () => {
+      stopBargeIn();
+      onDone?.();
+      if (sessionActiveRef.current) {
+        setPhase("listening");
+        setTimeout(() => { if (sessionActiveRef.current) startRecordingRef.current?.(); }, 150);
+      }
+    });
+    setTimeout(() => { if (sessionActiveRef.current) startBargeInRef.current?.(); }, 400);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ttsLang, stopBargeIn]);
+
+  const startSafetyCheck = useCallback(() => {
+    safetyModeRef.current = true;
+    safetyIndexRef.current = 0;
+    setSafetyMode(true);
+    setSafetyIndex(0);
+    const items = isSpanish ? SAFETY_ITEMS_ES : SAFETY_ITEMS_EN;
+    const intro = isSpanish
+      ? `Iniciando revisión de seguridad. ${items[0]}`
+      : `Starting safety check. ${items[0]}`;
+    safetySpeak(intro);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSpanish, safetySpeak]);
+
+  const handleSafetyCheckInput = useCallback((transcript: string) => {
+    const items = isSpanish ? SAFETY_ITEMS_ES : SAFETY_ITEMS_EN;
+    const idx = safetyIndexRef.current;
+    const item = items[idx];
+
+    addLog("USER", transcript);
+    setLastHeard(transcript);
+
+    if (isSafetyDeny(transcript)) {
+      // Item failed — stop the check
+      safetyModeRef.current = false;
+      setSafetyMode(false);
+      setSafetyIndex(0);
+      const failed = isSpanish
+        ? `Fallo de seguridad: ${item} Notifica a tu supervisor. Sesión de seguridad detenida.`
+        : `Safety failed: ${item} Notify your supervisor. Safety session stopped.`;
+      safetySpeak(failed);
+      return;
+    }
+
+    if (isSafetyConfirm(transcript)) {
+      const next = idx + 1;
+      if (next < items.length) {
+        safetyIndexRef.current = next;
+        setSafetyIndex(next);
+        safetySpeak(items[next]);
+      } else {
+        // All items passed
+        safetyModeRef.current = false;
+        setSafetyMode(false);
+        setSafetyIndex(0);
+        const done = isSpanish
+          ? "Revisión de seguridad completa. Todo en orden. ¡Listo para trabajar!"
+          : "Safety check complete. All systems good. Ready to pick!";
+        safetySpeak(done);
+      }
+      return;
+    }
+
+    // Unrecognized — repeat current item
+    const repeat = isSpanish
+      ? `No escuché bien. ${item}`
+      : `Didn't catch that. ${item}`;
+    safetySpeak(repeat);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSpanish, safetySpeak]);
 
   // ── Ask NOVA AI ───────────────────────────────────────────────────────────
   const handleQuestion = useCallback(
@@ -574,10 +732,12 @@ export default function NovaHelpPage() {
   }, [stopBargeIn]);
 
   // Assign all forward refs
-  useEffect(() => { startRecordingRef.current    = startRecording;    }, [startRecording]);
-  useEffect(() => { stopAndTranscribeRef.current  = stopAndTranscribe; }, [stopAndTranscribe]);
-  useEffect(() => { startWakeListenerRef.current  = startWakeListener; }, [startWakeListener]);
-  useEffect(() => { startBargeInRef.current       = startBargeIn;      }, [startBargeIn]);
+  useEffect(() => { startRecordingRef.current          = startRecording;          }, [startRecording]);
+  useEffect(() => { stopAndTranscribeRef.current        = stopAndTranscribe;       }, [stopAndTranscribe]);
+  useEffect(() => { startWakeListenerRef.current        = startWakeListener;       }, [startWakeListener]);
+  useEffect(() => { startBargeInRef.current             = startBargeIn;            }, [startBargeIn]);
+  useEffect(() => { handleSafetyCheckInputRef.current   = handleSafetyCheckInput;  }, [handleSafetyCheckInput]);
+  useEffect(() => { startSafetyCheckRef.current         = startSafetyCheck;        }, [startSafetyCheck]);
 
   // ── Session start ─────────────────────────────────────────────────────────
   const startSession = () => {
@@ -609,6 +769,9 @@ export default function NovaHelpPage() {
   const endSession = () => {
     sessionActiveRef.current = false;
     wakeModeRef.current = false;
+    safetyModeRef.current = false;
+    setSafetyMode(false);
+    setSafetyIndex(0);
     stopVAD();
     stopBargeIn();
     stopWakeListener();
@@ -668,6 +831,19 @@ export default function NovaHelpPage() {
       setWakeMode(false);
     }
     setTextInput("");
+
+    // Safety check mode — intercept input
+    if (safetyModeRef.current) {
+      handleSafetyCheckInputRef.current?.(q);
+      return;
+    }
+
+    // Safety check trigger via text
+    if (isSafetyTrigger(q)) {
+      startSafetyCheckRef.current?.();
+      return;
+    }
+
     addLog("USER", q);
     setLastQuestion(q);
     await handleQuestion(q);
@@ -697,6 +873,8 @@ export default function NovaHelpPage() {
 
   const phaseTitle = !sessionActive
     ? isSpanish ? "Di 'Hola NOVA' para activar" : "Say 'Hey NOVA' to activate"
+    : safetyMode
+    ? isSpanish ? `Revisión de seguridad · Ítem ${safetyIndex + 1} de ${SAFETY_ITEMS_EN.length}` : `Safety check · Item ${safetyIndex + 1} of ${SAFETY_ITEMS_EN.length}`
     : phase === "wake_listening"
     ? isSpanish ? "Di 'Hola NOVA' para activarme" : "Say 'Hey NOVA' to wake me"
     : phase === "recording"
@@ -794,6 +972,36 @@ export default function NovaHelpPage() {
           >
             {isSpanish ? "⏹ Parar" : "⏹ Stop"}
           </button>
+        )}
+
+        {/* Safety check progress banner */}
+        {sessionActive && safetyMode && (
+          <div className="w-full rounded-xl border border-yellow-400/40 bg-yellow-400/8 px-5 py-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-bold text-yellow-400 uppercase tracking-widest">
+                {isSpanish ? "🛡 Revisión de Seguridad" : "🛡 Safety Check"}
+              </p>
+              <p className="text-xs text-yellow-300/70 font-semibold">
+                {safetyIndex + 1} / {SAFETY_ITEMS_EN.length}
+              </p>
+            </div>
+            <div className="flex gap-1 mb-3">
+              {SAFETY_ITEMS_EN.map((_, i) => (
+                <div
+                  key={i}
+                  className={`h-1.5 flex-1 rounded-full transition-colors ${
+                    i < safetyIndex ? "bg-green-400" : i === safetyIndex ? "bg-yellow-400 animate-pulse" : "bg-slate-700"
+                  }`}
+                />
+              ))}
+            </div>
+            <p className="text-sm font-semibold text-yellow-200">
+              {(isSpanish ? SAFETY_ITEMS_ES : SAFETY_ITEMS_EN)[safetyIndex]}
+            </p>
+            <p className="text-xs text-slate-400 mt-2">
+              {isSpanish ? "Di 'sí' para confirmar o 'no' si falla" : "Say 'okay' to confirm or 'no' if failed"}
+            </p>
+          </div>
         )}
 
         {/* Info panels */}
