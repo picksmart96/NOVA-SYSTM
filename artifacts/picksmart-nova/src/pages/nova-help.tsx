@@ -1,223 +1,268 @@
-import { useState, useCallback, useRef, useEffect } from "react";
-import { useVoiceEngine, UseVoiceEngineReturn } from "@/hooks/useVoiceEngine";
-import { askNovaHelp } from "@/lib/novaHelpApi";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Mic, MicOff, StopCircle, RefreshCw } from "lucide-react";
+import useVoiceEngine, { UseVoiceEngineReturn } from "@/hooks/useVoiceEngine";
+import { askNovaHelp } from "@/lib/novaHelpApi";
+
+const WAKE_WORDS = ["hey nova", "hola nova"];
+const STOP_WORDS = ["stop", "parar", "detener"];
 
 export default function NovaHelpPage() {
-  const { t, i18n } = useTranslation();
+  const { i18n } = useTranslation();
+  const isSpanish = i18n.language?.startsWith("es");
 
-  const [ready, setReady] = useState(false);
+  const [started, setStarted] = useState(false);
   const [awake, setAwake] = useState(false);
-  const [novaText, setNovaText] = useState("");
   const [lastQuestion, setLastQuestion] = useState("");
-  const [thinking, setThinking] = useState(false);
-
-  const voiceRef = useRef<UseVoiceEngineReturn | null>(null);
-  const awakeRef = useRef(false);
-  awakeRef.current = awake;
-
-  const speakAndListen = useCallback((text: string) => {
-    setNovaText(text);
-    voiceRef.current?.askAndListen(text);
-  }, []);
-
-  const handleVoiceInput = useCallback(
-    async (heard: string) => {
-      const text = heard.toLowerCase().trim();
-      if (!text) return;
-
-      if (text.includes("stop") || text.includes("parar") || text.includes("detener")) {
-        setAwake(false);
-        const bye = t("novaHelp.novaStopped");
-        setNovaText(bye);
-        voiceRef.current?.speak(bye, { restartAfterSpeak: true });
-        return;
-      }
-
-      if (text.includes("hey nova") || text.includes("hola nova")) {
-        setAwake(true);
-        speakAndListen(awakeRef.current ? t("novaHelp.iAmHere") : t("novaHelp.heyNovaGreeting"));
-        return;
-      }
-
-      if (!awakeRef.current) {
-        voiceRef.current?.startListening();
-        return;
-      }
-
-      setLastQuestion(heard);
-      setNovaText(t("novaHelp.thinking"));
-      setThinking(true);
-      try {
-        const answer = await askNovaHelp(text, i18n.language);
-        setThinking(false);
-        speakAndListen(answer);
-      } catch {
-        setThinking(false);
-        speakAndListen(t("novaHelp.fallback"));
-      }
-    },
-    [speakAndListen, t, i18n.language]
+  const [prompt, setPrompt] = useState(
+    isSpanish ? "Di Hola NOVA para activarme." : "Say Hey NOVA to wake me.",
   );
 
-  const voice = useVoiceEngine({
-    onHeard: handleVoiceInput,
-    autoRestart: true,
-    silencePrompt: "",
-  });
+  // Ref so handleVoiceInput can access the latest voice object without stale closures
+  const voiceRef = useRef<UseVoiceEngineReturn | null>(null);
+  const awakeRef = useRef(false);
 
-  voiceRef.current = voice;
+  const handleVoiceInput = async (heard: string) => {
+    const v = voiceRef.current;
+    if (!v) return;
+    const text = heard.toLowerCase().trim();
 
-  useEffect(() => () => { voice.shutdown(); }, []);
+    const wakeMatched = WAKE_WORDS.some((w) => text.includes(w));
+    const stopMatched = STOP_WORDS.some((w) => text === w || text.includes(w));
 
-  const tap = async () => {
-    if (ready) {
-      voice.startListening();
+    if (!awakeRef.current) {
+      if (wakeMatched) {
+        awakeRef.current = true;
+        setAwake(true);
+        const greeting = isSpanish
+          ? "Hola. Soy NOVA. ¿Cómo puedo ayudarte con selección hoy?"
+          : "Hi. I'm NOVA. How can I help you with selecting today?";
+        setPrompt(greeting);
+        v.speak(greeting, { after: "active" });
+        return;
+      }
+      v.startWakeMode();
       return;
     }
+
+    if (stopMatched) {
+      awakeRef.current = false;
+      setAwake(false);
+      const stopText = isSpanish
+        ? "NOVA detenida. Di Hola NOVA para activarme otra vez."
+        : "NOVA stopped. Say Hey NOVA to wake me again.";
+      setPrompt(stopText);
+      v.speak(stopText, { after: "wake" });
+      return;
+    }
+
+    if (wakeMatched) {
+      const helloAgain = isSpanish
+        ? "Estoy aquí. ¿Cómo puedo ayudarte?"
+        : "I'm here. How can I help?";
+      setPrompt(helloAgain);
+      v.speak(helloAgain, { after: "active" });
+      return;
+    }
+
+    setLastQuestion(text);
+    setPrompt(isSpanish ? "Pensando..." : "Thinking...");
+
+    try {
+      const answer = await askNovaHelp(text, isSpanish ? "es" : "en");
+      setPrompt(answer);
+      v.speak(answer, { after: "active" });
+    } catch {
+      const fallback = isSpanish
+        ? "Tuve un problema respondiendo. Pregúntame otra vez sobre selección, seguridad o tarimas."
+        : "I had trouble answering that. Ask me again about selecting, safety, or pallets.";
+      setPrompt(fallback);
+      v.speak(fallback, { after: "active" });
+    }
+  };
+
+  const voice = useVoiceEngine({
+    lang: isSpanish ? "es-ES" : "en-US",
+    onHeard: async (heard) => {
+      await handleVoiceInput(heard);
+    },
+  });
+
+  // Always sync the ref so handleVoiceInput always has the latest voice
+  voiceRef.current = voice;
+
+  const startNovaHelp = async () => {
     const ok = await voice.initialize();
     if (!ok) return;
-    setReady(true);
-    setNovaText(t("novaHelp.started"));
-    voice.askAndListen(t("novaHelp.started"));
-  };
-
-  const stop = () => {
-    voice.stopListening();
-    try { window.speechSynthesis?.cancel(); } catch {}
-    setReady(false);
+    setStarted(true);
+    awakeRef.current = false;
     setAwake(false);
-    setNovaText("");
-    setLastQuestion("");
+    const intro = isSpanish
+      ? "Ayuda NOVA iniciada. Di Hola NOVA para activarme."
+      : "NOVA Help started. Say Hey NOVA to wake me.";
+    setPrompt(intro);
+    voice.speak(intro, { after: "wake" });
   };
 
-  // ── Derived visual state ───────────────────────────────────────────────────
-  const isListening = voice.listening;
-  const isSpeaking  = voice.speaking;
-  const isThinking  = thinking || voice.processing;
+  const stopNovaHelp = () => {
+    voice.stopAll();
+    setStarted(false);
+    awakeRef.current = false;
+    setAwake(false);
+    setPrompt(isSpanish ? "Ayuda NOVA detenida." : "NOVA Help stopped.");
+  };
 
-  const ringClass = isListening
-    ? "ring-green-400/60"
-    : isSpeaking
-    ? "ring-yellow-400/60"
-    : isThinking
-    ? "ring-blue-400/60"
-    : awake
-    ? "ring-yellow-400/30"
-    : "ring-slate-700";
+  const retryMic = async () => {
+    const ok = await voice.retryMic();
+    if (!ok) return;
+    setStarted(true);
+    const wakeText = isSpanish
+      ? "Di Hola NOVA para activarme."
+      : "Say Hey NOVA to wake me.";
+    setPrompt(wakeText);
+    voice.speak(wakeText, { after: "wake" });
+  };
 
-  const iconColor = isListening
-    ? "text-green-300"
-    : isSpeaking
-    ? "text-yellow-300"
-    : isThinking
-    ? "text-blue-300"
-    : voice.error
-    ? "text-red-400"
-    : ready
-    ? "text-yellow-200"
-    : "text-slate-400";
-
-  const statusLabel = isThinking
-    ? "Thinking…"
-    : isListening
-    ? "Listening…"
-    : isSpeaking
-    ? "Speaking…"
-    : awake
-    ? "Awake — ask anything"
-    : ready
-    ? "Say \"Hey NOVA\" to wake me"
-    : "Tap mic to start";
+  const stateLabel = voice.error
+    ? "Error"
+    : voice.speaking
+      ? isSpanish ? "Hablando" : "Speaking"
+      : voice.thinking
+        ? isSpanish ? "Pensando" : "Thinking"
+        : voice.status === "active_listening"
+          ? isSpanish ? "Escuchando" : "Listening"
+          : voice.status === "wake_listening"
+            ? isSpanish ? "Esperando activación" : "Wake Listening"
+            : awake
+              ? isSpanish ? "Despierta" : "Awake"
+              : isSpanish ? "Inactiva" : "Idle";
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center px-4 py-12 text-white">
-      <div className="w-full max-w-md flex flex-col items-center gap-8">
+    <div className="min-h-screen bg-slate-950 text-white px-6 py-10">
+      <div className="max-w-5xl mx-auto space-y-8">
 
-        {/* ── Mic button ── */}
-        <button
-          onClick={tap}
-          className={`relative flex items-center justify-center h-28 w-28 rounded-full ring-4 transition-all duration-300 ${ringClass} ${
-            ready ? "bg-slate-900" : "bg-slate-900 hover:bg-slate-800"
-          }`}
-          aria-label={statusLabel}
-        >
-          {/* Pulse rings */}
-          {(isListening || isSpeaking) && (
-            <span className={`absolute inset-0 rounded-full animate-ping opacity-20 ${
-              isListening ? "bg-green-400" : "bg-yellow-400"
-            }`} />
-          )}
-          {voice.error
-            ? <MicOff className={`h-12 w-12 ${iconColor}`} />
-            : <Mic className={`h-12 w-12 ${iconColor}`} />
-          }
-        </button>
+        {/* Header */}
+        <div className="text-center">
+          <p className="text-yellow-400 text-sm font-semibold uppercase tracking-[0.22em]">
+            {isSpanish ? "Pregunta a NOVA" : "Ask NOVA Anything"}
+          </p>
+          <h1 className="mt-3 text-5xl font-black">NOVA Help</h1>
+          <p className="mt-4 text-lg text-slate-300 max-w-3xl mx-auto">
+            {isSpanish
+              ? "Obtén ayuda inmediata sobre selección, seguridad y rendimiento."
+              : "Get instant help with picking strategies, safety tips, and performance advice."}
+          </p>
+        </div>
 
-        {/* ── Status label ── */}
-        <p className={`text-sm font-semibold uppercase tracking-widest text-center ${
-          isListening ? "text-green-400"
-          : isSpeaking ? "text-yellow-400"
-          : isThinking ? "text-blue-400"
-          : awake ? "text-yellow-300"
-          : "text-slate-500"
-        }`}>
-          {statusLabel}
-        </p>
+        {/* Voice panel */}
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl text-center">
+          <h2 className="text-2xl font-bold">
+            {isSpanish ? "Asistente de voz para almacén" : "Warehouse Voice Coach"}
+          </h2>
+          <p className="mt-4 text-yellow-400 font-semibold">
+            {isSpanish ? '"Hola NOVA" para activarme' : '"Hey NOVA" to wake me'}
+          </p>
+          <p className="mt-3 text-slate-300">
+            {isSpanish
+              ? 'Seguiré escuchando después de cada respuesta. Di "parar" para silenciarme.'
+              : 'I\'ll keep listening after each answer. Say "stop" anytime to silence me.'}
+          </p>
 
-        {/* ── NOVA says ── */}
-        {novaText && (
-          <div className="w-full rounded-3xl border border-slate-800 bg-slate-900 px-6 py-5">
-            <p className="text-xs text-slate-500 uppercase tracking-widest mb-3">NOVA says</p>
-            <p className="text-white text-base sm:text-lg font-semibold leading-relaxed">
-              {novaText}
+          <div className="mt-8 flex flex-wrap justify-center gap-4">
+            {!started ? (
+              <button
+                onClick={startNovaHelp}
+                className="rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
+              >
+                {isSpanish ? "Iniciar Ayuda NOVA" : "Start NOVA Help"}
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => voice.startWakeMode()}
+                  className="rounded-2xl border border-slate-700 px-6 py-3 font-semibold hover:border-yellow-400 transition"
+                >
+                  {isSpanish ? "Escuchar ahora" : "Listen Now"}
+                </button>
+                <button
+                  onClick={stopNovaHelp}
+                  className="rounded-2xl border border-red-500/30 px-6 py-3 font-semibold text-red-300 hover:bg-red-500/10 transition"
+                >
+                  {isSpanish ? "Detener" : "Stop"}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Error panel */}
+        {voice.error ? (
+          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-6">
+            <p className="font-bold text-red-300">
+              {isSpanish ? "Error de voz" : "Voice Error"}
             </p>
-          </div>
-        )}
-
-        {/* ── You asked ── */}
-        {lastQuestion && (
-          <div className="w-full rounded-2xl border border-slate-800 bg-slate-900 px-5 py-4">
-            <p className="text-xs text-slate-500 uppercase tracking-widest mb-2">You asked</p>
-            <p className="text-slate-300 text-sm">{lastQuestion}</p>
-          </div>
-        )}
-
-        {/* ── Mic error ── */}
-        {voice.error && (
-          <div className="w-full rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4">
-            <p className="text-red-300 text-sm font-semibold mb-3">{voice.error}</p>
+            <p className="mt-2 text-red-200">{voice.error}</p>
             <button
-              onClick={async () => { await voice.retryMic(); voice.startListening(); }}
-              className="rounded-xl bg-yellow-400 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-yellow-300 transition flex items-center gap-2"
+              onClick={retryMic}
+              className="mt-4 rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
             >
-              <RefreshCw className="h-4 w-4" /> Retry mic
+              {isSpanish ? "Reintentar micrófono" : "Retry Mic"}
             </button>
           </div>
-        )}
+        ) : null}
 
-        {/* ── Stop button (only when active) ── */}
-        {ready && (
-          <button
-            onClick={stop}
-            className="flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-red-300 transition"
-          >
-            <StopCircle className="h-4 w-4" /> Stop NOVA
-          </button>
-        )}
-
-        {/* ── Hint badges ── */}
-        {ready && (
-          <div className="flex flex-wrap justify-center gap-2 text-xs text-slate-600">
-            <span className="px-3 py-1 rounded-full bg-slate-900 border border-slate-800">
-              "Hey NOVA" to wake
-            </span>
-            <span className="px-3 py-1 rounded-full bg-slate-900 border border-slate-800">
-              "stop" to silence
-            </span>
+        {/* Status grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">{isSpanish ? "Estado" : "State"}</p>
+            <p className="mt-3 text-2xl font-black">{stateLabel}</p>
           </div>
-        )}
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">
+              {isSpanish ? "Última escucha" : "Last Heard"}
+            </p>
+            <p className="mt-3 text-lg font-semibold break-words">
+              {voice.lastHeard || "—"}
+            </p>
+          </div>
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">
+              {isSpanish ? "Permiso de micrófono" : "Mic Permission"}
+            </p>
+            <p className="mt-3 text-lg font-semibold capitalize">
+              {voice.micPermission}
+            </p>
+          </div>
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">
+              {isSpanish ? "Modo" : "Wake Mode"}
+            </p>
+            <p className="mt-3 text-lg font-semibold">
+              {awake
+                ? isSpanish ? "Hola NOVA activa" : "Hey NOVA Active"
+                : isSpanish ? "Esperando" : "Waiting"}
+            </p>
+          </div>
+        </div>
+
+        {/* Current prompt + last question */}
+        <div className="grid lg:grid-cols-2 gap-6">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <h3 className="text-2xl font-bold">
+              {isSpanish ? "Respuesta actual" : "Current Prompt"}
+            </h3>
+            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-5">
+              <p className="text-slate-200 text-lg">{prompt}</p>
+            </div>
+          </div>
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <h3 className="text-2xl font-bold">
+              {isSpanish ? "Última pregunta" : "Last Question"}
+            </h3>
+            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-5">
+              <p className="text-slate-200 text-lg">{lastQuestion || "—"}</p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

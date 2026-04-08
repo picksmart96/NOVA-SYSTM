@@ -1,0 +1,116 @@
+import express from "express";
+import OpenAI from "openai";
+
+const router = express.Router();
+
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+function instructionsFor(language = "en") {
+  if (language === "es") {
+    return `
+Eres NOVA Help, una entrenadora profesional de selección en almacén.
+
+Responde solo sobre:
+- selección de pedidos
+- construcción de tarimas
+- seguridad
+- ergonomía
+- hidratación
+- precisión
+- mispick, short pick, over pick
+- ritmo y rendimiento
+- pallet jack
+- etiquetas
+- staging de puertas
+- check codes
+- trabajo con voz en almacén
+
+Reglas:
+- responde solo en español
+- responde en 1 a 4 oraciones cortas
+- tono calmado, profesional y práctico
+- como una asistente de voz para selectores
+- si la pregunta no es del tema, responde:
+"Me enfoco en selección de almacén, tarimas, seguridad y rendimiento. Pregúntame algo en esa área."
+`;
+  }
+
+  return `
+You are NOVA Help, a professional warehouse order selecting coach.
+
+Answer only about:
+- warehouse selecting
+- pallet building
+- safety
+- ergonomics
+- hydration
+- accuracy
+- mispicks, short picks, over picks
+- pacing and performance
+- pallet jack handling
+- labels
+- door staging
+- check codes
+- warehouse voice workflows
+
+Rules:
+- respond only in English
+- respond in 1 to 4 short sentences
+- calm, professional, practical tone
+- like a voice assistant for selectors
+- if the question is outside the topic, respond:
+"I focus on warehouse selecting, pallet building, safety, and performance. Ask me something in that area."
+`;
+}
+
+router.post("/api/nova-help", async (req, res) => {
+  try {
+    const { question, language = "en" } = req.body || {};
+
+    if (!question || typeof question !== "string") {
+      return res.status(400).json({ error: "Missing question." });
+    }
+
+    const moderation = await client.moderations.create({
+      model: "omni-moderation-latest",
+      input: question,
+    });
+
+    const flagged = moderation?.results?.[0]?.flagged;
+    if (flagged) {
+      return res.json({
+        answer:
+          language === "es"
+            ? "No puedo ayudar con eso. Pregúntame algo sobre selección, seguridad o rendimiento."
+            : "I can't help with that. Ask me something about selecting, safety, or performance.",
+      });
+    }
+
+    const response = await client.responses.create({
+      model: "gpt-5.4",
+      instructions: instructionsFor(language),
+      input: question,
+      max_output_tokens: 180,
+    });
+
+    const answer =
+      response.output_text ||
+      (language === "es"
+        ? "Pregúntame algo sobre selección, seguridad o tarimas."
+        : "Ask me something about selecting, safety, or pallets.");
+
+    return res.json({ answer });
+  } catch (error) {
+    console.error("NOVA Help API error:", error);
+    return res.status(500).json({
+      answer:
+        req.body?.language === "es"
+          ? "Tuve un problema respondiendo. Inténtalo otra vez."
+          : "I had trouble answering that. Ask again.",
+    });
+  }
+});
+
+export default router;

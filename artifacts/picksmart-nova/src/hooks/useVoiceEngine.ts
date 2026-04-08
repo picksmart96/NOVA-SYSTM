@@ -1,253 +1,226 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-// ── Preferred voice cache — loaded once at module level, refreshed on voiceschanged ──
-let _preferredVoice: SpeechSynthesisVoice | null = null;
-
-function pickPreferredVoice(): SpeechSynthesisVoice | null {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
-  const voices = window.speechSynthesis.getVoices();
-  if (!voices.length) return null;
-  return (
-    voices.find((v) => /samantha|aria|ava|zira|karen/i.test(v.name) && v.lang.startsWith("en")) ||
-    voices.find((v) => /samantha|aria|ava|zira|karen/i.test(v.name)) ||
-    voices.find((v) => /female/i.test(v.name)) ||
-    voices.find((v) => v.lang.startsWith("en") && v.default) ||
-    voices[0]
-  );
-}
-
-// Eagerly load; also refresh when browser fires voiceschanged (Firefox / Safari)
-if (typeof window !== "undefined" && "speechSynthesis" in window) {
-  _preferredVoice = pickPreferredVoice();
-  window.speechSynthesis.addEventListener("voiceschanged", () => {
-    _preferredVoice = pickPreferredVoice();
-  });
-}
-
+// ─── Status constants ───────────────────────────────────────────────────────
 export const STATUS = {
   IDLE: "idle",
-  LISTENING: "listening",
+  WAKE_LISTENING: "wake_listening",
+  ACTIVE_LISTENING: "active_listening",
+  THINKING: "thinking",
   SPEAKING: "speaking",
-  PROCESSING: "processing",
+  STOPPED: "stopped",
   ERROR: "error",
 } as const;
 
-type StatusValue = typeof STATUS[keyof typeof STATUS];
+type StatusValue = (typeof STATUS)[keyof typeof STATUS];
 
-function normalizeText(text = ""): string {
-  return text.toLowerCase().trim();
-}
+// ─── Types ───────────────────────────────────────────────────────────────────
+type SpeakOptions = {
+  /** Which recognition mode to restart after speaking. Default "wake". */
+  after?: "wake" | "active";
+  /** Compat alias — treated same as after:"active" */
+  restartAfterSpeak?: boolean;
+  onEnd?: () => void;
+};
 
-function getSpeechRecognition(): typeof SpeechRecognition | null {
+type UseVoiceEngineOptions = {
+  onHeard?: (heard: string, raw: string) => void | Promise<void>;
+  lang?: string;
+  silenceTimeoutMs?: number;
+  /** Compat — accepted but the new engine restarts automatically */
+  autoRestart?: boolean;
+  /** Compat — accepted but ignored (engine restarts silently on no-speech) */
+  silencePrompt?: string;
+};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function getRecognitionClass(): typeof SpeechRecognition | null {
+  if (typeof window === "undefined") return null;
   return (
-    (window as any).SpeechRecognition ||
-    (window as any).webkitSpeechRecognition ||
+    (window as unknown as { SpeechRecognition?: typeof SpeechRecognition })
+      .SpeechRecognition ||
+    (
+      window as unknown as {
+        webkitSpeechRecognition?: typeof SpeechRecognition;
+      }
+    ).webkitSpeechRecognition ||
     null
   );
 }
 
-interface UseVoiceEngineOptions {
-  onHeard?: (heard: string, raw: string) => void;
-  autoRestart?: boolean;
-  silencePrompt?: string;
-  lang?: string;
+function pickPreferredVoice(lang: string): SpeechSynthesisVoice | null {
+  if (!("speechSynthesis" in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  const langRoot = lang.split("-")[0];
+  return (
+    voices.find(
+      (v) => /samantha|aria|ava|zira|karen/i.test(v.name) && v.lang.startsWith(langRoot),
+    ) ||
+    voices.find((v) => /samantha|aria|ava|zira|karen/i.test(v.name)) ||
+    voices.find((v) => /female/i.test(v.name)) ||
+    voices.find((v) => v.lang.startsWith(langRoot) && v.default) ||
+    voices[0]
+  );
 }
 
-export interface UseVoiceEngineReturn {
-  initialize: () => Promise<boolean>;
-  startListening: () => void;
-  stopListening: () => void;
-  hardStopListening: () => void;
-  speak: (text: string, opts?: SpeakOptions) => void;
-  askAndListen: (text: string, opts?: SpeakOptions) => void;
-  retryMic: () => Promise<boolean>;
-  shutdown: () => void;
-
-  status: StatusValue;
-  transcript: string;
-  lastHeard: string;
-  currentPrompt: string;
-  error: string;
-  micPermission: "unknown" | "granted" | "denied";
-  supported: boolean;
-  initialized: boolean;
-
-  listening: boolean;
-  speaking: boolean;
-  processing: boolean;
-  idle: boolean;
-
-  // Legacy compat
-  isSpeaking: boolean;
-  stop: () => void;
-}
-
-interface SpeakOptions {
-  onEnd?: () => void;
-  interrupt?: boolean;
-  restartAfterSpeak?: boolean;
-  rate?: number;
-  pitch?: number;
-}
-
+// ─── Hook ─────────────────────────────────────────────────────────────────────
 export function useVoiceEngine({
   onHeard,
-  autoRestart = true,
-  silencePrompt = "No input received.",
   lang = "en-US",
-}: UseVoiceEngineOptions = {}): UseVoiceEngineReturn {
-  const recognitionRef = useRef<InstanceType<typeof SpeechRecognition> | null>(null);
-  const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const shouldKeepListeningRef = useRef(false);
-  const manuallyStoppedRef = useRef(false);
-  const isStartingRef = useRef(false);
-
-  // Always-current refs — updated via useEffect so they're never stale in callbacks
+  silenceTimeoutMs = 7000,
+}: UseVoiceEngineOptions = {}) {
+  // Refs — never stale inside callbacks
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const shouldRunRef = useRef(false);
+  const speakingRef = useRef(false);
+  const restartingRef = useRef(false);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const modeRef = useRef<"wake" | "active">("wake");
   const onHeardRef = useRef(onHeard);
-  const silencePromptRef = useRef(silencePrompt);
-  useEffect(() => { onHeardRef.current = onHeard; });
-  useEffect(() => { silencePromptRef.current = silencePrompt; });
+  useEffect(() => {
+    onHeardRef.current = onHeard;
+  });
 
   const [status, setStatus] = useState<StatusValue>(STATUS.IDLE);
-  const [transcript, setTranscript] = useState("");
-  const [lastHeard, setLastHeard] = useState("");
-  const [currentPrompt, setCurrentPrompt] = useState("");
-  const [error, setError] = useState("");
-  const [micPermission, setMicPermission] = useState<"unknown" | "granted" | "denied">("unknown");
   const [supported, setSupported] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [micPermission, setMicPermission] = useState<"unknown" | "granted" | "denied">("unknown");
+  const [error, setError] = useState("");
+  const [lastHeard, setLastHeard] = useState("");
+  const [currentPrompt, setCurrentPrompt] = useState("");
+  const [transcript, setTranscript] = useState("");
 
-  const clearRestartTimeout = useCallback(() => {
-    if (restartTimeoutRef.current) {
-      clearTimeout(restartTimeoutRef.current);
-      restartTimeoutRef.current = null;
+  // ── Silence timer ─────────────────────────────────────────────────────────
+  const clearSilenceTimer = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
     }
   }, []);
 
-  const safeStartRecognition = useCallback(() => {
-    const recognition = recognitionRef.current;
-    if (!recognition) return;
-    if (isStartingRef.current) return;
+  const startSilenceTimer = useCallback(() => {
+    clearSilenceTimer();
+    silenceTimerRef.current = setTimeout(() => {
+      if (shouldRunRef.current && !speakingRef.current) {
+        try {
+          recognitionRef.current?.stop();
+        } catch {
+          // ignore
+        }
+      }
+    }, silenceTimeoutMs);
+  }, [clearSilenceTimer, silenceTimeoutMs]);
+
+  // ── Recognition control ────────────────────────────────────────────────────
+  const stopRecognition = useCallback(() => {
+    clearSilenceTimer();
     try {
-      isStartingRef.current = true;
-      recognition.start();
+      recognitionRef.current?.stop();
     } catch {
-      isStartingRef.current = false;
+      // ignore
     }
-  }, []);
+  }, [clearSilenceTimer]);
 
-  const scheduleRestart = useCallback(
-    (delay = 300) => {
-      if (!autoRestart) return;
-      if (!shouldKeepListeningRef.current) return;
-      clearRestartTimeout();
-      restartTimeoutRef.current = setTimeout(() => {
-        safeStartRecognition();
-      }, delay);
+  const abortRecognition = useCallback(() => {
+    clearSilenceTimer();
+    try {
+      recognitionRef.current?.abort();
+    } catch {
+      // ignore
+    }
+  }, [clearSilenceTimer]);
+
+  const startRecognition = useCallback(
+    (mode: "wake" | "active" = "wake") => {
+      if (!recognitionRef.current || !shouldRunRef.current || speakingRef.current) return;
+      if (restartingRef.current) return;
+
+      restartingRef.current = true;
+      modeRef.current = mode;
+      setError("");
+      setStatus(mode === "active" ? STATUS.ACTIVE_LISTENING : STATUS.WAKE_LISTENING);
+
+      try {
+        recognitionRef.current.start();
+        startSilenceTimer();
+      } catch {
+        restartingRef.current = false;
+      }
     },
-    [autoRestart, safeStartRecognition, clearRestartTimeout]
+    [startSilenceTimer],
   );
 
-  const stopListening = useCallback(() => {
-    shouldKeepListeningRef.current = false;
-    manuallyStoppedRef.current = true;
-    clearRestartTimeout();
-    try { recognitionRef.current?.stop(); } catch {}
-  }, [clearRestartTimeout]);
-
-  const hardStopListening = useCallback(() => {
-    shouldKeepListeningRef.current = false;
-    manuallyStoppedRef.current = true;
-    clearRestartTimeout();
-    try { recognitionRef.current?.abort(); } catch {}
-  }, [clearRestartTimeout]);
-
-  const startListening = useCallback(() => {
-    if (!supported) {
-      setError("Speech recognition is not supported in this browser.");
-      setStatus(STATUS.ERROR);
-      return;
-    }
-    manuallyStoppedRef.current = false;
-    shouldKeepListeningRef.current = true;
-    clearRestartTimeout();
-    safeStartRecognition();
-  }, [safeStartRecognition, supported, clearRestartTimeout]);
-
+  // ── Speak ──────────────────────────────────────────────────────────────────
   const speak = useCallback(
-    (text: string, opts: SpeakOptions = {}) => {
-      const {
-        onEnd,
-        interrupt = true,
-        restartAfterSpeak = true,
-        rate = 1,
-        pitch = 1,
-      } = opts;
+    (text: string, options: SpeakOptions = {}) => {
+      const { onEnd, restartAfterSpeak } = options;
+      const after: "wake" | "active" =
+        restartAfterSpeak ? "active" : options.after ?? "wake";
+
+      setCurrentPrompt(text);
+      setTranscript(text);
 
       if (!("speechSynthesis" in window)) {
         onEnd?.();
-        if (restartAfterSpeak && shouldKeepListeningRef.current) scheduleRestart(250);
+        if (shouldRunRef.current) startRecognition(after);
         return;
       }
 
-      clearRestartTimeout();
-      setCurrentPrompt(text);
+      speakingRef.current = true;
+      clearSilenceTimer();
+      stopRecognition();
       setStatus(STATUS.SPEAKING);
-      setError("");
 
-      try { recognitionRef.current?.stop(); } catch {}
-
-      if (interrupt) {
-        try { window.speechSynthesis.cancel(); } catch {}
+      try {
+        window.speechSynthesis.cancel();
+      } catch {
+        // ignore
       }
 
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = rate;
-      utterance.pitch = pitch;
       utterance.lang = lang;
-
-      const voice = _preferredVoice ?? pickPreferredVoice();
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      const voice = pickPreferredVoice(lang);
       if (voice) utterance.voice = voice;
 
       utterance.onend = () => {
-        setStatus(STATUS.IDLE);
+        speakingRef.current = false;
         onEnd?.();
-        if (restartAfterSpeak && shouldKeepListeningRef.current) scheduleRestart(250);
+        if (shouldRunRef.current) {
+          startRecognition(after);
+        } else {
+          setStatus(STATUS.STOPPED);
+        }
       };
 
       utterance.onerror = () => {
+        speakingRef.current = false;
         setError("Speech playback failed.");
-        setStatus(STATUS.ERROR);
-        if (restartAfterSpeak && shouldKeepListeningRef.current) scheduleRestart(400);
+        if (shouldRunRef.current) {
+          startRecognition(after);
+        } else {
+          setStatus(STATUS.ERROR);
+        }
       };
 
       try {
         window.speechSynthesis.speak(utterance);
       } catch {
-        setError("Unable to start speech playback.");
+        speakingRef.current = false;
         setStatus(STATUS.ERROR);
-        if (restartAfterSpeak && shouldKeepListeningRef.current) scheduleRestart(400);
+        setError("Unable to start speech playback.");
       }
     },
-    [lang, scheduleRestart, clearRestartTimeout]
+    [clearSilenceTimer, lang, startRecognition, stopRecognition],
   );
 
-  const askAndListen = useCallback(
-    (text: string, opts: SpeakOptions = {}) => {
-      // Ensure the keep-listening flag is ON so recognition restarts after the utterance
-      shouldKeepListeningRef.current = true;
-      manuallyStoppedRef.current = false;
-      speak(text, { ...opts, restartAfterSpeak: true });
-    },
-    [speak]
-  );
-
+  // ── Initialize ────────────────────────────────────────────────────────────
   const initialize = useCallback(async (): Promise<boolean> => {
-    const SpeechRecognitionClass = getSpeechRecognition();
-
-    if (!SpeechRecognitionClass) {
+    const Recognition = getRecognitionClass();
+    if (!Recognition) {
       setSupported(false);
-      setError("Speech recognition is not supported in this browser.");
+      setError("This browser does not fully support live voice mode. Try Chrome.");
       setStatus(STATUS.ERROR);
       return false;
     }
@@ -256,12 +229,8 @@ export function useVoiceEngine({
     setError("");
 
     try {
-      if (navigator.mediaDevices?.getUserMedia) {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        setMicPermission("granted");
-      } else {
-        setMicPermission("unknown");
-      }
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      setMicPermission("granted");
     } catch {
       setMicPermission("denied");
       setError("Microphone permission was denied.");
@@ -269,133 +238,197 @@ export function useVoiceEngine({
       return false;
     }
 
-    const recognition = new SpeechRecognitionClass();
+    const recognition = new Recognition();
     recognition.lang = lang;
     recognition.interimResults = false;
     recognition.continuous = false;
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
-      isStartingRef.current = false;
-      setStatus(STATUS.LISTENING);
-      setError("");
+      restartingRef.current = false;
+      startSilenceTimer();
     };
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const raw = event?.results?.[0]?.[0]?.transcript || "";
-      const heard = normalizeText(raw);
-
-      setTranscript(raw);
+    recognition.onresult = async (event: SpeechRecognitionEvent) => {
+      clearSilenceTimer();
+      const raw = event?.results?.[0]?.[0]?.transcript ?? "";
+      const heard = raw.toLowerCase().trim();
       setLastHeard(heard);
-      setStatus(STATUS.PROCESSING);
-      setError("");
+      setTranscript(heard);
 
-      if (!heard) {
-        // If silencePrompt is empty, just silently restart — don't speak an empty utterance
-        if (silencePromptRef.current) {
-          speak(silencePromptRef.current, { restartAfterSpeak: true });
-        } else if (shouldKeepListeningRef.current) {
-          scheduleRestart(200);
-        }
-        return;
+      if (heard && onHeardRef.current) {
+        setStatus(STATUS.THINKING);
+        await onHeardRef.current(heard, raw);
       }
-
-      // Use the ref so we always call the latest handler, never a stale closure
-      onHeardRef.current?.(heard, raw);
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      isStartingRef.current = false;
-      const errType = (event as any)?.error || "unknown";
+      clearSilenceTimer();
+      restartingRef.current = false;
+      const code = (event as SpeechRecognitionErrorEvent).error ?? "unknown";
 
-      if (errType === "not-allowed" || errType === "service-not-allowed") {
+      if (code === "not-allowed" || code === "service-not-allowed") {
         setMicPermission("denied");
         setError("Microphone permission was denied.");
         setStatus(STATUS.ERROR);
-        shouldKeepListeningRef.current = false;
+        shouldRunRef.current = false;
         return;
       }
 
-      if (errType === "no-speech") {
-        // Silently restart if no silencePrompt set — keeps mic open without speaking
-        if (silencePromptRef.current) {
-          speak(silencePromptRef.current, { restartAfterSpeak: true });
-        } else if (shouldKeepListeningRef.current) {
-          scheduleRestart(300);
+      if (code === "no-speech" || code === "aborted") {
+        if (shouldRunRef.current && !speakingRef.current) {
+          startRecognition(modeRef.current);
         }
         return;
       }
 
-      setError(`Recognition error: ${errType}`);
-      setStatus(STATUS.ERROR);
-
-      if (shouldKeepListeningRef.current && autoRestart) {
-        scheduleRestart(500);
+      setError(`Recognition error: ${code}`);
+      if (shouldRunRef.current && !speakingRef.current) {
+        startRecognition(modeRef.current);
+      } else {
+        setStatus(STATUS.ERROR);
       }
     };
 
     recognition.onend = () => {
-      isStartingRef.current = false;
-
-      if (manuallyStoppedRef.current) {
-        setStatus(STATUS.IDLE);
-        return;
-      }
-
-      if (shouldKeepListeningRef.current && autoRestart) {
-        scheduleRestart(250);
-      } else {
-        setStatus(STATUS.IDLE);
+      clearSilenceTimer();
+      restartingRef.current = false;
+      if (shouldRunRef.current && !speakingRef.current) {
+        startRecognition(modeRef.current);
       }
     };
 
     recognitionRef.current = recognition;
+    shouldRunRef.current = true;
     setInitialized(true);
-    setStatus(STATUS.IDLE);
+    setStatus(STATUS.WAKE_LISTENING);
+    startRecognition("wake");
     return true;
-  // onHeard and silencePrompt are accessed via refs inside — no need in deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoRestart, lang, scheduleRestart, speak]);
+  }, [clearSilenceTimer, lang, startRecognition, startSilenceTimer]);
 
-  const shutdown = useCallback(() => {
-    stopListening();
-    clearRestartTimeout();
-    try { window.speechSynthesis.cancel(); } catch {}
-    recognitionRef.current = null;
-    setInitialized(false);
-    setStatus(STATUS.IDLE);
-  }, [stopListening, clearRestartTimeout]);
+  // ── Mode switches ─────────────────────────────────────────────────────────
+  const startWakeMode = useCallback(() => {
+    shouldRunRef.current = true;
+    startRecognition("wake");
+  }, [startRecognition]);
+
+  const startActiveMode = useCallback(() => {
+    shouldRunRef.current = true;
+    startRecognition("active");
+  }, [startRecognition]);
+
+  // ── Stop / shutdown ────────────────────────────────────────────────────────
+  const stopAll = useCallback(() => {
+    shouldRunRef.current = false;
+    clearSilenceTimer();
+    abortRecognition();
+    try {
+      window.speechSynthesis?.cancel();
+    } catch {
+      // ignore
+    }
+    speakingRef.current = false;
+    setStatus(STATUS.STOPPED);
+  }, [abortRecognition, clearSilenceTimer]);
 
   const retryMic = useCallback(async () => {
-    setError("");
-    setStatus(STATUS.IDLE);
+    stopAll();
     return initialize();
-  }, [initialize]);
+  }, [initialize, stopAll]);
 
+  // ── Cleanup on unmount ─────────────────────────────────────────────────────
   useEffect(() => {
-    return () => { shutdown(); };
-  }, [shutdown]);
+    return () => {
+      stopAll();
+    };
+  }, [stopAll]);
 
-  const api = useMemo(
+  // ── Compat aliases (used by NovaTrainerPage + my-assignments) ─────────────
+  /** Speak text then restart active listening. Compat alias for speak(text, { after:"active" }) */
+  const askAndListen = useCallback(
+    (text: string) => speak(text, { after: "active" }),
+    [speak],
+  );
+  /** Start active-mode recognition. Compat alias for startActiveMode(). */
+  const startListening = useCallback(() => startActiveMode(), [startActiveMode]);
+  /** Stop all. Compat alias for stopAll(). */
+  const stopListening = useCallback(() => stopAll(), [stopAll]);
+  /** Stop all. Compat alias for stopAll(). */
+  const shutdown = useCallback(() => stopAll(), [stopAll]);
+  /** Restart recognition after a manual stop. Compat alias for startActiveMode(). */
+  const scheduleRestart = useCallback(
+    (_delayMs?: number) => startActiveMode(),
+    [startActiveMode],
+  );
+  /** Restart recognition silently. Compat alias for startActiveMode(). */
+  const hardStopListening = useCallback(() => stopAll(), [stopAll]);
+
+  // ── Derived state ──────────────────────────────────────────────────────────
+  const listening =
+    status === STATUS.WAKE_LISTENING || status === STATUS.ACTIVE_LISTENING;
+  const speaking = status === STATUS.SPEAKING;
+  const thinking = status === STATUS.THINKING;
+
+  return useMemo(
     () => ({
-      initialize, startListening, stopListening, hardStopListening,
-      speak, askAndListen, retryMic, shutdown,
-      status, transcript, lastHeard, currentPrompt, error,
-      micPermission, supported, initialized,
-      listening: status === STATUS.LISTENING,
-      speaking: status === STATUS.SPEAKING,
-      processing: status === STATUS.PROCESSING,
-      idle: status === STATUS.IDLE,
-      isSpeaking: status === STATUS.SPEAKING,
-      stop: stopListening,
+      // New API
+      STATUS,
+      status,
+      supported,
+      initialized,
+      micPermission,
+      error,
+      lastHeard,
+      currentPrompt,
+      transcript,
+      initialize,
+      speak,
+      startWakeMode,
+      startActiveMode,
+      stopAll,
+      retryMic,
+      listening,
+      speaking,
+      thinking,
+      // Compat aliases — keep old pages working without changes
+      askAndListen,
+      startListening,
+      stopListening,
+      shutdown,
+      scheduleRestart,
+      hardStopListening,
+      processing: thinking,
+      isSpeaking: speaking,
+      idle: status === STATUS.IDLE || status === STATUS.STOPPED,
+      stop: stopAll,
     }),
     [
-      initialize, startListening, stopListening, hardStopListening,
-      speak, askAndListen, retryMic, shutdown,
-      status, transcript, lastHeard, currentPrompt, error,
-      micPermission, supported, initialized,
-    ]
+      status,
+      supported,
+      initialized,
+      micPermission,
+      error,
+      lastHeard,
+      currentPrompt,
+      transcript,
+      initialize,
+      speak,
+      startWakeMode,
+      startActiveMode,
+      stopAll,
+      retryMic,
+      listening,
+      speaking,
+      thinking,
+      askAndListen,
+      startListening,
+      stopListening,
+      shutdown,
+      scheduleRestart,
+      hardStopListening,
+    ],
   );
-
-  return api;
 }
+
+export type UseVoiceEngineReturn = ReturnType<typeof useVoiceEngine>;
+export default useVoiceEngine;
