@@ -26,7 +26,20 @@ export function useRoleNav(): NavLink[] {
   const { role: demoRole } = useAppStore();
 
   const role: string = currentUser?.role ?? demoRole;
+  const plan = currentUser?.subscriptionPlan ?? null;
 
+  // Personal plan: restricted to these pages only
+  if (plan === "personal") {
+    return [
+      { href: "/", label: t("nav.home"), group: "public" },
+      { href: "/training", label: t("nav.training"), group: "public" },
+      { href: "/nova-help", label: t("nav.novaHelp"), group: "nova" },
+      { href: "/mistakes", label: t("nav.commonMistakes"), group: "public" },
+      { href: "/selector-nation", label: t("nav.selectorNation"), group: "public" },
+    ];
+  }
+
+  // Owner / Company / no-plan (demo) — full nav based on role
   const links: NavLink[] = [];
 
   links.push(
