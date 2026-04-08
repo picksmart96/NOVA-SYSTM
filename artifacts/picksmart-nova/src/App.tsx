@@ -97,9 +97,7 @@ function Router() {
         </ProtectedRoute>
       </Route>
       <Route path="/nova-trainer">
-        <ProtectedRoute path="/nova-trainer" requiredRole="selector">
-          <Layout><NovaTrainerPage /></Layout>
-        </ProtectedRoute>
+        <Layout><NovaTrainerPage /></Layout>
       </Route>
       <Route path="/nova-help">
         <Layout><NovaHelpPage /></Layout>

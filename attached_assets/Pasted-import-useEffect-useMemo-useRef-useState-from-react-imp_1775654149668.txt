@@ -1,0 +1,513 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import useVoiceEngine from "../../hooks/useVoiceEngine";
+
+function StatCard({ label, value, tone = "default" }) {
+  const toneClass =
+    tone === "success"
+      ? "text-green-300"
+      : tone === "danger"
+      ? "text-red-300"
+      : tone === "accent"
+      ? "text-yellow-300"
+      : "text-white";
+
+  return (
+    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-lg">
+      <p className="text-sm text-slate-400">{label}</p>
+      <p className={`mt-3 text-2xl font-black break-words ${toneClass}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+      <p className="text-sm text-slate-400">{label}</p>
+      <p className="mt-2 font-semibold break-words">{value}</p>
+    </div>
+  );
+}
+
+function QuickButton({ label, onClick, variant = "default" }) {
+  const className =
+    variant === "danger"
+      ? "border-red-500/30 text-red-300 hover:bg-red-500/10"
+      : "border-slate-700 hover:border-yellow-400";
+
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-2xl border px-4 py-3 font-semibold transition ${className}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function buildWsUrl() {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}/ws/nova-trainer`;
+}
+
+export default function NovaTrainerSession({ selector, onExit }) {
+  const wsRef = useRef(null);
+  const reconnectTimerRef = useRef(null);
+  const initializedRef = useRef(false);
+  const lastSpokenPromptRef = useRef("");
+
+  const [connected, setConnected] = useState(false);
+  const [started, setStarted] = useState(false);
+  const [serverError, setServerError] = useState("");
+  const [heardResponse, setHeardResponse] = useState("");
+
+  const [trainerState, setTrainerState] = useState({
+    selector,
+    phase: "WAIT_WAKE",
+    prompt: 'Tap "Start Session" once, then say "Hey NOVA".',
+    equipmentId: "",
+    maxPalletCount: "2",
+    failedSafetyItem: "",
+    activeAssignment: null,
+    currentStop: null,
+    nextStop: null,
+    invalidCount: 0,
+    commandLog: [],
+    defaults: {
+      printerNumber: "307",
+      alphaLabelNumber: "242",
+      bravoLabelNumber: "578",
+    },
+  });
+
+  const voice = useVoiceEngine({
+    onHeard: async (heard, raw) => {
+      const text = raw || heard;
+      setHeardResponse(text);
+      sendInput(text);
+    },
+  });
+
+  const voiceStateLabel = useMemo(() => {
+    if (serverError || voice.error) return "Error";
+    if (voice.speaking) return "Speaking";
+    if (voice.thinking) return "Thinking";
+    if (voice.listening) return "Listening";
+    return "Idle";
+  }, [serverError, voice.error, voice.listening, voice.speaking, voice.thinking]);
+
+  const progressPercent = useMemo(() => {
+    if (!trainerState.activeAssignment || !trainerState.currentStop) return "—";
+    const total = Number(trainerState.activeAssignment.stops || 0);
+    const current = Number(trainerState.currentStop.stopOrder || 0);
+    if (!total || !current) return "—";
+    return `${Math.round((current / total) * 100)}%`;
+  }, [trainerState.activeAssignment, trainerState.currentStop]);
+
+  const connectSocket = () => {
+    try {
+      const ws = new WebSocket(buildWsUrl());
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setConnected(true);
+        setServerError("");
+        ws.send(
+          JSON.stringify({
+            type: "init",
+            selector: {
+              userId: selector.userId,
+              novaId: selector.novaId,
+              fullName: selector.fullName || selector.name || "",
+            },
+          })
+        );
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+
+          if (msg.type === "error") {
+            setServerError(msg.error || "Server error.");
+            return;
+          }
+
+          if (msg.type === "state") {
+            setTrainerState((prev) => ({
+              ...prev,
+              ...msg.state,
+            }));
+
+            const newPrompt = msg.state?.prompt || "";
+            if (
+              started &&
+              newPrompt &&
+              newPrompt !== lastSpokenPromptRef.current &&
+              !voice.speaking
+            ) {
+              lastSpokenPromptRef.current = newPrompt;
+              voice.speak(newPrompt);
+            }
+          }
+        } catch (err) {
+          setServerError("Failed to read server message.");
+        }
+      };
+
+      ws.onerror = () => {
+        setServerError("Realtime trainer connection error.");
+      };
+
+      ws.onclose = () => {
+        setConnected(false);
+        if (started) {
+          reconnectTimerRef.current = setTimeout(() => {
+            connectSocket();
+          }, 1000);
+        }
+      };
+    } catch (err) {
+      setServerError("Unable to connect to realtime trainer.");
+    }
+  };
+
+  const requestState = () => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "get_state" }));
+    }
+  };
+
+  const sendInput = (text) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+      setServerError("Trainer connection is not ready.");
+      return;
+    }
+
+    wsRef.current.send(
+      JSON.stringify({
+        type: "input",
+        text,
+      })
+    );
+  };
+
+  const startSession = async () => {
+    const ok = await voice.initialize();
+    if (!ok) return;
+
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      connectSocket();
+    } else if (!connected) {
+      connectSocket();
+    }
+
+    setStarted(true);
+
+    setTimeout(() => {
+      requestState();
+      voice.speak('Say "Hey NOVA" to begin.');
+    }, 350);
+  };
+
+  const retryMic = async () => {
+    const ok = await voice.retryMic();
+    if (!ok) return;
+
+    if (!connected) {
+      connectSocket();
+      setTimeout(() => requestState(), 350);
+    } else {
+      requestState();
+    }
+  };
+
+  const resetSession = () => {
+    voice.stopAll();
+    setStarted(false);
+    setHeardResponse("");
+    lastSpokenPromptRef.current = "";
+    requestState();
+  };
+
+  useEffect(() => {
+    return () => {
+      try {
+        wsRef.current?.close();
+      } catch {}
+      try {
+        voice.stopAll();
+      } catch {}
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+      }
+    };
+  }, [voice]);
+
+  const currentAssignment = trainerState.activeAssignment;
+  const currentStop = trainerState.currentStop;
+  const nextStop = trainerState.nextStop;
+  const defaults = trainerState.defaults || {
+    printerNumber: "307",
+    alphaLabelNumber: "242",
+    bravoLabelNumber: "578",
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white px-6 py-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
+          <div>
+            <p className="text-yellow-400 text-xs uppercase tracking-widest">
+              NOVA Trainer
+            </p>
+            <h1 className="text-3xl font-black">ES3 Script Mode</h1>
+            <p className="text-slate-400 text-sm">
+              New server-driven trainer workflow
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={startSession}
+              className="rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
+            >
+              Start Session
+            </button>
+
+            <button
+              onClick={retryMic}
+              className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-yellow-400 transition"
+            >
+              Retry Mic
+            </button>
+
+            <button
+              onClick={resetSession}
+              className="rounded-2xl border border-red-500/30 bg-slate-900 px-5 py-3 font-semibold text-red-300 hover:bg-red-500/10 transition"
+            >
+              Reset Session
+            </button>
+
+            {onExit ? (
+              <button
+                onClick={onExit}
+                className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-yellow-400 transition"
+              >
+                Exit
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Selector bar */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 rounded-3xl border border-slate-800 bg-slate-900 px-5 py-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-bold text-yellow-300">
+              {selector.novaId}
+            </span>
+            <span className="font-semibold">
+              {selector.fullName || selector.name || "Selector"}
+            </span>
+          </div>
+
+          <div className="text-sm text-slate-400">
+            Selector ID: {selector.userId}
+          </div>
+        </div>
+
+        {/* Errors */}
+        {serverError ? (
+          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-5">
+            <p className="font-bold text-red-300">Server Error</p>
+            <p className="mt-2 text-red-200">{serverError}</p>
+          </div>
+        ) : null}
+
+        {voice.error ? (
+          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-5">
+            <p className="font-bold text-red-300">Voice Error</p>
+            <p className="mt-2 text-red-200">{voice.error}</p>
+          </div>
+        ) : null}
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-4">
+          <StatCard label="Phase" value={trainerState.phase} tone="accent" />
+          <StatCard
+            label="Assignment"
+            value={currentAssignment ? `#${currentAssignment.assignmentNumber}` : "—"}
+          />
+          <StatCard
+            label="Current Stop"
+            value={currentStop ? currentStop.stopOrder : "—"}
+          />
+          <StatCard label="Voice" value={voiceStateLabel} tone="success" />
+          <StatCard
+            label="Invalid"
+            value={trainerState.invalidCount ?? 0}
+            tone={(trainerState.invalidCount ?? 0) > 0 ? "danger" : "default"}
+          />
+          <StatCard label="Progress" value={progressPercent} tone="accent" />
+          <StatCard label="Socket" value={connected ? "Connected" : "Offline"} />
+        </div>
+
+        {/* Main */}
+        <div className="grid xl:grid-cols-[1.2fr_0.8fr] gap-6">
+          {/* Left */}
+          <div className="space-y-6">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+              <h2 className="text-xl font-bold mb-4">Current Prompt</h2>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5 text-lg font-semibold">
+                {trainerState.prompt}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <MiniStat label="Heard" value={heardResponse || "—"} />
+                <MiniStat label="Mic" value={voice.micPermission} />
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+              <h2 className="text-xl font-bold mb-4">Live Data</h2>
+
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <MiniStat label="Equipment" value={trainerState.equipmentId || "—"} />
+                <MiniStat
+                  label="Max Pallets"
+                  value={trainerState.maxPalletCount || "2"}
+                />
+                <MiniStat label="Aisle" value={currentStop?.aisle ?? "—"} />
+                <MiniStat label="Slot" value={currentStop?.slot ?? "—"} />
+                <MiniStat
+                  label="Next"
+                  value={nextStop ? `${nextStop.aisle}/${nextStop.slot}` : "—"}
+                />
+                <MiniStat label="Door" value={currentAssignment?.doorNumber ?? "—"} />
+                <MiniStat label="Code" value={currentAssignment?.doorCode ?? "—"} />
+                <MiniStat
+                  label="Labels"
+                  value={`A ${defaults.alphaLabelNumber} · B ${defaults.bravoLabelNumber}`}
+                />
+                <MiniStat
+                  label="Printer"
+                  value={defaults.printerNumber || "307"}
+                />
+                <MiniStat
+                  label="Safety"
+                  value={trainerState.failedSafetyItem || "None"}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Right */}
+          <div className="space-y-6">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+              <h2 className="text-xl font-bold mb-4">Assigned Work</h2>
+
+              <div className="space-y-3">
+                {(selector.assignments || []).length === 0 ? (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-slate-400">
+                    Assigned work comes from server session.
+                  </div>
+                ) : (
+                  selector.assignments.map((a) => (
+                    <div
+                      key={a.id}
+                      className={`p-4 rounded-xl border ${
+                        currentAssignment?.id === a.id
+                          ? "border-yellow-400 bg-yellow-500/10"
+                          : "border-slate-800 bg-slate-950"
+                      }`}
+                    >
+                      <div className="flex justify-between gap-3">
+                        <span className="font-bold">#{a.assignmentNumber}</span>
+                        <span className="text-xs bg-yellow-500/20 px-2 py-1 rounded text-yellow-300">
+                          {a.type}
+                        </span>
+                      </div>
+
+                      <p className="text-sm text-slate-400 mt-1">
+                        {a.totalCases} cases · aisles {a.startAisle}-{a.endAisle}
+                      </p>
+                    </div>
+                  ))
+                )}
+
+                {!selector.assignments?.length && currentAssignment ? (
+                  <div className="p-4 rounded-xl border border-yellow-400 bg-yellow-500/10">
+                    <div className="flex justify-between gap-3">
+                      <span className="font-bold">
+                        #{currentAssignment.assignmentNumber}
+                      </span>
+                      <span className="text-xs bg-yellow-500/20 px-2 py-1 rounded text-yellow-300">
+                        {currentAssignment.type}
+                      </span>
+                    </div>
+
+                    <p className="text-sm text-slate-400 mt-1">
+                      {currentAssignment.totalCases} cases · aisles{" "}
+                      {currentAssignment.startAisle}-{currentAssignment.endAisle}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+              <h2 className="text-xl font-bold mb-4">Quick Controls</h2>
+
+              <div className="grid grid-cols-2 gap-3">
+                <QuickButton label="Hey NOVA" onClick={() => sendInput("hey nova")} />
+                <QuickButton
+                  label="Stop"
+                  variant="danger"
+                  onClick={() => sendInput("stop")}
+                />
+                <QuickButton
+                  label="Load Picks"
+                  onClick={() => sendInput("load picks")}
+                />
+                <QuickButton label="Ready" onClick={() => sendInput("ready")} />
+                <QuickButton label="Confirm" onClick={() => sendInput("confirm")} />
+                <QuickButton label="Deny" onClick={() => sendInput("no")} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Command log */}
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+          <h2 className="text-xl font-bold mb-4">Command Log</h2>
+
+          <div className="max-h-72 overflow-auto space-y-2">
+            {(trainerState.commandLog || []).length === 0 ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-slate-400">
+                No command activity yet.
+              </div>
+            ) : (
+              trainerState.commandLog.map((c) => (
+                <div
+                  key={c.id}
+                  className="bg-slate-950 border border-slate-800 p-3 rounded-lg text-sm"
+                >
+                  <span
+                    className={c.type === "NOVA" ? "text-yellow-400" : "text-blue-400"}
+                  >
+                    {c.type}
+                  </span>
+                  <span className="ml-2">{c.text}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,74 @@
+import { WebSocketServer } from "ws";
+import { createNovaTrainerSession } from "./novaTrainerStateMachine.js";
+import { assignments } from "../../src/data/assignments.js";
+import { assignmentStops } from "../../src/data/assignmentStops.js";
+
+const sessions = new Map();
+
+export function attachNovaRealtimeServer(httpServer) {
+  const wss = new WebSocketServer({
+    server: httpServer,
+    path: "/ws/nova-trainer",
+  });
+
+  wss.on("connection", (ws) => {
+    let sessionId = null;
+
+    ws.on("message", (raw) => {
+      try {
+        const msg = JSON.parse(String(raw));
+
+        if (msg.type === "init") {
+          const { selector } = msg;
+          if (!selector || !selector.userId || !selector.novaId) {
+            ws.send(JSON.stringify({ type: "error", error: "Invalid selector." }));
+            return;
+          }
+
+          sessionId = `${selector.userId}:${selector.novaId}`;
+          const session = createNovaTrainerSession({
+            selector,
+            assignments,
+            assignmentStops,
+          });
+
+          sessions.set(sessionId, session);
+
+          ws.send(
+            JSON.stringify({
+              type: "state",
+              state: session.snapshot(),
+            })
+          );
+          return;
+        }
+
+        if (!sessionId || !sessions.has(sessionId)) {
+          ws.send(JSON.stringify({ type: "error", error: "Session not initialized." }));
+          return;
+        }
+
+        const session = sessions.get(sessionId);
+
+        if (msg.type === "input") {
+          const state = session.handleWorkflowInput(msg.text || "");
+          ws.send(JSON.stringify({ type: "state", state }));
+          return;
+        }
+
+        if (msg.type === "get_state") {
+          ws.send(JSON.stringify({ type: "state", state: session.snapshot() }));
+          return;
+        }
+      } catch (error) {
+        ws.send(JSON.stringify({ type: "error", error: error.message }));
+      }
+    });
+
+    ws.on("close", () => {
+      // keep session if you want resume; deleting is also fine
+    });
+  });
+
+  return wss;
+}

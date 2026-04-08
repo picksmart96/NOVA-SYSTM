@@ -39,7 +39,7 @@ Full-stack warehouse training and assignment management platform combining a pub
 
 ### NOVA Internal
 - `/nova-help` — NOVA Help AI voice coach (Whisper STT + gpt-4o-mini)
-- `/nova-trainer` — NOVA Trainer ES3 Script Mode (NOVA ID gate + live session)
+- `/nova-trainer` — NOVA Trainer ES3 Script Mode (NOVA ID gate → WebSocket-driven server state machine)
 - `/nova` — My Assignments (selector view)
 - `/nova/assignments/:id` — Assignment detail + stops table
 - `/nova/voice/:id` — NOVA voice session simulation

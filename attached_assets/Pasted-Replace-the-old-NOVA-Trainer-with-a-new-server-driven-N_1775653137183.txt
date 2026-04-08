@@ -1,0 +1,142 @@
+Replace the old NOVA Trainer with a new server-driven NOVA Trainer system.
+
+GOAL
+Build a new NOVA Trainer that behaves like the paper ES3/Jennifer script, but uses the real assignments assigned to the selector username / userId.
+Do not use the paper sample assignment.
+Remove level from assignment stop data.
+Use only the real assignments below.
+
+IMPORTANT RULES
+1. After safety check passes, selector must say:
+   - load picks
+2. Then NOVA loads only the assignments assigned to that selector userId
+3. Do not use any hardcoded sample route from the paper
+4. Remove level from assignment stop data and UI
+5. Replace the old Replit NOVA Trainer with this new one
+6. Keep the browser mic/speaker layer, but move the trainer workflow brain to the server
+7. Use WebSocket between browser and server for realtime trainer events
+8. Use OpenAI only for help-mode / natural question answering, not for the strict assignment workflow logic
+
+SYSTEM BEHAVIOR
+PHASES
+- WAIT_WAKE
+- SIGN_ON_EQUIPMENT
+- CONFIRM_EQUIPMENT
+- MAX_PALLET_COUNT
+- CONFIRM_MAX_PALLET_COUNT
+- SAFETY
+- WAIT_LOAD_PICKS
+- LOAD_SUMMARY
+- SETUP_ALPHA
+- SETUP_BRAVO
+- PICK_CHECK
+- PICK_READY
+- COMPLETE_DOOR
+- COMPLETE_ALPHA
+- COMPLETE_BRAVO
+- COMPLETE_STAGE_BRAVO
+- COMPLETE_STAGE_ALPHA
+- STOPPED
+
+WAKE / STOP
+- wake phrase: hey nova
+- stop phrase: stop
+
+SIGN ON FLOW
+- Enter equipment ID
+- Confirm equipment ####
+- Enter maximum pallet count
+- Confirm maximum pallet count
+
+SAFETY FLOW
+Ask one by one:
+- Brakes okay?
+- Battery guard okay?
+- Horn okay?
+- Wheels okay?
+- Hydraulics okay?
+- Controls okay?
+- Steering okay?
+- Welds okay?
+- Electric wiring okay?
+
+If denied:
+- fail session
+- stop workflow
+
+AFTER SAFETY
+- NOVA says: Say load picks.
+- selector must say: load picks
+- only then load assigned assignment
+
+ASSIGNMENT FLOW
+Use the assignment assigned to selector userId.
+Read assignment summary:
+- start aisle
+- end aisle
+- total cases
+- pallets
+- goal time
+- to continue say ready
+
+Then:
+- Position alpha pallet get chep
+- Position bravo pallet get chep
+
+Then for each stop:
+- New aisle X slot Y
+- wait for correct check code
+- if wrong:
+  repeat heard digits and say invalid
+  keep listening
+- if correct:
+  say Grab qty Alpha or Bravo
+- then continue
+
+BATCH COMPLETE
+- Batch complete deliver pallet bravo to door ###
+- wait for door code
+- Apply labels to pallet alpha
+- Apply labels to pallet bravo
+- Deliver bravo pallet to door ###
+- Deliver alpha pallet to door ###
+- then return to WAIT_LOAD_PICKS
+
+HELP MODE
+If user asks a natural question instead of a strict workflow command, send question to server OpenAI route and answer like a warehouse coach.
+Keep help mode warehouse-only.
+
+DATA
+Replace assignment data with these real assignments and no level field in stop data:
+- 251736
+- 251737
+- 251738
+
+FILES TO CREATE / UPDATE
+- server/index.js
+- server/realtime/novaSystemPrompt.js
+- server/realtime/novaTrainerStateMachine.js
+- server/realtime/novaRealtimeServer.js
+- server/novaHelpRoute.js
+- src/data/assignments.js
+- src/data/assignmentStops.js
+- src/pages/nova/NovaTrainerPage.jsx
+- src/components/nova/NovaTrainerSession.jsx
+
+UI
+Keep a clean Base44-style cockpit UI.
+Show:
+- phase
+- selector
+- assignment
+- current stop
+- voice state
+- current prompt
+- heard response
+- live data
+- assigned work
+- command log
+
+IMPORTANT
+The old paper sample route must be removed completely.
+Use only the real assigned work for the selector.
