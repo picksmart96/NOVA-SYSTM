@@ -554,51 +554,59 @@ export default function NovaTrainerPage() {
   // ── NOVA ID entry screen ─────────────────────────────────────────────────────
   if (!matchedSelector) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6 py-10">
-        <div className="w-full max-w-xl">
-          <div className="rounded-[28px] border border-slate-800 bg-slate-900 p-8 md:p-10 shadow-2xl text-center">
+      <div className="min-h-screen bg-[#0d0d1a] text-white flex flex-col">
+        {/* Top bar */}
+        <div className="bg-[#141428] border-b border-white/5 px-6 py-3 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-xs font-bold">N</div>
+          <div>
+            <p className="text-sm font-semibold leading-none">NOVA Trainer</p>
+            <p className="text-xs text-slate-400 mt-0.5">ES3 Script Mode</p>
+          </div>
+        </div>
 
-            {/* Brand mark */}
-            <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-yellow-400 mx-auto mb-6">
-              <svg className="h-7 w-7 text-slate-950" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="22" />
+        {/* Main */}
+        <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 gap-8">
+
+          {/* Signal circle */}
+          <div className="relative flex items-center justify-center w-48 h-48">
+            <div className="w-36 h-36 rounded-full flex items-center justify-center border-2 border-violet-700/50 bg-[#1a1a2e]">
+              <svg viewBox="0 0 48 48" className="w-16 h-16 text-violet-500/60" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+                <path strokeWidth="2.5" strokeOpacity="0.4" d="M8 20 C8 11.163 15.163 4 24 4 C32.837 4 40 11.163 40 20" />
+                <path strokeWidth="2.5" strokeOpacity="0.5" d="M13 25 C13 19.477 18.477 14 24 14 C29.523 14 35 19.477 35 25" />
+                <path strokeWidth="2.5" d="M18 30 C18 26.686 20.686 24 24 24 C27.314 24 30 26.686 30 30" />
+                <circle cx="24" cy="38" r="3" fill="currentColor" strokeWidth="0" />
               </svg>
             </div>
+          </div>
 
-            <p className="text-yellow-400 text-xs font-semibold uppercase tracking-[0.24em]">
-              NOVA Trainer
-            </p>
+          {/* Title */}
+          <div className="text-center space-y-2">
+            <h1 className="text-4xl font-black tracking-tight">NOVA</h1>
+            <p className="text-slate-300 text-base">Warehouse voice picking trainer</p>
+            <p className="text-slate-500 text-sm">Fully automatic — just like Siri</p>
+          </div>
 
-            <h1 className="mt-3 text-2xl md:text-3xl font-black leading-tight">
-              Enter your NOVA ID to access your session
-            </h1>
-
-            <div className="mt-8">
-              <input
-                value={novaIdInput}
-                onChange={(e) => { setNovaIdInput(e.target.value); setEntryError(""); }}
-                onKeyDown={(e) => e.key === "Enter" && handleEnterNova()}
-                placeholder="NOVA-XXXXX"
-                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-5 py-4 text-center text-lg font-semibold tracking-widest uppercase outline-none focus:border-yellow-400 transition placeholder-slate-600"
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </div>
-
+          {/* NOVA ID field */}
+          <div className="w-full max-w-md space-y-3">
+            <input
+              value={novaIdInput}
+              onChange={(e) => { setNovaIdInput(e.target.value); setEntryError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && handleEnterNova()}
+              placeholder="NOVA-XXXXX"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-5 py-4 text-center text-lg font-semibold tracking-widest uppercase text-white placeholder-slate-600 focus:outline-none focus:border-violet-500 transition"
+              autoComplete="off"
+              spellCheck={false}
+            />
             {entryError && (
-              <p className="mt-4 text-sm font-semibold text-red-300">{entryError}</p>
+              <p className="text-sm font-semibold text-red-300 text-center">{entryError}</p>
             )}
-
             <button
               onClick={handleEnterNova}
-              className="mt-6 w-full rounded-2xl bg-yellow-400 px-6 py-4 text-lg font-bold text-slate-950 hover:bg-yellow-300 active:scale-[0.98] transition"
+              className="w-full py-5 rounded-xl bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-bold text-lg tracking-wide transition-all duration-200 shadow-[0_0_30px_rgba(139,92,246,0.35)]"
             >
-              Enter NOVA
+              Start Session
             </button>
-
-            <p className="mt-6 text-sm text-slate-500">
+            <p className="text-center text-xs text-slate-600">
               Your NOVA ID is given to you by your trainer after registration.
             </p>
           </div>
