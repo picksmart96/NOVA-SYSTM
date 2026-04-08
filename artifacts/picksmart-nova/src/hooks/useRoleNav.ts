@@ -57,7 +57,7 @@ export function useRoleNav(): NavLink[] {
     links.push({ href: "/supervisor", label: t("nav.supervisorDashboard"), group: "supervisor" });
   }
 
-  if (atLeast("owner", role)) {
+  if (currentUser?.role === "owner") {
     links.push(
       { href: "/owner", label: "Control Center", group: "owner" },
       { href: "/users-access", label: t("nav.usersAccess"), group: "owner" },
