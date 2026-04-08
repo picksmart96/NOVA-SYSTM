@@ -1,169 +1,251 @@
-import { useState } from "react";
-import { Link } from "wouter";
-import { ASSIGNMENTS } from "@/data/assignments";
-import { Activity, MapPin, Play, Archive, Package, Clock, User } from "lucide-react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { useVoiceEngine, UseVoiceEngineReturn } from "@/hooks/useVoiceEngine";
+import { askNovaHelp } from "@/lib/novaHelpApi";
+import { useTranslation } from "react-i18next";
+import { Mic, MicOff, StopCircle, RefreshCw } from "lucide-react";
 
-const STATUS_STYLES = {
-  pending: "bg-yellow-400/10 text-yellow-300 border-yellow-400/30",
-  active: "bg-blue-400/10 text-blue-300 border-blue-400/30",
-  completed: "bg-green-500/10 text-green-400 border-green-500/30",
-};
+const TOPICS = [
+  { label: "Pallet Building", icon: "📦" },
+  { label: "Fast Picking",    icon: "⚡" },
+  { label: "Safety",          icon: "🦺" },
+  { label: "Save Time",       icon: "⏱" },
+  { label: "Stay Motivated",  icon: "💪" },
+];
 
-const TYPE_STYLES = {
-  TRAINING: "bg-purple-500/10 text-purple-300 border-purple-500/30",
-  PRODUCTION: "bg-orange-500/10 text-orange-300 border-orange-500/30",
-};
+export default function NovaCoachPage() {
+  const { t, i18n } = useTranslation();
 
-export default function MyAssignmentsPage() {
-  const [archived, setArchived] = useState<Set<string>>(new Set());
+  const [ready,        setReady]        = useState(false);
+  const [awake,        setAwake]        = useState(false);
+  const [novaText,     setNovaText]     = useState("");
+  const [lastQuestion, setLastQuestion] = useState("");
+  const [thinking,     setThinking]     = useState(false);
 
-  const visible = ASSIGNMENTS.filter(a => !archived.has(a.id));
+  const voiceRef = useRef<UseVoiceEngineReturn | null>(null);
+  const awakeRef = useRef(false);
+  awakeRef.current = awake;
 
-  const handleArchive = (id: string) => {
-    setArchived(prev => new Set([...prev, id]));
+  const speakAndListen = useCallback((text: string) => {
+    setNovaText(text);
+    voiceRef.current?.askAndListen(text);
+  }, []);
+
+  const handleVoiceInput = useCallback(
+    async (heard: string) => {
+      const text = heard.toLowerCase().trim();
+      if (!text) return;
+
+      // Stop → silence but keep mic open for next wake word
+      if (
+        text.includes("stop") ||
+        text.includes("parar") ||
+        text.includes("detener")
+      ) {
+        setAwake(false);
+        setNovaText("Ready when you need me. Say \"Hey NOVA\" anytime.");
+        voiceRef.current?.speak(
+          "Got it. Say Hey NOVA whenever you want help.",
+          { restartAfterSpeak: true }
+        );
+        return;
+      }
+
+      // Wake word
+      if (text.includes("hey nova") || text.includes("hola nova")) {
+        setAwake(true);
+        speakAndListen(
+          awakeRef.current
+            ? "I'm here. What do you need?"
+            : "Hey! Ask me anything about pallet building, picking, safety, or staying on pace."
+        );
+        return;
+      }
+
+      // Not awake — listen silently for wake word
+      if (!awakeRef.current) {
+        voiceRef.current?.startListening();
+        return;
+      }
+
+      // Awake — answer the question
+      setLastQuestion(heard);
+      setNovaText("Thinking…");
+      setThinking(true);
+      try {
+        const answer = await askNovaHelp(text, i18n.language);
+        setThinking(false);
+        speakAndListen(answer);
+      } catch {
+        setThinking(false);
+        speakAndListen("I had trouble answering. Try asking again.");
+      }
+    },
+    [speakAndListen, i18n.language]
+  );
+
+  const voice = useVoiceEngine({
+    onHeard: handleVoiceInput,
+    autoRestart: true,
+    silencePrompt: "",
+  });
+
+  voiceRef.current = voice;
+
+  useEffect(() => () => { voice.shutdown(); }, []);
+
+  // Single tap to start — grants mic permission in user-gesture context
+  const tap = async () => {
+    if (ready) { voice.startListening(); return; }
+    const ok = await voice.initialize();
+    if (!ok) return;
+    setReady(true);
+    const intro = "Ready. Say \"Hey NOVA\" and ask me anything about picking, pallets, safety, or pace.";
+    setNovaText(intro);
+    voice.askAndListen(intro);
   };
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      {/* Header */}
-      <div className="border-b border-slate-800 bg-gradient-to-b from-slate-900 to-slate-950 px-6 py-10">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-yellow-400 flex items-center justify-center">
-                <Activity className="h-6 w-6 text-slate-950" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-black text-white">My Assignments</h1>
-                <p className="text-slate-400 text-sm mt-0.5">
-                  {visible.length} active · {archived.size} archived
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+  const stop = () => {
+    voice.stopListening();
+    try { window.speechSynthesis?.cancel(); } catch {}
+    setReady(false);
+    setAwake(false);
+    setNovaText("");
+    setLastQuestion("");
+  };
 
-      {/* Cards */}
-      <div className="max-w-4xl mx-auto px-6 py-8 space-y-4">
-        {visible.length === 0 && (
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-16 text-center">
-            <Activity className="h-12 w-12 mx-auto text-slate-600 mb-4" />
-            <p className="text-white font-black text-xl mb-2">No active assignments</p>
-            <p className="text-slate-400">All assignments have been archived.</p>
+  // Visual state
+  const isListening = voice.listening;
+  const isSpeaking  = voice.speaking;
+  const isThinking  = thinking || voice.processing;
+
+  const ringClass = isListening
+    ? "ring-green-400/60"
+    : isSpeaking
+    ? "ring-yellow-400/60"
+    : isThinking
+    ? "ring-blue-400/60"
+    : awake
+    ? "ring-yellow-400/30"
+    : "ring-slate-700";
+
+  const iconColor = isListening
+    ? "text-green-300"
+    : isSpeaking
+    ? "text-yellow-300"
+    : isThinking
+    ? "text-blue-300"
+    : voice.error
+    ? "text-red-400"
+    : ready
+    ? "text-yellow-200"
+    : "text-slate-400";
+
+  const statusLabel = isThinking
+    ? "Thinking…"
+    : isListening
+    ? "Listening…"
+    : isSpeaking
+    ? "Speaking…"
+    : awake
+    ? "Awake — ask anything"
+    : ready
+    ? "Say \"Hey NOVA\" to wake me"
+    : "Tap mic to start";
+
+  const statusColor = isListening
+    ? "text-green-400"
+    : isSpeaking
+    ? "text-yellow-400"
+    : isThinking
+    ? "text-blue-400"
+    : awake
+    ? "text-yellow-300"
+    : "text-slate-500";
+
+  return (
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center px-4 py-12 text-white">
+      <div className="w-full max-w-md flex flex-col items-center gap-8">
+
+        {/* ── Mic button ── */}
+        <button
+          onClick={tap}
+          className={`relative flex items-center justify-center h-28 w-28 rounded-full ring-4 transition-all duration-300 bg-slate-900 ${ringClass} ${!ready ? "hover:bg-slate-800" : ""}`}
+          aria-label={statusLabel}
+        >
+          {(isListening || isSpeaking) && (
+            <span className={`absolute inset-0 rounded-full animate-ping opacity-20 ${isListening ? "bg-green-400" : "bg-yellow-400"}`} />
+          )}
+          {voice.error
+            ? <MicOff className={`h-12 w-12 ${iconColor}`} />
+            : <Mic   className={`h-12 w-12 ${iconColor}`} />
+          }
+        </button>
+
+        {/* ── Status ── */}
+        <p className={`text-sm font-semibold uppercase tracking-widest text-center ${statusColor}`}>
+          {statusLabel}
+        </p>
+
+        {/* ── Topic hints (only before started) ── */}
+        {!ready && (
+          <div className="flex flex-wrap justify-center gap-2">
+            {TOPICS.map(({ label, icon }) => (
+              <span
+                key={label}
+                className="flex items-center gap-1.5 rounded-full border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-400"
+              >
+                <span>{icon}</span> {label}
+              </span>
+            ))}
           </div>
         )}
 
-        {visible.map(assignment => (
-          <div
-            key={assignment.id}
-            className="rounded-3xl border border-slate-800 bg-slate-900 overflow-hidden hover:border-slate-700 transition-all"
-          >
-            {/* Card header */}
-            <div className="px-6 py-5 border-b border-slate-800 flex items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center flex-wrap gap-2 mb-1">
-                  <h2 className="text-2xl font-black text-white">
-                    #{assignment.assignmentNumber}
-                  </h2>
-                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase border ${STATUS_STYLES[assignment.status]}`}>
-                    {assignment.status}
-                  </span>
-                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase border ${TYPE_STYLES[assignment.type]}`}>
-                    {assignment.type}
-                  </span>
-                </div>
-                <p className="text-slate-400 text-sm">{assignment.title}</p>
-              </div>
-
-              <button
-                onClick={() => handleArchive(assignment.id)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-700 text-slate-400 text-xs font-bold hover:border-red-500/40 hover:text-red-400 transition-all shrink-0"
-              >
-                <Archive className="h-3.5 w-3.5" /> Archive
-              </button>
-            </div>
-
-            {/* Stats grid */}
-            <div className="px-6 py-5">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
-                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <p className="text-xs text-slate-500 flex items-center gap-1 mb-1">
-                    <MapPin className="h-3 w-3" /> Aisles
-                  </p>
-                  <p className="text-white font-black text-lg">
-                    {assignment.startAisle} → {assignment.endAisle}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <p className="text-xs text-slate-500 flex items-center gap-1 mb-1">
-                    <Package className="h-3 w-3" /> Cases
-                  </p>
-                  <p className="text-white font-black text-lg">{assignment.totalCases}</p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <p className="text-xs text-slate-500 flex items-center gap-1 mb-1">
-                    <Clock className="h-3 w-3" /> Goal Time
-                  </p>
-                  <p className="text-white font-black text-lg">{assignment.goalTimeMinutes}m</p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-                  <p className="text-xs text-slate-500 flex items-center gap-1 mb-1">
-                    <User className="h-3 w-3" /> Selector
-                  </p>
-                  <p className="text-white font-black text-sm truncate">{assignment.selectorUserId}</p>
-                </div>
-              </div>
-
-              {/* Footer actions */}
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs text-slate-500">
-                  {assignment.stops} stops · {assignment.totalPallets} pallets · Printer {assignment.printerNumber}
-                </p>
-                <div className="flex gap-2">
-                  <Link href={`/nova/assignments/${assignment.id}`}>
-                    <button className="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm font-bold hover:border-slate-500 hover:text-white transition-all">
-                      Details
-                    </button>
-                  </Link>
-                  <Link href={`/nova/voice/${assignment.id}`}>
-                    <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-yellow-400 text-slate-950 font-black text-sm hover:bg-yellow-300 transition-all">
-                      <Play className="h-4 w-4" />
-                      {assignment.status === "active" ? "Resume" : "Start Session"}
-                    </button>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-
-        {/* Archived section */}
-        {archived.size > 0 && (
-          <div className="pt-4">
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-600 mb-3 flex items-center gap-2">
-              <Archive className="h-3.5 w-3.5" /> Archived ({archived.size})
+        {/* ── NOVA says ── */}
+        {novaText && (
+          <div className="w-full rounded-3xl border border-slate-800 bg-slate-900 px-6 py-5">
+            <p className="text-xs text-slate-500 uppercase tracking-widest mb-3">NOVA says</p>
+            <p className="text-white text-base sm:text-lg font-semibold leading-relaxed">
+              {novaText}
             </p>
-            <div className="space-y-2">
-              {ASSIGNMENTS.filter(a => archived.has(a.id)).map(a => (
-                <div key={a.id} className="rounded-2xl border border-slate-800/50 bg-slate-900/50 px-5 py-3 flex items-center justify-between opacity-50">
-                  <div className="flex items-center gap-3">
-                    <p className="text-slate-400 font-bold text-sm">#{a.assignmentNumber}</p>
-                    <span className="text-xs text-slate-600">{a.type}</span>
-                    <span className="text-xs text-slate-600">{a.totalCases} cases</span>
-                  </div>
-                  <button
-                    onClick={() => setArchived(prev => { const next = new Set(prev); next.delete(a.id); return next; })}
-                    className="text-xs text-slate-600 hover:text-slate-400 transition"
-                  >
-                    Restore
-                  </button>
-                </div>
-              ))}
-            </div>
+          </div>
+        )}
+
+        {/* ── You asked ── */}
+        {lastQuestion && (
+          <div className="w-full rounded-2xl border border-slate-800 bg-slate-900 px-5 py-4">
+            <p className="text-xs text-slate-500 uppercase tracking-widest mb-2">You asked</p>
+            <p className="text-slate-300 text-sm">{lastQuestion}</p>
+          </div>
+        )}
+
+        {/* ── Mic error ── */}
+        {voice.error && (
+          <div className="w-full rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4">
+            <p className="text-red-300 text-sm font-semibold mb-3">{voice.error}</p>
+            <button
+              onClick={async () => { await voice.retryMic(); voice.startListening(); }}
+              className="rounded-xl bg-yellow-400 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-yellow-300 transition flex items-center gap-2"
+            >
+              <RefreshCw className="h-4 w-4" /> Retry mic
+            </button>
+          </div>
+        )}
+
+        {/* ── Stop ── */}
+        {ready && (
+          <button
+            onClick={stop}
+            className="flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-red-300 transition"
+          >
+            <StopCircle className="h-4 w-4" /> Stop NOVA
+          </button>
+        )}
+
+        {/* ── Hint badges (active) ── */}
+        {ready && (
+          <div className="flex flex-wrap justify-center gap-2 text-xs text-slate-600">
+            <span className="px-3 py-1 rounded-full bg-slate-900 border border-slate-800">"Hey NOVA" to wake</span>
+            <span className="px-3 py-1 rounded-full bg-slate-900 border border-slate-800">"stop" to silence</span>
           </div>
         )}
       </div>
