@@ -45,7 +45,10 @@ export function useRoleNav(): NavLink[] {
   }
 
   if (atLeast("owner", role)) {
-    links.push({ href: "/users-access", label: t("nav.usersAccess"), group: "owner" });
+    links.push(
+      { href: "/owner", label: "Control Center", group: "owner" },
+      { href: "/users-access", label: t("nav.usersAccess"), group: "owner" },
+    );
   }
 
   links.push(
@@ -75,9 +78,7 @@ export function useRoleNav(): NavLink[] {
     );
   }
 
-  if (atLeast("manager", role)) {
-    links.push({ href: "/pricing", label: t("nav.pricing"), group: "owner" });
-  }
+  links.push({ href: "/pricing", label: t("nav.pricing"), group: "public" });
 
   return links;
 }

@@ -1,0 +1,836 @@
+Build the matching Pricing page, plan selection flow, and owner-only admin control center for PickSmart NOVA.
+
+GOAL
+1. Keep Pricing public
+2. Add Personal vs Company checkout flow
+3. Make Users & Access owner-only
+4. Make Owner page the main admin control center
+5. Move all plan control to Owner only
+6. Allow owner to monitor subscribers, usage, and manage users
+
+==================================================
+1. PRICING PAGE
+==================================================
+Create a clean public Pricing page.
+
+SECTIONS
+- Hero
+- Personal plan card
+- Company plan card
+- FAQ
+- CTA
+
+PERSONAL PLAN
+Label:
+- Best for individual selectors
+
+Features:
+- Training
+- NOVA Help
+- NOVA Trainer
+- Common Mistakes
+- Leaderboard
+- Selector Nation
+
+CTA:
+- Choose Personal
+
+COMPANY PLAN
+Label:
+- Best for teams and warehouse operations
+
+Features:
+- Everything in Personal
+- Trainer Dashboard
+- Supervisor Dashboard
+- Team workflow tools
+
+CTA:
+- Choose Company
+
+IMPORTANT
+Do not show Users & Access on Pricing.
+Do not show Owner tools on Pricing.
+Keep Pricing public.
+
+FILES
+- src/pages/public/PricingPage.jsx
+
+==================================================
+2. CHOOSE PLAN PAGE
+==================================================
+Create Choose Plan page or modal.
+
+TITLE
+- Choose Your Access Plan
+
+OPTIONS
+- Personal Use
+- Company
+
+Personal goes to:
+- /checkout/personal
+
+Company goes to:
+- /checkout/company
+
+FILES
+- src/pages/public/ChoosePlanPage.jsx
+
+==================================================
+3. CHECKOUT FLOW TEXT
+==================================================
+Build simple checkout pages for now.
+No need for full Stripe integration unless already installed.
+Use placeholder checkout summary UI that can later connect to payments.
+
+PERSONAL CHECKOUT TEXT
+Title:
+- Personal Plan Checkout
+Summary:
+- Individual selector access
+Includes:
+- Training
+- NOVA Help
+- NOVA Trainer
+- Common Mistakes
+- Leaderboard
+- Selector Nation
+
+Button:
+- Complete Personal Subscription
+
+After success:
+- set user.isSubscribed = true
+- set user.subscriptionPlan = "personal"
+
+COMPANY CHECKOUT TEXT
+Title:
+- Company Plan Checkout
+Summary:
+- Team and warehouse operations access
+Includes:
+- Everything in Personal
+- Trainer Dashboard
+- Supervisor Dashboard
+
+Button:
+- Complete Company Subscription
+
+After success:
+- set user.isSubscribed = true
+- set user.subscriptionPlan = "company"
+
+FILES
+- src/pages/public/PersonalCheckoutPage.jsx
+- src/pages/public/CompanyCheckoutPage.jsx
+
+==================================================
+4. OWNER-ONLY ACCESS
+==================================================
+Users & Access page must be visible only to owner.
+Owner page must be visible only to owner.
+No selector, trainer, supervisor, or company subscriber can access those pages.
+
+RULES
+- users-access page = owner-only
+- owner page = owner-only
+- pricing page = public
+- choose plan page = public
+
+FILES
+- update src/lib/accessControl.js
+- update src/components/auth/ProtectedRoute.jsx
+- update navbar filtering
+
+==================================================
+5. OWNER CONTROL CENTER
+==================================================
+Redesign the Owner page into a real admin control center.
+
+TITLE
+- Owner Control Center
+
+TOP STATS
+Show cards for:
+- Total Subscribers
+- Personal Subscribers
+- Company Subscribers
+- Active Users Today
+- Total Sessions
+- Banned Users
+
+SECTIONS
+
+A. Subscriber Overview
+- total subscribers
+- subscriber growth
+- active plans
+- subscription type breakdown
+
+B. User Activity
+- users active today
+- recent logins
+- recent NOVA sessions
+- recent training activity
+
+C. User Management
+- search users
+- filter by role
+- filter by subscription plan
+- filter by active / banned
+- ban user
+- unban user
+- deactivate user
+- reactivate user
+- change role
+- change plan
+
+D. Invite Management
+- invite by email
+- invite by role
+- invite to company
+- generated invite links
+
+E. Plan Control
+- manage personal plan details
+- manage company plan details
+- pricing controls
+- plan visibility controls
+
+F. Admin Movement / Audit Log
+Show activity like:
+- user subscribed
+- user banned
+- invite sent
+- role changed
+- plan changed
+- login recorded
+- session started
+
+==================================================
+6. OWNER DATA MODELS
+==================================================
+Create sample owner dashboard data models if backend DB is not ready.
+
+Use arrays / mock store for now:
+- subscribers
+- users
+- activityLog
+- invites
+- planStats
+
+FILES
+- src/data/adminUsers.js
+- src/data/adminStats.js
+- src/data/adminActivityLog.js
+- src/data/adminInvites.js
+
+==================================================
+7. OWNER PAGE UI
+==================================================
+Make it professional and easy to scan.
+
+LAYOUT
+- header
+- top stat cards
+- filters row
+- user management table/cards
+- subscriber analytics section
+- activity log section
+- invite section
+- plan controls section
+
+STYLE
+- dark navy / slate industrial theme
+- safety yellow accents
+- rounded cards
+- strong hierarchy
+- mobile-friendly
+
+FILES
+- src/pages/owner/OwnerPage.jsx
+
+==================================================
+8. USERS & ACCESS PAGE
+==================================================
+Keep Users & Access page owner-only.
+This page is for owner account creation / invite control only.
+
+SECTIONS
+- Invite by Role
+- App Users
+- NOVA Access
+- Active Accounts
+
+Only owner can see or use this page.
+
+==================================================
+9. ACCESS CONTROL
+==================================================
+Use:
+- role
+- subscriptionPlan
+- isSubscribed
+
+RULES
+owner:
+- can access everything
+
+supervisor:
+- cannot access users-access
+- cannot access owner
+
+trainer:
+- cannot access users-access
+- cannot access owner
+- cannot access supervisor dashboard
+
+selector:
+- cannot access users-access
+- cannot access owner
+- cannot access trainer dashboard
+- cannot access supervisor dashboard
+
+company plan:
+- allows selector/trainer/supervisor feature pages
+- never allows users-access or owner
+
+personal plan:
+- allows selector pages only
+
+==================================================
+10. IMPORTANT
+==================================================
+Users & Access and Owner must stay owner-only for your account only.
+Move plan control to owner only.
+Build owner page as the main place to control the whole website.
+Access control update
+src/lib/accessControl.js
+export function canAccessPage(user, pageKey) {
+  if (pageKey === "home") return true;
+  if (pageKey === "pricing") return true;
+  if (pageKey === "choose-plan") return true;
+  if (pageKey === "checkout-personal") return true;
+  if (pageKey === "checkout-company") return true;
+
+  if (!user) return false;
+  if (!user.isSubscribed && user.role !== "owner") return false;
+
+  const { role, subscriptionPlan } = user;
+
+  if (role === "owner") return true;
+
+  if (pageKey === "users-access" || pageKey === "owner") {
+    return false;
+  }
+
+  if (subscriptionPlan === "personal") {
+    return [
+      "training",
+      "nova-help",
+      "nova-trainer",
+      "common-mistakes",
+      "leaderboard",
+      "selector-nation",
+    ].includes(pageKey);
+  }
+
+  if (subscriptionPlan === "company") {
+    if (role === "selector") {
+      return [
+        "training",
+        "nova-help",
+        "nova-trainer",
+        "common-mistakes",
+        "leaderboard",
+        "selector-nation",
+      ].includes(pageKey);
+    }
+
+    if (role === "trainer") {
+      return [
+        "training",
+        "nova-help",
+        "nova-trainer",
+        "common-mistakes",
+        "leaderboard",
+        "selector-nation",
+        "trainer-dashboard",
+      ].includes(pageKey);
+    }
+
+    if (role === "supervisor") {
+      return [
+        "training",
+        "nova-help",
+        "nova-trainer",
+        "common-mistakes",
+        "leaderboard",
+        "selector-nation",
+        "trainer-dashboard",
+        "supervisor-dashboard",
+      ].includes(pageKey);
+    }
+  }
+
+  return false;
+}
+Public Pricing page
+src/pages/public/PricingPage.jsx
+import { useNavigate } from "react-router-dom";
+
+function PlanCard({ title, subtitle, features, buttonText, onClick, highlight }) {
+  return (
+    <div
+      className={`rounded-3xl border p-8 shadow-xl ${
+        highlight
+          ? "border-yellow-400 bg-slate-900"
+          : "border-slate-800 bg-slate-900"
+      }`}
+    >
+      <p className="text-yellow-400 font-semibold">{subtitle}</p>
+      <h2 className="mt-3 text-3xl font-black">{title}</h2>
+
+      <div className="mt-6 space-y-3 text-slate-300">
+        {features.map((feature) => (
+          <p key={feature}>• {feature}</p>
+        ))}
+      </div>
+
+      <button
+        onClick={onClick}
+        className="mt-8 w-full rounded-2xl bg-yellow-400 px-6 py-4 text-lg font-bold text-slate-950 hover:bg-yellow-300 transition"
+      >
+        {buttonText}
+      </button>
+    </div>
+  );
+}
+
+export default function PricingPage() {
+  const navigate = useNavigate();
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white px-6 py-12">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-12">
+          <p className="text-yellow-400 text-sm font-semibold uppercase tracking-[0.22em]">
+            Pricing
+          </p>
+          <h1 className="mt-3 text-5xl font-black">Choose the Access That Fits You</h1>
+          <p className="mt-4 text-lg text-slate-300 max-w-3xl mx-auto">
+            PickSmart NOVA gives selectors and warehouse teams the tools they need to train, improve, and operate with confidence.
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          <PlanCard
+            title="Personal"
+            subtitle="Best for individual selectors"
+            features={[
+              "Training",
+              "NOVA Help",
+              "NOVA Trainer",
+              "Common Mistakes",
+              "Leaderboard",
+              "Selector Nation",
+            ]}
+            buttonText="Choose Personal"
+            onClick={() => navigate("/choose-plan")}
+          />
+
+          <PlanCard
+            title="Company"
+            subtitle="Best for teams and warehouse operations"
+            highlight
+            features={[
+              "Everything in Personal",
+              "Trainer Dashboard",
+              "Supervisor Dashboard",
+              "Team workflow access",
+            ]}
+            buttonText="Choose Company"
+            onClick={() => navigate("/choose-plan")}
+          />
+        </div>
+
+        <div className="mt-14 rounded-3xl border border-slate-800 bg-slate-900 p-8">
+          <h2 className="text-2xl font-bold">FAQ</h2>
+          <div className="mt-6 space-y-4 text-slate-300">
+            <p><strong>Can I start with Personal and upgrade later?</strong> Yes.</p>
+            <p><strong>Can Company users access Owner tools?</strong> No. Owner tools stay private.</p>
+            <p><strong>Is Home page public?</strong> Yes. Home stays public while tools stay private.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+Choose Plan page
+src/pages/public/ChoosePlanPage.jsx
+import { useNavigate } from "react-router-dom";
+
+export default function ChoosePlanPage() {
+  const navigate = useNavigate();
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white px-6 py-12">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-10">
+          <p className="text-yellow-400 text-sm font-semibold uppercase tracking-[0.22em]">
+            Subscription
+          </p>
+          <h1 className="mt-3 text-5xl font-black">Choose Your Access Plan</h1>
+          <p className="mt-4 text-slate-300 text-lg">
+            Pick the access level that fits how you want to use PickSmart NOVA.
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
+            <p className="text-yellow-400 font-semibold">Personal Use</p>
+            <h2 className="mt-3 text-3xl font-black">For Individual Selectors</h2>
+            <p className="mt-3 text-slate-300">
+              Best for one person using training and NOVA tools.
+            </p>
+
+            <div className="mt-6 space-y-2 text-slate-300">
+              <p>• Training</p>
+              <p>• NOVA Help</p>
+              <p>• NOVA Trainer</p>
+              <p>• Common Mistakes</p>
+              <p>• Leaderboard</p>
+              <p>• Selector Nation</p>
+            </div>
+
+            <button
+              onClick={() => navigate("/checkout/personal")}
+              className="mt-8 w-full rounded-2xl bg-yellow-400 px-6 py-4 text-lg font-bold text-slate-950 hover:bg-yellow-300 transition"
+            >
+              Continue Personal
+            </button>
+          </div>
+
+          <div className="rounded-3xl border border-yellow-400 bg-slate-900 p-8 shadow-xl">
+            <p className="text-yellow-400 font-semibold">Company</p>
+            <h2 className="mt-3 text-3xl font-black">For Teams and Operations</h2>
+            <p className="mt-3 text-slate-300">
+              Best for warehouses, trainers, and supervisors.
+            </p>
+
+            <div className="mt-6 space-y-2 text-slate-300">
+              <p>• Everything in Personal</p>
+              <p>• Trainer Dashboard</p>
+              <p>• Supervisor Dashboard</p>
+              <p>• Team workflow tools</p>
+            </div>
+
+            <p className="mt-4 text-sm text-red-300">
+              Users & Access and Owner stay private to the owner only.
+            </p>
+
+            <button
+              onClick={() => navigate("/checkout/company")}
+              className="mt-8 w-full rounded-2xl bg-yellow-400 px-6 py-4 text-lg font-bold text-slate-950 hover:bg-yellow-300 transition"
+            >
+              Continue Company
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+Personal checkout flow text
+src/pages/public/PersonalCheckoutPage.jsx
+import { useNavigate } from "react-router-dom";
+import { useAuthStore } from "../../store/authStore";
+
+export default function PersonalCheckoutPage() {
+  const navigate = useNavigate();
+  const { user, setUser } = useAuthStore();
+
+  const completeCheckout = () => {
+    if (!user) return navigate("/");
+
+    setUser({
+      ...user,
+      isSubscribed: true,
+      subscriptionPlan: "personal",
+      role: user.role || "selector",
+    });
+
+    navigate("/training");
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white px-6 py-12">
+      <div className="max-w-3xl mx-auto rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
+        <p className="text-yellow-400 text-sm font-semibold uppercase tracking-[0.22em]">
+          Checkout
+        </p>
+        <h1 className="mt-3 text-4xl font-black">Personal Plan Checkout</h1>
+        <p className="mt-4 text-slate-300">
+          Individual selector access for training and NOVA tools.
+        </p>
+
+        <div className="mt-8 space-y-3 text-slate-300">
+          <p>• Training</p>
+          <p>• NOVA Help</p>
+          <p>• NOVA Trainer</p>
+          <p>• Common Mistakes</p>
+          <p>• Leaderboard</p>
+          <p>• Selector Nation</p>
+        </div>
+
+        <button
+          onClick={completeCheckout}
+          className="mt-8 w-full rounded-2xl bg-yellow-400 px-6 py-4 text-lg font-bold text-slate-950 hover:bg-yellow-300 transition"
+        >
+          Complete Personal Subscription
+        </button>
+      </div>
+    </div>
+  );
+}
+Company checkout flow text
+src/pages/public/CompanyCheckoutPage.jsx
+import { useNavigate } from "react-router-dom";
+import { useAuthStore } from "../../store/authStore";
+
+export default function CompanyCheckoutPage() {
+  const navigate = useNavigate();
+  const { user, setUser } = useAuthStore();
+
+  const completeCheckout = () => {
+    if (!user) return navigate("/");
+
+    setUser({
+      ...user,
+      isSubscribed: true,
+      subscriptionPlan: "company",
+      role: user.role || "selector",
+    });
+
+    navigate("/training");
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white px-6 py-12">
+      <div className="max-w-3xl mx-auto rounded-3xl border border-yellow-400 bg-slate-900 p-8 shadow-xl">
+        <p className="text-yellow-400 text-sm font-semibold uppercase tracking-[0.22em]">
+          Checkout
+        </p>
+        <h1 className="mt-3 text-4xl font-black">Company Plan Checkout</h1>
+        <p className="mt-4 text-slate-300">
+          Team and warehouse operations access for company users.
+        </p>
+
+        <div className="mt-8 space-y-3 text-slate-300">
+          <p>• Everything in Personal</p>
+          <p>• Trainer Dashboard</p>
+          <p>• Supervisor Dashboard</p>
+          <p>• Team workflow access</p>
+        </div>
+
+        <p className="mt-5 text-sm text-red-300">
+          Users & Access and Owner controls remain owner-only.
+        </p>
+
+        <button
+          onClick={completeCheckout}
+          className="mt-8 w-full rounded-2xl bg-yellow-400 px-6 py-4 text-lg font-bold text-slate-950 hover:bg-yellow-300 transition"
+        >
+          Complete Company Subscription
+        </button>
+      </div>
+    </div>
+  );
+}
+Owner control center example
+src/pages/owner/OwnerPage.jsx
+const adminStats = {
+  totalSubscribers: 148,
+  personalSubscribers: 102,
+  companySubscribers: 46,
+  activeUsersToday: 37,
+  totalSessions: 981,
+  bannedUsers: 4,
+};
+
+const adminUsers = [
+  {
+    id: "u1",
+    name: "Soumaila Ouedraogo",
+    email: "owner@example.com",
+    role: "owner",
+    subscriptionPlan: "owner",
+    status: "active",
+  },
+  {
+    id: "u2",
+    name: "John Smith",
+    email: "john@example.com",
+    role: "trainer",
+    subscriptionPlan: "company",
+    status: "active",
+  },
+  {
+    id: "u3",
+    name: "Maria Lopez",
+    email: "maria@example.com",
+    role: "selector",
+    subscriptionPlan: "personal",
+    status: "banned",
+  },
+];
+
+const activityLog = [
+  "User subscribed to Company plan",
+  "Trainer invite sent",
+  "Selector started NOVA session",
+  "User banned by owner",
+  "Role changed from selector to trainer",
+];
+
+export default function OwnerPage() {
+  return (
+    <div className="min-h-screen bg-slate-950 text-white px-6 py-10">
+      <div className="max-w-7xl mx-auto space-y-8">
+        <div>
+          <p className="text-yellow-400 text-sm font-semibold uppercase tracking-[0.22em]">
+            Owner
+          </p>
+          <h1 className="mt-2 text-4xl font-black">Owner Control Center</h1>
+          <p className="mt-3 text-slate-300">
+            Manage subscribers, plans, user activity, invites, and platform controls.
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-3 xl:grid-cols-6 gap-4">
+          <StatCard label="Total Subscribers" value={adminStats.totalSubscribers} />
+          <StatCard label="Personal" value={adminStats.personalSubscribers} />
+          <StatCard label="Company" value={adminStats.companySubscribers} />
+          <StatCard label="Active Today" value={adminStats.activeUsersToday} />
+          <StatCard label="Sessions" value={adminStats.totalSessions} />
+          <StatCard label="Banned" value={adminStats.bannedUsers} tone="danger" />
+        </div>
+
+        <div className="grid xl:grid-cols-[1.2fr_0.8fr] gap-6">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+            <h2 className="text-2xl font-bold">User Management</h2>
+
+            <div className="mt-5 space-y-4">
+              {adminUsers.map((user) => (
+                <div
+                  key={user.id}
+                  className="rounded-2xl border border-slate-800 bg-slate-950 p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-bold">{user.name}</p>
+                      <p className="text-sm text-slate-400">{user.email}</p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-bold text-yellow-300">
+                        {user.role}
+                      </span>
+                      <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-bold text-blue-300">
+                        {user.subscriptionPlan}
+                      </span>
+                      <span className={`rounded-full px-3 py-1 text-xs font-bold ${
+                        user.status === "banned"
+                          ? "bg-red-500/20 text-red-300"
+                          : "bg-green-500/20 text-green-300"
+                      }`}>
+                        {user.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button className="rounded-xl border border-slate-700 px-4 py-2 hover:border-yellow-400">
+                      Change Role
+                    </button>
+                    <button className="rounded-xl border border-slate-700 px-4 py-2 hover:border-yellow-400">
+                      Change Plan
+                    </button>
+                    <button className="rounded-xl border border-red-500/30 px-4 py-2 text-red-300 hover:bg-red-500/10">
+                      {user.status === "banned" ? "Unban" : "Ban"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+              <h2 className="text-2xl font-bold">Invite Management</h2>
+              <div className="mt-5 space-y-3">
+                <input
+                  placeholder="Email address"
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3"
+                />
+                <select className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3">
+                  <option>Selector</option>
+                  <option>Trainer</option>
+                  <option>Supervisor</option>
+                </select>
+                <button className="w-full rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300">
+                  Send Invite
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+              <h2 className="text-2xl font-bold">Plan Control</h2>
+              <div className="mt-5 space-y-3 text-slate-300">
+                <p>• Manage Personal plan</p>
+                <p>• Manage Company plan</p>
+                <p>• Update pricing visibility</p>
+                <p>• Platform access controls</p>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+              <h2 className="text-2xl font-bold">Admin Movement</h2>
+              <div className="mt-5 space-y-3">
+                {activityLog.map((item) => (
+                  <div
+                    key={item}
+                    className="rounded-2xl border border-slate-800 bg-slate-950 p-3 text-sm text-slate-300"
+                  >
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, tone = "default" }) {
+  const toneClass =
+    tone === "danger" ? "text-red-300" : "text-white";
+
+  return (
+    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+      <p className="text-sm text-slate-400">{label}</p>
+      <p className={`mt-3 text-2xl font-black ${toneClass}`}>{value}</p>
+    </div>
+  );
+}
+Router additions
+
+Add these routes:
+
+<Route path="/pricing" element={<PricingPage />} />
+<Route path="/choose-plan" element={<ChoosePlanPage />} />
+<Route path="/checkout/personal" element={<PersonalCheckoutPage />} />
+<Route path="/checkout/company" element={<CompanyCheckoutPage />} />

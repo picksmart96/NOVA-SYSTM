@@ -31,6 +31,10 @@ import NovaHelpPage from "@/pages/nova-help";
 import TrainerPortalPage from "@/pages/trainer-portal";
 import SupervisorPage from "@/pages/supervisor";
 import UsersAccessPage from "@/pages/users-access";
+import ChoosePlanPage from "@/pages/choose-plan";
+import PersonalCheckoutPage from "@/pages/checkout-personal";
+import CompanyCheckoutPage from "@/pages/checkout-company";
+import OwnerPage from "@/pages/owner";
 
 import SelectorPortalPage from "@/pages/selector-portal";
 import LoginPage from "@/pages/login";
@@ -78,6 +82,15 @@ function Router() {
       </Route>
       <Route path="/pricing">
         <Layout><PricingPage /></Layout>
+      </Route>
+      <Route path="/choose-plan">
+        <Layout><ChoosePlanPage /></Layout>
+      </Route>
+      <Route path="/checkout/personal">
+        <Layout><PersonalCheckoutPage /></Layout>
+      </Route>
+      <Route path="/checkout/company">
+        <Layout><CompanyCheckoutPage /></Layout>
       </Route>
       <Route path="/selector-nation">
         <Layout><SelectorNationPage /></Layout>
@@ -148,6 +161,14 @@ function Router() {
         <Layout>
           <ProtectedRoute path="/users-access" requiredRole="owner">
             <UsersAccessPage />
+          </ProtectedRoute>
+        </Layout>
+      </Route>
+
+      <Route path="/owner">
+        <Layout>
+          <ProtectedRoute path="/owner" requiredRole="owner">
+            <OwnerPage />
           </ProtectedRoute>
         </Layout>
       </Route>

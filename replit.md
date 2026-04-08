@@ -21,21 +21,37 @@ Full-stack warehouse training and assignment management platform combining a pub
 
 ## Roles & Navigation
 - **selector**: Home, Training, Mistakes Guide, My Assignments, NOVA Voice
-- **trainer**: + Assignment Control, Slot Master, Warehouse Reference, Voice Commands
-- **supervisor**: + Live Tracking, Trainer Portal
-- **owner**: + Pricing, Users & Access, System Settings
+- **trainer**: + Assignment Control, Slot Master, Warehouse Reference, Voice Commands, Trainer Dashboard
+- **supervisor**: + Live Tracking, Supervisor Dashboard
+- **owner**: everything + Control Center, Users & Access (both owner-only)
+
+## Subscription Plans (AuthAccount.subscriptionPlan)
+- `"owner"` — master account only, full access
+- `"company"` — selector/trainer/supervisor role pages; never owner/users-access
+- `"personal"` — selector-only pages
+- `null` — no subscription yet
+
+## Access Control
+- `/owner` and `/users-access` → owner-only (ProtectedRoute requiredRole="owner")
+- `/pricing`, `/choose-plan`, `/checkout/personal`, `/checkout/company` → public
+- All other feature pages → require login + matching role
 
 ## Pages
 
-### Public
+### Public (no login required)
 - `/` — HomePage (hero, features)
+- `/pricing` — Pricing page: Personal vs Company plan cards + FAQ + CTA
+- `/choose-plan` — Choose Your Access Plan: Personal or Company selection
+- `/checkout/personal` — Personal Plan Checkout (sets subscriptionPlan="personal", isSubscribed=true)
+- `/checkout/company` — Company Plan Checkout (sets subscriptionPlan="company", isSubscribed=true)
+
+### Training & Tools
 - `/training` — Training modules grid
 - `/training/:id` — Module detail (with video player)
 - `/training/lesson/:id` — NOVA-guided lesson session (with video player)
 - `/mistakes` — Common mistakes guide
 - `/progress` — Progress dashboard
 - `/leaderboard` — Ranked leaderboard
-- `/pricing` — Pricing tiers
 
 ### NOVA Internal
 - `/nova-help` — NOVA Help AI voice coach (Whisper STT + gpt-4o-mini)

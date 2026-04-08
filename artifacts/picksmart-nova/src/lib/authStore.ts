@@ -21,7 +21,9 @@ export interface AuthAccount {
   password: string;
   fullName: string;
   role: AuthRole;
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "banned";
+  subscriptionPlan: "owner" | "personal" | "company" | null;
+  isSubscribed: boolean;
   createdAt: string;
 }
 
@@ -44,6 +46,10 @@ interface AuthState {
   logout: () => void;
   lock: () => void;
   unlock: (password: string) => boolean;
+  updateSubscription: (plan: "personal" | "company") => void;
+  banUser: (accountId: string) => void;
+  unbanUser: (accountId: string) => void;
+  changeRole: (accountId: string, role: AuthRole) => void;
   createAccount: (data: { username: string; password: string; fullName: string; role: AuthRole }) => void;
   removeAccount: (accountId: string) => void;
   addInvite: (data: { fullName: string; email: string; role: AuthRole }) => string;
@@ -58,6 +64,8 @@ const MASTER_ACCOUNT: AuthAccount = {
   fullName: "soumaila ouedraogo",
   role: "owner",
   status: "active",
+  subscriptionPlan: "owner",
+  isSubscribed: true,
   createdAt: new Date().toISOString(),
 };
 
@@ -138,6 +146,45 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => set({ currentUser: null }),
 
+      updateSubscription: (plan) =>
+        set((state) => {
+          if (!state.currentUser) return {};
+          const updated: AuthAccount = {
+            ...state.currentUser,
+            subscriptionPlan: plan,
+            isSubscribed: true,
+          };
+          return {
+            currentUser: updated,
+            accounts: state.accounts.map((a) =>
+              a.id === updated.id ? updated : a
+            ),
+          };
+        }),
+
+      banUser: (accountId) =>
+        set((state) => ({
+          accounts: state.accounts.map((a) =>
+            a.id === accountId && a.id !== "master"
+              ? { ...a, status: "banned" as const }
+              : a
+          ),
+        })),
+
+      unbanUser: (accountId) =>
+        set((state) => ({
+          accounts: state.accounts.map((a) =>
+            a.id === accountId ? { ...a, status: "active" as const } : a
+          ),
+        })),
+
+      changeRole: (accountId, role) =>
+        set((state) => ({
+          accounts: state.accounts.map((a) =>
+            a.id === accountId && a.id !== "master" ? { ...a, role } : a
+          ),
+        })),
+
       removeAccount: (accountId) =>
         set((state) => ({
           // Never allow deleting the master account
@@ -157,6 +204,8 @@ export const useAuthStore = create<AuthState>()(
               fullName: data.fullName,
               role: data.role,
               status: "active",
+              subscriptionPlan: null,
+              isSubscribed: false,
               createdAt: new Date().toISOString(),
             },
           ],
@@ -204,6 +253,8 @@ export const useAuthStore = create<AuthState>()(
               fullName: invite.fullName,
               role: invite.role,
               status: "active",
+              subscriptionPlan: null,
+              isSubscribed: false,
               createdAt: new Date().toISOString(),
             },
           ],
