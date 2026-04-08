@@ -266,6 +266,15 @@ export const useAuthStore = create<AuthState>()(
         return true;
       },
     }),
-    { name: "picksmart-auth-store" }
+    {
+      name: "picksmart-auth-store",
+      partialize: (state) => ({
+        accounts: state.accounts,
+        pendingInvites: state.pendingInvites,
+        usedTokens: state.usedTokens,
+        // currentUser and locked are intentionally excluded —
+        // every page load / tab close requires a fresh login.
+      }),
+    }
   )
 );
