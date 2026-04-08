@@ -305,10 +305,24 @@ export default function NovaHelpPage() {
     setErrorMsg("");
   };
 
+  // ── Stop TTS immediately ──────────────────────────────────────────────────
+  const stopSpeaking = useCallback(() => {
+    try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+    if (sessionActiveRef.current) {
+      setPhase("listening");
+      setTimeout(() => {
+        if (sessionActiveRef.current) startRecording();
+      }, 300);
+    }
+  }, [startRecording]);
+
   // ── Mic button tap ────────────────────────────────────────────────────────
   const handleMic = () => {
     if (!sessionActive) return;
-    if (phase === "recording") {
+    if (phase === "speaking") {
+      // Interrupt NOVA mid-sentence
+      stopSpeaking();
+    } else if (phase === "recording") {
       stopAndTranscribe();
     } else if (phase === "listening" || phase === "wake_listening") {
       startRecording();
@@ -345,6 +359,8 @@ export default function NovaHelpPage() {
   const micLabel =
     phase === "recording"
       ? isSpanish ? "🔴 Toca para enviar" : "🔴 Tap to send"
+      : phase === "speaking"
+      ? isSpanish ? "⏹ Toca para parar" : "⏹ Tap to stop"
       : phase === "wake_listening"
       ? isSpanish ? "Toca · Di Hola NOVA" : "Tap · Say Hey NOVA"
       : phase === "listening"
@@ -353,7 +369,7 @@ export default function NovaHelpPage() {
 
   const canTapMic =
     sessionActive &&
-    (phase === "listening" || phase === "recording" || phase === "wake_listening");
+    (phase === "listening" || phase === "recording" || phase === "wake_listening" || phase === "speaking");
 
   const phaseTitle = !sessionActive
     ? isSpanish ? "Totalmente automático — como Siri" : "Fully automatic — just like Siri"
@@ -366,7 +382,7 @@ export default function NovaHelpPage() {
     : phase === "thinking"
     ? isSpanish ? "NOVA pensando…" : "NOVA thinking…"
     : phase === "speaking"
-    ? isSpanish ? "NOVA hablando…" : "NOVA speaking…"
+    ? isSpanish ? "NOVA hablando — toca para parar" : "NOVA speaking — tap to stop"
     : isSpanish ? "Listo — toca el micrófono" : "Ready — tap the microphone";
 
   return (
