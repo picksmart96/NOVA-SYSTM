@@ -510,6 +510,19 @@ export default function NovaTrainerPage() {
     setPromptText(voice.currentPrompt);
   }, [voice.currentPrompt]);
 
+  // Auto-start session as soon as a selector is matched (mic already granted in handleEnterNova)
+  const hasAutoStartedRef = useRef(false);
+  useEffect(() => {
+    if (matchedSelector && !hasAutoStartedRef.current) {
+      hasAutoStartedRef.current = true;
+      startNova();
+    }
+    if (!matchedSelector) {
+      hasAutoStartedRef.current = false;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchedSelector]);
+
   const voiceLabels = {
     listening: t("novaTrainer.listening"),
     speaking: t("novaTrainer.speaking"),
@@ -519,7 +532,7 @@ export default function NovaTrainerPage() {
   };
 
   // ── NOVA ID handler ──────────────────────────────────────────────────────────
-  const handleEnterNova = () => {
+  const handleEnterNova = async () => {
     const cleaned = novaIdInput.trim().toUpperCase();
     if (!cleaned) {
       setEntryError("Please enter your NOVA ID.");
@@ -533,6 +546,8 @@ export default function NovaTrainerPage() {
       return;
     }
     setEntryError("");
+    // Initialize mic HERE (same user-gesture context) so auto-start works immediately
+    await voice.initialize();
     setMatchedSelector(found);
   };
 
