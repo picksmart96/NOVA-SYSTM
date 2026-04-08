@@ -30,10 +30,12 @@ export default function NovaHelpPage() {
     const v = voiceRef.current;
     if (!v) return;
     const text = heard.toLowerCase().trim();
+    // Strip punctuation so Chrome's "hey, nova." still matches "hey nova"
+    const clean = text.replace(/[.,!?;:'"()]/g, " ").replace(/\s+/g, " ").trim();
     addLog(`🎤 Heard: "${text}"`);
 
-    const wakeMatched = WAKE_WORDS.some((w) => text.includes(w));
-    const stopMatched = STOP_WORDS.some((w) => text === w || text.includes(w));
+    const wakeMatched = WAKE_WORDS.some((w) => clean.includes(w));
+    const stopMatched = STOP_WORDS.some((w) => clean === w || clean.includes(w));
 
     if (!awakeRef.current) {
       if (wakeMatched) {
@@ -48,7 +50,7 @@ export default function NovaHelpPage() {
         return;
       }
       addLog("⏳ Waiting for wake word…");
-      v.startWakeMode();
+      // Don't call startWakeMode() — onend already handles the restart automatically
       return;
     }
 
@@ -65,9 +67,7 @@ export default function NovaHelpPage() {
     }
 
     if (wakeMatched) {
-      const helloAgain = isSpanish
-        ? "Estoy aquí. ¿Cómo puedo ayudarte?"
-        : "I'm here. How can I help?";
+      const helloAgain = isSpanish ? "Estoy aquí. ¿Cómo puedo ayudarte?" : "I'm here. How can I help?";
       setPrompt(helloAgain);
       addLog("👋 Re-wake");
       v.speak(helloAgain, { after: "active" });

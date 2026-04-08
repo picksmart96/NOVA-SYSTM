@@ -72,6 +72,8 @@ export function useVoiceEngine({
   const restartingRef = useRef(false);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ttsWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const networkRetryRef = useRef(0);
+  const recognitionActiveRef = useRef(false); // true between onstart and onend
   const modeRef = useRef<"wake" | "active">("wake");
   const onHeardRef = useRef(onHeard);
   useEffect(() => {
@@ -133,8 +135,9 @@ export function useVoiceEngine({
         console.log("[NOVA voice] startRecognition blocked", { hasRec: !!recognitionRef.current, shouldRun: shouldRunRef.current, speaking: speakingRef.current });
         return;
       }
-      if (restartingRef.current) {
-        console.log("[NOVA voice] startRecognition blocked (already restarting)");
+      // Block if recognition is already started (onstart fired) OR just queued (restartingRef)
+      if (restartingRef.current || recognitionActiveRef.current) {
+        console.log("[NOVA voice] startRecognition blocked (active:", recognitionActiveRef.current, "restarting:", restartingRef.current, ")");
         return;
       }
 
@@ -288,6 +291,7 @@ export function useVoiceEngine({
 
     recognition.onstart = () => {
       restartingRef.current = false;
+      recognitionActiveRef.current = true;
       console.log("[NOVA voice] recognition started ✓ mode:", modeRef.current);
       startSilenceTimer();
     };
@@ -295,6 +299,7 @@ export function useVoiceEngine({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = async (event: any) => {
       clearSilenceTimer();
+      networkRetryRef.current = 0; // successful result — reset backoff
       const raw: string = event?.results?.[0]?.[0]?.transcript ?? "";
       const heard = raw.toLowerCase().trim();
       console.log("[NOVA voice] heard:", JSON.stringify(heard));
@@ -305,6 +310,7 @@ export function useVoiceEngine({
         setStatus(STATUS.THINKING);
         await onHeardRef.current(heard, raw);
       }
+      // Do NOT call startRecognition here — onend will handle it
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -319,31 +325,42 @@ export function useVoiceEngine({
         setError("Microphone permission was denied.");
         setStatus(STATUS.ERROR);
         shouldRunRef.current = false;
+        // onend fires next but shouldRunRef is false so no restart
         return;
       }
 
-      if (code === "no-speech" || code === "aborted") {
-        if (shouldRunRef.current && !speakingRef.current) {
-          setTimeout(() => startRecognition(modeRef.current), 150);
-        }
+      if (code === "network") {
+        networkRetryRef.current++;
+        // Don't restart here — onend fires after onerror and handles restart with backoff
         return;
       }
 
-      setError(`Recognition error: ${code}`);
-      if (shouldRunRef.current && !speakingRef.current) {
-        setTimeout(() => startRecognition(modeRef.current), 300);
-      } else {
-        setStatus(STATUS.ERROR);
+      // For no-speech, aborted, and other errors: let onend handle restart
+      // Just clear any displayed error for non-critical ones
+      if (code !== "no-speech" && code !== "aborted") {
+        setError(`Recognition error: ${code}`);
       }
     };
 
     recognition.onend = () => {
       clearSilenceTimer();
       restartingRef.current = false;
-      console.log("[NOVA voice] recognition ended — speaking:", speakingRef.current, "shouldRun:", shouldRunRef.current);
-      if (shouldRunRef.current && !speakingRef.current) {
-        setTimeout(() => startRecognition(modeRef.current), 150);
+      recognitionActiveRef.current = false;
+      console.log("[NOVA voice] recognition ended — speaking:", speakingRef.current, "shouldRun:", shouldRunRef.current, "networkRetry:", networkRetryRef.current);
+
+      if (!shouldRunRef.current || speakingRef.current) return;
+
+      // Exponential backoff for repeated network errors (caps at 30s)
+      const retries = networkRetryRef.current;
+      const delay = retries > 0
+        ? Math.min(300 * Math.pow(2, Math.min(retries - 1, 6)), 30_000)
+        : 150;
+
+      if (retries > 0) {
+        console.log(`[NOVA voice] network backoff ${delay}ms (retry #${retries})`);
       }
+
+      setTimeout(() => startRecognition(modeRef.current), delay);
     };
 
     recognitionRef.current = recognition;
