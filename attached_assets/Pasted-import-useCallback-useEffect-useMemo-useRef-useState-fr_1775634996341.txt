@@ -1,0 +1,310 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+const STATUS = {
+  IDLE: "idle",
+  WAKE_LISTENING: "wake_listening",
+  ACTIVE_LISTENING: "active_listening",
+  THINKING: "thinking",
+  SPEAKING: "speaking",
+  STOPPED: "stopped",
+  ERROR: "error",
+};
+
+function getRecognitionClass() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
+export default function useVoiceEngine({
+  onHeard,
+  silenceTimeoutMs = 7000,
+  lang = "en-US",
+} = {}) {
+  const recognitionRef = useRef(null);
+  const shouldRunRef = useRef(false);
+  const speakingRef = useRef(false);
+  const restartingRef = useRef(false);
+  const silenceTimerRef = useRef(null);
+
+  const [status, setStatus] = useState(STATUS.IDLE);
+  const [supported, setSupported] = useState(false);
+  const [initialized, setInitialized] = useState(false);
+  const [micPermission, setMicPermission] = useState("unknown");
+  const [error, setError] = useState("");
+  const [lastHeard, setLastHeard] = useState("");
+  const [currentPrompt, setCurrentPrompt] = useState("");
+
+  const clearSilenceTimer = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  };
+
+  const startSilenceTimer = useCallback(() => {
+    clearSilenceTimer();
+    silenceTimerRef.current = setTimeout(() => {
+      if (shouldRunRef.current && !speakingRef.current) {
+        setLastHeard("");
+        setStatus((prev) =>
+          prev === STATUS.ACTIVE_LISTENING ? STATUS.ACTIVE_LISTENING : STATUS.WAKE_LISTENING
+        );
+        try {
+          recognitionRef.current?.stop();
+        } catch {}
+      }
+    }, silenceTimeoutMs);
+  }, [silenceTimeoutMs]);
+
+  const stopRecognition = useCallback(() => {
+    clearSilenceTimer();
+    try {
+      recognitionRef.current?.stop();
+    } catch {}
+  }, []);
+
+  const abortRecognition = useCallback(() => {
+    clearSilenceTimer();
+    try {
+      recognitionRef.current?.abort();
+    } catch {}
+  }, []);
+
+  const startRecognition = useCallback(
+    (mode = "wake") => {
+      if (!recognitionRef.current || !shouldRunRef.current || speakingRef.current) return;
+      if (restartingRef.current) return;
+
+      restartingRef.current = true;
+      setError("");
+      setStatus(mode === "active" ? STATUS.ACTIVE_LISTENING : STATUS.WAKE_LISTENING);
+
+      try {
+        recognitionRef.current.start();
+        startSilenceTimer();
+      } catch {
+        restartingRef.current = false;
+      }
+    },
+    [startSilenceTimer]
+  );
+
+  const speak = useCallback(
+    (text, { after = "wake", onEnd } = {}) => {
+      setCurrentPrompt(text);
+      if (!("speechSynthesis" in window)) {
+        onEnd?.();
+        if (shouldRunRef.current) {
+          startRecognition(after);
+        }
+        return;
+      }
+
+      speakingRef.current = true;
+      clearSilenceTimer();
+      stopRecognition();
+      setStatus(STATUS.SPEAKING);
+
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang;
+      utterance.rate = 1;
+      utterance.pitch = 1;
+
+      const voices = window.speechSynthesis.getVoices();
+      const preferred =
+        voices.find((v) => /samantha|zira|karen|aria|ava|female/i.test(v.name)) ||
+        voices[0];
+
+      if (preferred) utterance.voice = preferred;
+
+      utterance.onend = () => {
+        speakingRef.current = false;
+        onEnd?.();
+        if (shouldRunRef.current) {
+          startRecognition(after);
+        } else {
+          setStatus(STATUS.STOPPED);
+        }
+      };
+
+      utterance.onerror = () => {
+        speakingRef.current = false;
+        setError("Speech playback failed.");
+        setStatus(STATUS.ERROR);
+        if (shouldRunRef.current) {
+          startRecognition(after);
+        }
+      };
+
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        speakingRef.current = false;
+        setError("Unable to start speech playback.");
+        setStatus(STATUS.ERROR);
+      }
+    },
+    [clearSilenceTimer, lang, startRecognition, stopRecognition]
+  );
+
+  const initialize = useCallback(async () => {
+    const Recognition = getRecognitionClass();
+    if (!Recognition) {
+      setSupported(false);
+      setError("This browser does not fully support live voice mode. Try Chrome.");
+      setStatus(STATUS.ERROR);
+      return false;
+    }
+
+    setSupported(true);
+    setError("");
+
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      setMicPermission("granted");
+    } catch {
+      setMicPermission("denied");
+      setError("Microphone permission was denied.");
+      setStatus(STATUS.ERROR);
+      return false;
+    }
+
+    const recognition = new Recognition();
+    recognition.lang = lang;
+    recognition.interimResults = false;
+    recognition.continuous = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      restartingRef.current = false;
+      startSilenceTimer();
+    };
+
+    recognition.onresult = async (event) => {
+      clearSilenceTimer();
+      const raw = event?.results?.[0]?.[0]?.transcript || "";
+      const heard = raw.toLowerCase().trim();
+      setLastHeard(heard);
+
+      if (heard && onHeard) {
+        setStatus(STATUS.THINKING);
+        await onHeard(heard, raw);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      clearSilenceTimer();
+      restartingRef.current = false;
+      const code = event?.error || "unknown";
+
+      if (code === "not-allowed" || code === "service-not-allowed") {
+        setMicPermission("denied");
+        setError("Microphone permission was denied.");
+        setStatus(STATUS.ERROR);
+        shouldRunRef.current = false;
+        return;
+      }
+
+      if (code === "no-speech" || code === "aborted") {
+        if (shouldRunRef.current && !speakingRef.current) {
+          startRecognition(status === STATUS.ACTIVE_LISTENING ? "active" : "wake");
+        }
+        return;
+      }
+
+      setError(`Recognition error: ${code}`);
+      if (shouldRunRef.current && !speakingRef.current) {
+        startRecognition(status === STATUS.ACTIVE_LISTENING ? "active" : "wake");
+      } else {
+        setStatus(STATUS.ERROR);
+      }
+    };
+
+    recognition.onend = () => {
+      clearSilenceTimer();
+      restartingRef.current = false;
+      if (shouldRunRef.current && !speakingRef.current) {
+        startRecognition(status === STATUS.ACTIVE_LISTENING ? "active" : "wake");
+      }
+    };
+
+    recognitionRef.current = recognition;
+    shouldRunRef.current = true;
+    setInitialized(true);
+    setStatus(STATUS.WAKE_LISTENING);
+    startRecognition("wake");
+    return true;
+  }, [clearSilenceTimer, lang, onHeard, startRecognition, startSilenceTimer, status]);
+
+  const startWakeMode = useCallback(() => {
+    shouldRunRef.current = true;
+    startRecognition("wake");
+  }, [startRecognition]);
+
+  const startActiveMode = useCallback(() => {
+    shouldRunRef.current = true;
+    startRecognition("active");
+  }, [startRecognition]);
+
+  const stopAll = useCallback(() => {
+    shouldRunRef.current = false;
+    clearSilenceTimer();
+    abortRecognition();
+    try {
+      window.speechSynthesis.cancel();
+    } catch {}
+    speakingRef.current = false;
+    setStatus(STATUS.STOPPED);
+  }, [abortRecognition]);
+
+  const retryMic = useCallback(async () => {
+    stopAll();
+    return initialize();
+  }, [initialize, stopAll]);
+
+  useEffect(() => {
+    return () => {
+      stopAll();
+    };
+  }, [stopAll]);
+
+  return useMemo(
+    () => ({
+      STATUS,
+      status,
+      supported,
+      initialized,
+      micPermission,
+      error,
+      lastHeard,
+      currentPrompt,
+      initialize,
+      speak,
+      startWakeMode,
+      startActiveMode,
+      stopAll,
+      retryMic,
+      listening:
+        status === STATUS.WAKE_LISTENING || status === STATUS.ACTIVE_LISTENING,
+      speaking: status === STATUS.SPEAKING,
+      thinking: status === STATUS.THINKING,
+    }),
+    [
+      currentPrompt,
+      error,
+      initialized,
+      micPermission,
+      retryMic,
+      speak,
+      startActiveMode,
+      startWakeMode,
+      status,
+      stopAll,
+      supported,
+      lastHeard,
+    ]
+  );
+}
