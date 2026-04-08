@@ -82,7 +82,6 @@ export default function NovaTrainerPage() {
             </div>
             <div>
               <h1 className="text-2xl font-black text-white">NOVA Trainer</h1>
-              <p className="text-slate-400 text-sm">ES3 Voice Script Mode</p>
             </div>
           </div>
 

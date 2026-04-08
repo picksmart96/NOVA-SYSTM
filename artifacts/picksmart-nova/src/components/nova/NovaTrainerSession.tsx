@@ -45,29 +45,6 @@ interface TrainerState {
   defaults: { printerNumber: string; alphaLabelNumber: string; bravoLabelNumber: string };
 }
 
-function StatCard({ label, value, tone = "default" }: { label: string; value: string | number; tone?: string }) {
-  const toneClass =
-    tone === "success" ? "text-green-300" :
-    tone === "danger"  ? "text-red-300" :
-    tone === "accent"  ? "text-yellow-300" :
-    "text-white";
-
-  return (
-    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-4 shadow-lg">
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className={`mt-2 text-xl font-black break-words ${toneClass}`}>{value}</p>
-    </div>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-3">
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="mt-1 text-sm font-semibold break-words">{value}</p>
-    </div>
-  );
-}
 
 function buildWsUrl() {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -76,7 +53,7 @@ function buildWsUrl() {
 
 const DEFAULT_STATE: TrainerState = {
   phase: "WAIT_WAKE",
-  prompt: 'Tap "Start Session" then say "Hey NOVA".',
+  prompt: "Connecting to NOVA…",
   equipmentId: "",
   maxPalletCount: "2",
   failedSafetyItem: "",
@@ -125,14 +102,6 @@ export default function NovaTrainerSession({
     return "Idle";
   }, [serverError, voice.error, voice.speaking, voice.listening]);
 
-  const progressPercent = useMemo(() => {
-    const { activeAssignment, currentStop } = trainerState;
-    if (!activeAssignment || !currentStop) return "—";
-    const total = Number(activeAssignment.stops ?? 0);
-    const current = Number(currentStop.stopOrder ?? 0);
-    if (!total || !current) return "—";
-    return `${Math.round((current / total) * 100)}%`;
-  }, [trainerState]);
 
   const connectSocket = () => {
     try {
@@ -283,231 +252,122 @@ export default function NovaTrainerSession({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { activeAssignment, currentStop, nextStop, defaults } = trainerState;
+  const micIcon = voice.speaking
+    ? "🔊"
+    : voice.listening
+    ? "🎙️"
+    : "⏸";
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white px-4 sm:px-6 py-6">
-      <div className="max-w-7xl mx-auto space-y-5">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
 
-        {/* Header */}
-        <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
-          <div>
-            <p className="text-yellow-400 text-xs uppercase tracking-widest">NOVA Trainer</p>
-            <h1 className="text-2xl sm:text-3xl font-black">ES3 Script Mode</h1>
-            <p className="text-slate-400 text-sm">Server-driven voice workflow</p>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
+      {/* Thin top bar — only selector name + exit */}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800/60">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-yellow-400">{selector.novaId}</span>
+          <span className="text-xs text-slate-500">·</span>
+          <span className="text-xs text-slate-400">{selector.fullName ?? selector.name}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          {/* mic status dot */}
+          <span className="text-base leading-none">{micIcon}</span>
+          {!connected && (
+            <span className="text-xs text-red-400">Offline</span>
+          )}
+          {onExit && (
             <button
-              onClick={startSession}
-              className="rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
+              onClick={() => { resetSession(); onExit(); }}
+              className="text-xs text-slate-500 hover:text-slate-300 transition"
             >
-              {started ? "Restart" : "Start Session"}
+              Exit
             </button>
+          )}
+        </div>
+      </div>
 
-            <button
-              onClick={retryMic}
-              className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-yellow-400 transition"
-            >
-              Retry Mic
-            </button>
+      {/* Error banners */}
+      {(serverError || voice.error) && (
+        <div className="mx-4 mt-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-red-300 text-xs">
+          {serverError || voice.error}
+        </div>
+      )}
 
-            <button
-              onClick={resetSession}
-              className="rounded-2xl border border-red-500/30 bg-slate-900 px-5 py-3 font-semibold text-red-300 hover:bg-red-500/10 transition"
-            >
-              Reset
-            </button>
+      {/* Main — NOVA prompt takes center stage */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 gap-6 max-w-xl mx-auto w-full">
 
-            {onExit && (
-              <button
-                onClick={onExit}
-                className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-yellow-400 transition"
-              >
-                Exit
-              </button>
-            )}
-          </div>
+        {/* Voice state pill */}
+        <div className={`flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold ${
+          voice.speaking
+            ? "bg-yellow-500/15 text-yellow-300"
+            : voice.listening
+            ? "bg-green-500/15 text-green-300"
+            : "bg-slate-800 text-slate-400"
+        }`}>
+          <span className="text-sm">{micIcon}</span>
+          {voiceStateLabel}
         </div>
 
-        {/* Selector bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-3xl border border-slate-800 bg-slate-900 px-5 py-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-bold text-yellow-300">
-              {selector.novaId}
-            </span>
-            <span className="font-semibold">
-              {selector.fullName ?? selector.name ?? "Selector"}
-            </span>
-          </div>
-          <div className="text-sm text-slate-400">
-            User ID: {selector.userId}
-          </div>
+        {/* NOVA prompt */}
+        <div className="w-full rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-xl text-center">
+          <p className="text-xs text-yellow-400 uppercase tracking-widest mb-3">NOVA</p>
+          <p className="text-xl sm:text-2xl font-bold leading-snug">
+            {trainerState.prompt}
+          </p>
         </div>
 
-        {/* Errors */}
-        {serverError && (
-          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-5">
-            <p className="font-bold text-red-300">Connection Error</p>
-            <p className="mt-1 text-red-200 text-sm">{serverError}</p>
+        {/* Heard */}
+        {heardResponse && (
+          <div className="w-full rounded-2xl border border-slate-800 bg-slate-950 px-5 py-3 text-center">
+            <p className="text-xs text-slate-500 mb-1">You said</p>
+            <p className="text-sm font-semibold text-slate-300">{heardResponse}</p>
           </div>
         )}
 
-        {voice.error && (
-          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-5">
-            <p className="font-bold text-red-300">Voice Error</p>
-            <p className="mt-1 text-red-200 text-sm">{voice.error}</p>
-          </div>
-        )}
-
-        {/* Stats row */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-7 gap-3">
-          <StatCard label="Phase" value={trainerState.phase} tone="accent" />
-          <StatCard
-            label="Assignment"
-            value={activeAssignment ? `#${activeAssignment.assignmentNumber}` : "—"}
+        {/* Manual input — always visible */}
+        <div className="w-full flex gap-2">
+          <input
+            id="nova-manual-input"
+            type="text"
+            placeholder="Type response and press Enter…"
+            className="flex-1 rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm outline-none focus:border-yellow-400 transition placeholder:text-slate-600"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const el = e.currentTarget;
+                const val = el.value.trim();
+                if (val) { setHeardResponse(val); sendInput(val); el.value = ""; }
+              }
+            }}
           />
-          <StatCard
-            label="Stop"
-            value={currentStop ? `${currentStop.stopOrder}/${activeAssignment?.stops ?? "—"}` : "—"}
-          />
-          <StatCard label="Voice" value={voiceStateLabel} tone="success" />
-          <StatCard
-            label="Errors"
-            value={trainerState.invalidCount ?? 0}
-            tone={(trainerState.invalidCount ?? 0) > 0 ? "danger" : "default"}
-          />
-          <StatCard label="Progress" value={progressPercent} tone="accent" />
-          <StatCard
-            label="Socket"
-            value={connected ? "Live" : "Offline"}
-            tone={connected ? "success" : "danger"}
-          />
+          <button
+            onClick={() => {
+              const el = document.getElementById("nova-manual-input") as HTMLInputElement | null;
+              const val = el?.value.trim();
+              if (val) { setHeardResponse(val); sendInput(val); if (el) el.value = ""; }
+            }}
+            className="rounded-2xl bg-yellow-400 px-5 py-3 text-sm font-black text-slate-950 hover:bg-yellow-300 transition"
+          >
+            Send
+          </button>
         </div>
-
-        {/* Main grid */}
-        <div className="grid xl:grid-cols-[1.3fr_0.7fr] gap-5">
-
-          {/* Left: prompt + live data */}
-          <div className="space-y-5">
-
-            {/* Current Prompt */}
-            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-              <h2 className="text-lg font-bold mb-4">Current Prompt</h2>
-              <div className="rounded-2xl border border-yellow-500/20 bg-slate-950 p-5 text-lg font-semibold leading-relaxed min-h-[80px]">
-                {trainerState.prompt}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 mt-4">
-                <MiniStat label="Heard" value={heardResponse || "—"} />
-                <MiniStat label="Mic" value={voice.micPermission ?? "—"} />
-              </div>
-
-              {/* Quick-type input (fallback for voice failures) */}
-              <div className="mt-4 flex gap-2">
-                <input
-                  id="quick-input"
-                  type="text"
-                  placeholder='Type input (e.g. "hey nova", check code…)'
-                  className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2 text-sm outline-none focus:border-yellow-400"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      const el = e.currentTarget;
-                      const val = el.value.trim();
-                      if (val) {
-                        setHeardResponse(val);
-                        sendInput(val);
-                        el.value = "";
-                      }
-                    }
-                  }}
-                />
-                <button
-                  onClick={() => {
-                    const el = document.getElementById("quick-input") as HTMLInputElement | null;
-                    const val = el?.value.trim();
-                    if (val) {
-                      setHeardResponse(val);
-                      sendInput(val);
-                      if (el) el.value = "";
-                    }
-                  }}
-                  className="rounded-xl bg-yellow-400 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-yellow-300 transition"
-                >
-                  Send
-                </button>
-              </div>
-            </div>
-
-            {/* Live data */}
-            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-              <h2 className="text-lg font-bold mb-4">Live Data</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-                <MiniStat label="Equipment" value={trainerState.equipmentId || "—"} />
-                <MiniStat label="Max Pallets" value={trainerState.maxPalletCount || "2"} />
-                <MiniStat label="Aisle" value={currentStop?.aisle ?? "—"} />
-                <MiniStat label="Slot" value={currentStop?.slot ?? "—"} />
-                <MiniStat label="Qty" value={currentStop?.qty ?? "—"} />
-                <MiniStat
-                  label="Next"
-                  value={nextStop ? `${nextStop.aisle} / ${nextStop.slot}` : "—"}
-                />
-                <MiniStat label="Door" value={activeAssignment?.doorNumber ?? "—"} />
-                <MiniStat label="Door Code" value={activeAssignment?.doorCode ?? "—"} />
-                <MiniStat label="Type" value={activeAssignment?.type ?? "—"} />
-                <MiniStat label="Cases" value={activeAssignment?.totalCases ?? "—"} />
-                <MiniStat label="Printer" value={defaults.printerNumber} />
-                <MiniStat
-                  label="Labels"
-                  value={`A:${defaults.alphaLabelNumber} B:${defaults.bravoLabelNumber}`}
-                />
-              </div>
-            </div>
-
-          </div>
-
-          {/* Right: command log */}
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-            <h2 className="text-lg font-bold mb-4">Command Log</h2>
-            <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
-              {trainerState.commandLog.length === 0 ? (
-                <p className="text-slate-500 text-sm">No commands yet.</p>
-              ) : (
-                trainerState.commandLog.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className={`rounded-xl px-3 py-2 text-xs ${
-                      entry.type === "NOVA"
-                        ? "border border-yellow-500/20 bg-yellow-500/5 text-yellow-200"
-                        : "border border-slate-700 bg-slate-950 text-slate-300"
-                    }`}
-                  >
-                    <span className="font-bold mr-2 opacity-60">
-                      {entry.type === "NOVA" ? "NOVA" : "YOU"}
-                    </span>
-                    {entry.text}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-        </div>
-
-        {/* Assignment info */}
-        {activeAssignment && (
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
-            <h2 className="text-sm font-bold text-slate-400 mb-3">Active Assignment</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-              <MiniStat label="Number" value={activeAssignment.assignmentNumber} />
-              <MiniStat label="Aisles" value={`${activeAssignment.startAisle}–${activeAssignment.endAisle}`} />
-              <MiniStat label="Goal" value={`${activeAssignment.goalTimeMinutes} min`} />
-              <MiniStat label="Pallets" value={activeAssignment.pallets} />
-            </div>
-          </div>
-        )}
 
       </div>
+
+      {/* Scrollable log at bottom */}
+      <div className="border-t border-slate-800/60 px-5 py-3 max-h-48 overflow-y-auto space-y-1">
+        {trainerState.commandLog.length === 0 ? (
+          <p className="text-xs text-slate-600 text-center py-2">Session log will appear here</p>
+        ) : (
+          trainerState.commandLog.map((entry) => (
+            <div key={entry.id} className="flex gap-2 text-xs">
+              <span className={`font-bold shrink-0 ${entry.type === "NOVA" ? "text-yellow-400" : "text-slate-400"}`}>
+                {entry.type === "NOVA" ? "NOVA" : "YOU "}
+              </span>
+              <span className="text-slate-300">{entry.text}</span>
+            </div>
+          ))
+        )}
+      </div>
+
     </div>
   );
 }
