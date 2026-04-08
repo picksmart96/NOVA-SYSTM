@@ -1,254 +1,158 @@
-import { useState, useCallback, useRef, useEffect } from "react";
-import { useVoiceEngine, UseVoiceEngineReturn } from "@/hooks/useVoiceEngine";
-import { askNovaHelp } from "@/lib/novaHelpApi";
-import { useTranslation } from "react-i18next";
-import { Mic, MicOff, StopCircle, RefreshCw } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { useTrainerStore } from "@/lib/trainerStore";
+import { useAuthStore } from "@/lib/authStore";
+import { ASSIGNMENTS } from "@/data/assignments";
+import { ClipboardList, Headphones, Clock, Package, DoorOpen, ChevronRight, CheckCircle2, Circle, Activity } from "lucide-react";
 
-const TOPICS = [
-  { label: "Pallet Building", icon: "📦" },
-  { label: "Fast Picking",    icon: "⚡" },
-  { label: "Safety",          icon: "🦺" },
-  { label: "Save Time",       icon: "⏱" },
-  { label: "Stay Motivated",  icon: "💪" },
-];
+export default function MyAssignmentsPage() {
+  const [, navigate] = useLocation();
+  const { currentUser } = useAuthStore();
+  const { selectors, assignments: trainerAssignments } = useTrainerStore();
 
-export default function NovaCoachPage() {
-  const { t, i18n } = useTranslation();
-
-  const [ready,        setReady]        = useState(false);
-  const [awake,        setAwake]        = useState(false);
-  const [novaText,     setNovaText]     = useState("");
-  const [lastQuestion, setLastQuestion] = useState("");
-  const [thinking,     setThinking]     = useState(false);
-
-  const voiceRef = useRef<UseVoiceEngineReturn | null>(null);
-  const awakeRef = useRef(false);
-  awakeRef.current = awake;
-
-  const speakAndListen = useCallback((text: string) => {
-    setNovaText(text);
-    voiceRef.current?.askAndListen(text);
-  }, []);
-
-  const handleVoiceInput = useCallback(
-    async (heard: string) => {
-      const text = heard.toLowerCase().trim();
-      if (!text) return;
-
-      // Stop → silence but keep mic open for next wake word
-      if (
-        text.includes("stop") ||
-        text.includes("parar") ||
-        text.includes("detener")
-      ) {
-        setAwake(false);
-        setNovaText("Ready when you need me. Say \"Hey NOVA\" anytime.");
-        voiceRef.current?.speak(
-          "Got it. Say Hey NOVA whenever you want help.",
-          { restartAfterSpeak: true }
-        );
-        return;
-      }
-
-      // Wake word
-      if (text.includes("hey nova") || text.includes("hola nova")) {
-        setAwake(true);
-        speakAndListen(
-          awakeRef.current
-            ? "I'm here. What do you need?"
-            : "Hey! Ask me anything about pallet building, picking, safety, or staying on pace."
-        );
-        return;
-      }
-
-      // Not awake — listen silently for wake word
-      if (!awakeRef.current) {
-        voiceRef.current?.startListening();
-        return;
-      }
-
-      // Awake — answer the question
-      setLastQuestion(heard);
-      setNovaText("Thinking…");
-      setThinking(true);
-      try {
-        const answer = await askNovaHelp(text, i18n.language);
-        setThinking(false);
-        speakAndListen(answer);
-      } catch {
-        setThinking(false);
-        speakAndListen("I had trouble answering. Try asking again.");
-      }
-    },
-    [speakAndListen, i18n.language]
+  const selectorProfile = selectors.find(
+    (s) =>
+      s.email.toLowerCase() === (currentUser?.username ?? "").toLowerCase() ||
+      s.name.toLowerCase().includes(
+        (currentUser?.fullName ?? "").toLowerCase().split(" ")[0]
+      )
   );
 
-  const voice = useVoiceEngine({
-    onHeard: handleVoiceInput,
-    autoRestart: true,
-    silencePrompt: "",
-  });
+  // Combine static + trainer-created assignments for this selector
+  const myAssignments = [
+    ...ASSIGNMENTS.filter((a) => a.selectorUserId === (selectorProfile?.userId ?? currentUser?.username ?? "")),
+    ...trainerAssignments.filter(
+      (a) =>
+        a.selectorUserId === (selectorProfile?.userId ?? currentUser?.username ?? "")
+    ),
+  ];
 
-  voiceRef.current = voice;
-
-  useEffect(() => () => { voice.shutdown(); }, []);
-
-  // Single tap to start — grants mic permission in user-gesture context
-  const tap = async () => {
-    if (ready) { voice.startListening(); return; }
-    const ok = await voice.initialize();
-    if (!ok) return;
-    setReady(true);
-    const intro = "Ready. Say \"Hey NOVA\" and ask me anything about picking, pallets, safety, or pace.";
-    setNovaText(intro);
-    voice.askAndListen(intro);
+  const statusColor = (s: string) => {
+    if (s === "active") return "bg-green-500/20 text-green-300 border-green-500/30";
+    if (s === "completed") return "bg-slate-700 text-slate-400 border-slate-600";
+    return "bg-yellow-400/10 text-yellow-300 border-yellow-400/20";
   };
-
-  const stop = () => {
-    voice.stopListening();
-    try { window.speechSynthesis?.cancel(); } catch {}
-    setReady(false);
-    setAwake(false);
-    setNovaText("");
-    setLastQuestion("");
+  const statusLabel = (s: string) => {
+    if (s === "active") return "Active";
+    if (s === "completed") return "Completed";
+    return "Pending";
   };
-
-  // Visual state
-  const isListening = voice.listening;
-  const isSpeaking  = voice.speaking;
-  const isThinking  = thinking || voice.processing;
-
-  const ringClass = isListening
-    ? "ring-green-400/60"
-    : isSpeaking
-    ? "ring-yellow-400/60"
-    : isThinking
-    ? "ring-blue-400/60"
-    : awake
-    ? "ring-yellow-400/30"
-    : "ring-slate-700";
-
-  const iconColor = isListening
-    ? "text-green-300"
-    : isSpeaking
-    ? "text-yellow-300"
-    : isThinking
-    ? "text-blue-300"
-    : voice.error
-    ? "text-red-400"
-    : ready
-    ? "text-yellow-200"
-    : "text-slate-400";
-
-  const statusLabel = isThinking
-    ? "Thinking…"
-    : isListening
-    ? "Listening…"
-    : isSpeaking
-    ? "Speaking…"
-    : awake
-    ? "Awake — ask anything"
-    : ready
-    ? "Say \"Hey NOVA\" to wake me"
-    : "Tap mic to start";
-
-  const statusColor = isListening
-    ? "text-green-400"
-    : isSpeaking
-    ? "text-yellow-400"
-    : isThinking
-    ? "text-blue-400"
-    : awake
-    ? "text-yellow-300"
-    : "text-slate-500";
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center px-4 py-12 text-white">
-      <div className="w-full max-w-md flex flex-col items-center gap-8">
+    <div className="min-h-screen bg-slate-950 text-white px-4 py-8">
+      <div className="max-w-2xl mx-auto space-y-6">
 
-        {/* ── Mic button ── */}
-        <button
-          onClick={tap}
-          className={`relative flex items-center justify-center h-28 w-28 rounded-full ring-4 transition-all duration-300 bg-slate-900 ${ringClass} ${!ready ? "hover:bg-slate-800" : ""}`}
-          aria-label={statusLabel}
-        >
-          {(isListening || isSpeaking) && (
-            <span className={`absolute inset-0 rounded-full animate-ping opacity-20 ${isListening ? "bg-green-400" : "bg-yellow-400"}`} />
-          )}
-          {voice.error
-            ? <MicOff className={`h-12 w-12 ${iconColor}`} />
-            : <Mic   className={`h-12 w-12 ${iconColor}`} />
-          }
-        </button>
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-yellow-400/10 border border-yellow-400/30 flex items-center justify-center">
+            <ClipboardList className="h-5 w-5 text-yellow-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-black">My Assignments</h1>
+            {selectorProfile && (
+              <p className="text-slate-400 text-sm">{selectorProfile.novaId} · {selectorProfile.level}</p>
+            )}
+          </div>
+        </div>
 
-        {/* ── Status ── */}
-        <p className={`text-sm font-semibold uppercase tracking-widest text-center ${statusColor}`}>
-          {statusLabel}
-        </p>
+        {/* NOVA Trainer shortcut */}
+        <Link href="/nova-trainer">
+          <div className="rounded-3xl border border-yellow-400/30 bg-yellow-400/5 p-5 flex items-center justify-between cursor-pointer hover:bg-yellow-400/10 transition group">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-2xl bg-yellow-400/20 flex items-center justify-center">
+                <Headphones className="h-5 w-5 text-yellow-400" />
+              </div>
+              <div>
+                <p className="font-black text-yellow-300">NOVA Trainer</p>
+                <p className="text-slate-400 text-sm">Start a voice-directed picking session</p>
+              </div>
+            </div>
+            <ChevronRight className="h-5 w-5 text-yellow-400 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </Link>
 
-        {/* ── Topic hints (only before started) ── */}
-        {!ready && (
-          <div className="flex flex-wrap justify-center gap-2">
-            {TOPICS.map(({ label, icon }) => (
-              <span
-                key={label}
-                className="flex items-center gap-1.5 rounded-full border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-400"
+        {/* Assignment list */}
+        {myAssignments.length === 0 ? (
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-10 flex flex-col items-center gap-4 text-center">
+            <Activity className="h-10 w-10 text-slate-600" />
+            <p className="text-slate-400 text-sm">
+              No assignments yet. Your trainer will assign one to you.
+            </p>
+            <Link href="/selector">
+              <button className="rounded-2xl border border-slate-700 px-5 py-2 text-sm text-slate-300 hover:border-slate-500 transition">
+                Back to Portal
+              </button>
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {myAssignments.map((a) => (
+              <div
+                key={a.id}
+                className="rounded-3xl border border-slate-800 bg-slate-900 p-5 hover:border-slate-600 transition cursor-pointer group"
+                onClick={() => navigate(`/nova/assignments/${a.id}`)}
               >
-                <span>{icon}</span> {label}
-              </span>
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div className="flex items-center gap-3">
+                    {a.status === "completed"
+                      ? <CheckCircle2 className="h-5 w-5 text-slate-500 shrink-0" />
+                      : <Circle className="h-5 w-5 text-yellow-400 shrink-0" />
+                    }
+                    <div>
+                      <p className="font-black text-white">Assignment #{a.assignmentNumber ?? a.id.slice(-6)}</p>
+                      <p className="text-slate-500 text-xs">{(a as { type?: string }).type ?? "TRAINING"}</p>
+                    </div>
+                  </div>
+                  <span className={`shrink-0 text-xs px-3 py-1 rounded-full border font-bold ${statusColor(a.status ?? "pending")}`}>
+                    {statusLabel(a.status ?? "pending")}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                  <Stat icon={<Package className="h-3.5 w-3.5" />} label="Cases" value={(a as { totalCases?: number }).totalCases ?? "—"} />
+                  <Stat icon={<Clock className="h-3.5 w-3.5" />} label="Goal" value={`${(a as { goalTimeMinutes?: number }).goalTimeMinutes ?? "—"}m`} />
+                  <Stat icon={<Activity className="h-3.5 w-3.5" />} label="Aisles" value={`${(a as { startAisle?: number }).startAisle ?? "?"}–${(a as { endAisle?: number }).endAisle ?? "?"}`} />
+                  <Stat icon={<DoorOpen className="h-3.5 w-3.5" />} label="Door" value={(a as { doorNumber?: number }).doorNumber ?? "—"} />
+                </div>
+
+                {a.status !== "completed" && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); navigate(`/nova/voice/${a.id}`); }}
+                      className="flex items-center gap-2 rounded-2xl bg-yellow-400 px-4 py-2 text-xs font-black text-slate-950 hover:bg-yellow-300 transition"
+                    >
+                      <Headphones className="h-3.5 w-3.5" />
+                      Start Voice Session
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); navigate(`/nova/assignments/${a.id}`); }}
+                      className="flex items-center gap-2 rounded-2xl border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:border-slate-500 transition"
+                    >
+                      View Details
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         )}
 
-        {/* ── NOVA says ── */}
-        {novaText && (
-          <div className="w-full rounded-3xl border border-slate-800 bg-slate-900 px-6 py-5">
-            <p className="text-xs text-slate-500 uppercase tracking-widest mb-3">NOVA says</p>
-            <p className="text-white text-base sm:text-lg font-semibold leading-relaxed">
-              {novaText}
-            </p>
-          </div>
-        )}
-
-        {/* ── You asked ── */}
-        {lastQuestion && (
-          <div className="w-full rounded-2xl border border-slate-800 bg-slate-900 px-5 py-4">
-            <p className="text-xs text-slate-500 uppercase tracking-widest mb-2">You asked</p>
-            <p className="text-slate-300 text-sm">{lastQuestion}</p>
-          </div>
-        )}
-
-        {/* ── Mic error ── */}
-        {voice.error && (
-          <div className="w-full rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4">
-            <p className="text-red-300 text-sm font-semibold mb-3">{voice.error}</p>
-            <button
-              onClick={async () => { await voice.retryMic(); voice.startListening(); }}
-              className="rounded-xl bg-yellow-400 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-yellow-300 transition flex items-center gap-2"
-            >
-              <RefreshCw className="h-4 w-4" /> Retry mic
-            </button>
-          </div>
-        )}
-
-        {/* ── Stop ── */}
-        {ready && (
-          <button
-            onClick={stop}
-            className="flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-red-300 transition"
-          >
-            <StopCircle className="h-4 w-4" /> Stop NOVA
-          </button>
-        )}
-
-        {/* ── Hint badges (active) ── */}
-        {ready && (
-          <div className="flex flex-wrap justify-center gap-2 text-xs text-slate-600">
-            <span className="px-3 py-1 rounded-full bg-slate-900 border border-slate-800">"Hey NOVA" to wake</span>
-            <span className="px-3 py-1 rounded-full bg-slate-900 border border-slate-800">"stop" to silence</span>
-          </div>
-        )}
+        <p className="text-center text-slate-600 text-xs pt-2">
+          PickSmart Academy — NOVA Assignment Board
+        </p>
       </div>
+    </div>
+  );
+}
+
+function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number }) {
+  return (
+    <div className="rounded-2xl bg-slate-950 border border-slate-800 px-3 py-2">
+      <div className="flex items-center gap-1.5 text-slate-500 mb-1">
+        {icon}
+        <span className="text-xs">{label}</span>
+      </div>
+      <p className="text-sm font-bold text-white">{value}</p>
     </div>
   );
 }
