@@ -1,0 +1,109 @@
+import { TOWER_MAP } from "../data/towerMap";
+
+function classifyProduct(productType = "") {
+  const text = productType.toLowerCase();
+
+  if (
+    text.includes("heavy juice") ||
+    text.includes("large detergents") ||
+    text.includes("tall & wide")
+  ) {
+    return "heavy_base";
+  }
+
+  if (
+    text.includes("juice") ||
+    text.includes("small detergents") ||
+    text.includes("small cans") ||
+    text.includes("rice") ||
+    text.includes("ramen") ||
+    text.includes("mixed juice")
+  ) {
+    return "middle_support";
+  }
+
+  if (
+    text.includes("cereal") ||
+    text.includes("paper towels") ||
+    text.includes("mixed small") ||
+    text.includes("salad dressings")
+  ) {
+    return "top_fill";
+  }
+
+  if (text.includes("x-order")) {
+    return "special";
+  }
+
+  return "general";
+}
+
+export function getAisleProducts(aisles = []) {
+  return aisles.map((aisle) => ({
+    aisle: Number(aisle),
+    productType: TOWER_MAP[Number(aisle)] || "Unknown",
+    buildClass: classifyProduct(TOWER_MAP[Number(aisle)] || "")
+  }));
+}
+
+export function buildPalletAdviceFromAisles(aisles = []) {
+  const mapped = getAisleProducts(aisles);
+
+  const heavy = mapped.filter((x) => x.buildClass === "heavy_base");
+  const middle = mapped.filter((x) => x.buildClass === "middle_support");
+  const top = mapped.filter((x) => x.buildClass === "top_fill");
+  const special = mapped.filter((x) => x.buildClass === "special");
+
+  const lines = [];
+
+  if (heavy.length) {
+    lines.push(
+      `Start your base with aisles ${heavy.map((x) => x.aisle).join(", ")} because those are heavy foundation aisles.`
+    );
+  }
+
+  if (middle.length) {
+    lines.push(
+      `Use aisles ${middle.map((x) => x.aisle).join(", ")} as middle support layers and to keep the pallet balanced.`
+    );
+  }
+
+  if (top.length) {
+    lines.push(
+      `Keep aisles ${top.map((x) => x.aisle).join(", ")} for top layers, gap filling, and light finishing work.`
+    );
+  }
+
+  if (special.length) {
+    lines.push(
+      `Aisle ${special.map((x) => x.aisle).join(", ")} is special. Build a base first before stacking those variety cases.`
+    );
+  }
+
+  if (aisles.includes(19) || aisles.includes(20)) {
+    lines.push(
+      "Combo aisles 19 and 20 can create too many small cases together, so use the second pallet when needed."
+    );
+  }
+
+  if (aisles.some((a) => Number(a) >= 31)) {
+    lines.push(
+      "Aisles 31 and up should usually help finish the front pallet. Fill the middle first and do not leave gaps."
+    );
+  }
+
+  if (!lines.length) {
+    lines.push(
+      "Start with the heaviest aisle first, keep the base tight, then build medium support, then finish with lighter top product."
+    );
+  }
+
+  lines.push(
+    "Main rule: heavy first, balanced middle, light top, and fill gaps early."
+  );
+
+  return {
+    aisles: mapped,
+    advice: lines.join(" ")
+  };
+}

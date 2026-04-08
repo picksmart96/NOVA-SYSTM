@@ -1,8 +1,15 @@
 import { Router } from "express";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import {
+  buildPalletAdviceFromAisles,
+  extractAislesFromText,
+  isBuildQuestion,
+  TOWER_MAP,
+} from "../lib/novaBuildCoach";
 
 const router = Router();
 
+// ─── System prompts ───────────────────────────────────────────────────────────
 const NOVA_SYSTEM_PROMPT_EN = `You are NOVA Help, a warehouse order selector voice coach.
 
 Your job:
@@ -16,6 +23,11 @@ Your job:
 - Sound like an experienced warehouse trainer, not a chatbot
 - Do not mention being an AI
 - Respond in English
+
+Tower / Aisle product reference (aisles 13–34):
+${Object.entries(TOWER_MAP).map(([k, v]) => `  Aisle ${k}: ${v}`).join("\n")}
+
+When answering pallet build questions, use the aisle product types above to give specific advice.
 
 If the question is completely outside warehouse selecting topics, respond:
 "I focus on warehouse selecting, pallet building, safety, and performance. Ask me something in that area."`;
@@ -34,9 +46,15 @@ Tu trabajo:
 - No menciones ser una IA
 - Responde en español
 
+Referencia de productos por pasillo (pasillos 13–34):
+${Object.entries(TOWER_MAP).map(([k, v]) => `  Pasillo ${k}: ${v}`).join("\n")}
+
+Cuando respondas sobre construcción de tarimas, usa los tipos de productos por pasillo de arriba para dar consejos específicos.
+
 Si la pregunta está completamente fuera de los temas de selección de almacén, responde:
 "Me enfoco en selección de almacén, construcción de tarimas, seguridad y rendimiento. Pregúntame algo en esa área."`;
 
+// ─── Route ────────────────────────────────────────────────────────────────────
 router.post("/nova-help", async (req, res) => {
   const { question, language } = req.body as { question?: string; language?: string };
 
@@ -45,15 +63,28 @@ router.post("/nova-help", async (req, res) => {
   }
 
   const isSpanish = typeof language === "string" && language.startsWith("es");
+  const q = question.trim();
+
+  // ── Build coach shortcut: detect pallet build questions with aisle numbers ──
+  const aisles = extractAislesFromText(q);
+  if (isBuildQuestion(q) && aisles.length > 0) {
+    const result = buildPalletAdviceFromAisles(aisles, language ?? "en");
+    const prefix = isSpanish
+      ? `Para los pasillos ${aisles.join(", ")}: `
+      : `For aisles ${aisles.join(", ")}: `;
+    return res.json({ answer: prefix + result.advice });
+  }
+
+  // ── AI answer via Replit OpenAI proxy ─────────────────────────────────────
   const systemPrompt = isSpanish ? NOVA_SYSTEM_PROMPT_ES : NOVA_SYSTEM_PROMPT_EN;
 
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      max_completion_tokens: 200,
+      max_completion_tokens: 220,
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: question.trim() },
+        { role: "user", content: q },
       ],
     });
 
