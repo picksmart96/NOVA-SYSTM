@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "Ku1IQf2zcIKNKMDs86C9e"
+uri = "file://PickSmart-NOVA-Handbook.md"
+type = "text"
+title = "PickSmart NOVA — User Handbook"
