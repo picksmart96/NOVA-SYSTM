@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import useVoiceEngine, { UseVoiceEngineReturn } from "@/hooks/useVoiceEngine";
 import { askNovaHelp } from "@/lib/novaHelpApi";
@@ -16,15 +16,21 @@ export default function NovaHelpPage() {
   const [prompt, setPrompt] = useState(
     isSpanish ? "Di Hola NOVA para activarme." : "Say Hey NOVA to wake me.",
   );
+  const [activityLog, setActivityLog] = useState<string[]>([]);
 
-  // Ref so handleVoiceInput can access the latest voice object without stale closures
   const voiceRef = useRef<UseVoiceEngineReturn | null>(null);
   const awakeRef = useRef(false);
+
+  const addLog = (msg: string) => {
+    const ts = new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    setActivityLog((prev) => [`${ts} ${msg}`, ...prev].slice(0, 12));
+  };
 
   const handleVoiceInput = async (heard: string) => {
     const v = voiceRef.current;
     if (!v) return;
     const text = heard.toLowerCase().trim();
+    addLog(`🎤 Heard: "${text}"`);
 
     const wakeMatched = WAKE_WORDS.some((w) => text.includes(w));
     const stopMatched = STOP_WORDS.some((w) => text === w || text.includes(w));
@@ -37,9 +43,11 @@ export default function NovaHelpPage() {
           ? "Hola. Soy NOVA. ¿Cómo puedo ayudarte con selección hoy?"
           : "Hi. I'm NOVA. How can I help you with selecting today?";
         setPrompt(greeting);
+        addLog("✅ Wake word matched — greeting");
         v.speak(greeting, { after: "active" });
         return;
       }
+      addLog("⏳ Waiting for wake word…");
       v.startWakeMode();
       return;
     }
@@ -51,6 +59,7 @@ export default function NovaHelpPage() {
         ? "NOVA detenida. Di Hola NOVA para activarme otra vez."
         : "NOVA stopped. Say Hey NOVA to wake me again.";
       setPrompt(stopText);
+      addLog("🛑 Stop word — going to wake mode");
       v.speak(stopText, { after: "wake" });
       return;
     }
@@ -60,22 +69,26 @@ export default function NovaHelpPage() {
         ? "Estoy aquí. ¿Cómo puedo ayudarte?"
         : "I'm here. How can I help?";
       setPrompt(helloAgain);
+      addLog("👋 Re-wake");
       v.speak(helloAgain, { after: "active" });
       return;
     }
 
     setLastQuestion(text);
     setPrompt(isSpanish ? "Pensando..." : "Thinking...");
+    addLog(`🤔 Asking AI: "${text}"`);
 
     try {
       const answer = await askNovaHelp(text, isSpanish ? "es" : "en");
       setPrompt(answer);
+      addLog(`💬 AI answered (${answer.length} chars)`);
       v.speak(answer, { after: "active" });
     } catch {
       const fallback = isSpanish
-        ? "Tuve un problema respondiendo. Pregúntame otra vez sobre selección, seguridad o tarimas."
-        : "I had trouble answering that. Ask me again about selecting, safety, or pallets.";
+        ? "Tuve un problema respondiendo. Pregúntame otra vez."
+        : "I had trouble answering that. Ask me again.";
       setPrompt(fallback);
+      addLog("❌ AI error — fallback spoken");
       v.speak(fallback, { after: "active" });
     }
   };
@@ -87,12 +100,25 @@ export default function NovaHelpPage() {
     },
   });
 
-  // Always sync the ref so handleVoiceInput always has the latest voice
+  // Always sync ref so handleVoiceInput uses the latest voice object
   voiceRef.current = voice;
 
+  // Log state transitions
+  const prevStatusRef = useRef(voice.status);
+  useEffect(() => {
+    if (voice.status !== prevStatusRef.current) {
+      addLog(`🔄 ${prevStatusRef.current} → ${voice.status}`);
+      prevStatusRef.current = voice.status;
+    }
+  }, [voice.status]);
+
   const startNovaHelp = async () => {
+    addLog("▶ Starting NOVA Help…");
     const ok = await voice.initialize();
-    if (!ok) return;
+    if (!ok) {
+      addLog(`❌ initialize() returned false — mic: ${voice.micPermission}`);
+      return;
+    }
     setStarted(true);
     awakeRef.current = false;
     setAwake(false);
@@ -100,6 +126,7 @@ export default function NovaHelpPage() {
       ? "Ayuda NOVA iniciada. Di Hola NOVA para activarme."
       : "NOVA Help started. Say Hey NOVA to wake me.";
     setPrompt(intro);
+    addLog("🔊 Speaking intro…");
     voice.speak(intro, { after: "wake" });
   };
 
@@ -109,15 +136,15 @@ export default function NovaHelpPage() {
     awakeRef.current = false;
     setAwake(false);
     setPrompt(isSpanish ? "Ayuda NOVA detenida." : "NOVA Help stopped.");
+    addLog("⏹ Stopped");
   };
 
   const retryMic = async () => {
+    addLog("🔄 Retrying mic…");
     const ok = await voice.retryMic();
-    if (!ok) return;
+    if (!ok) { addLog("❌ Retry failed"); return; }
     setStarted(true);
-    const wakeText = isSpanish
-      ? "Di Hola NOVA para activarme."
-      : "Say Hey NOVA to wake me.";
+    const wakeText = isSpanish ? "Di Hola NOVA para activarme." : "Say Hey NOVA to wake me.";
     setPrompt(wakeText);
     voice.speak(wakeText, { after: "wake" });
   };
@@ -135,6 +162,14 @@ export default function NovaHelpPage() {
             : awake
               ? isSpanish ? "Despierta" : "Awake"
               : isSpanish ? "Inactiva" : "Idle";
+
+  const stateColor =
+    voice.error ? "text-red-400"
+    : voice.speaking ? "text-yellow-400"
+    : voice.thinking ? "text-blue-400"
+    : voice.status === "active_listening" ? "text-green-400"
+    : voice.status === "wake_listening" ? "text-cyan-400"
+    : "text-slate-400";
 
   return (
     <div className="min-h-screen bg-slate-950 text-white px-6 py-10">
@@ -167,7 +202,12 @@ export default function NovaHelpPage() {
               : 'I\'ll keep listening after each answer. Say "stop" anytime to silence me.'}
           </p>
 
-          <div className="mt-8 flex flex-wrap justify-center gap-4">
+          {/* Live state indicator */}
+          <div className={`mt-5 text-sm font-bold uppercase tracking-wider ${stateColor}`}>
+            ● {stateLabel}
+          </div>
+
+          <div className="mt-6 flex flex-wrap justify-center gap-4">
             {!started ? (
               <button
                 onClick={startNovaHelp}
@@ -178,7 +218,7 @@ export default function NovaHelpPage() {
             ) : (
               <>
                 <button
-                  onClick={() => voice.startWakeMode()}
+                  onClick={() => { addLog("👂 Manual listen"); voice.startWakeMode(); }}
                   className="rounded-2xl border border-slate-700 px-6 py-3 font-semibold hover:border-yellow-400 transition"
                 >
                   {isSpanish ? "Escuchar ahora" : "Listen Now"}
@@ -214,21 +254,21 @@ export default function NovaHelpPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
             <p className="text-sm text-slate-400">{isSpanish ? "Estado" : "State"}</p>
-            <p className="mt-3 text-2xl font-black">{stateLabel}</p>
+            <p className={`mt-3 text-xl font-black ${stateColor}`}>{stateLabel}</p>
           </div>
           <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
             <p className="text-sm text-slate-400">
               {isSpanish ? "Última escucha" : "Last Heard"}
             </p>
-            <p className="mt-3 text-lg font-semibold break-words">
+            <p className="mt-3 text-base font-semibold break-words">
               {voice.lastHeard || "—"}
             </p>
           </div>
           <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
             <p className="text-sm text-slate-400">
-              {isSpanish ? "Permiso de micrófono" : "Mic Permission"}
+              {isSpanish ? "Permiso de micrófono" : "Mic"}
             </p>
-            <p className="mt-3 text-lg font-semibold capitalize">
+            <p className={`mt-3 text-base font-semibold capitalize ${voice.micPermission === "granted" ? "text-green-400" : voice.micPermission === "denied" ? "text-red-400" : "text-slate-400"}`}>
               {voice.micPermission}
             </p>
           </div>
@@ -236,9 +276,9 @@ export default function NovaHelpPage() {
             <p className="text-sm text-slate-400">
               {isSpanish ? "Modo" : "Wake Mode"}
             </p>
-            <p className="mt-3 text-lg font-semibold">
+            <p className={`mt-3 text-base font-semibold ${awake ? "text-yellow-400" : "text-slate-400"}`}>
               {awake
-                ? isSpanish ? "Hola NOVA activa" : "Hey NOVA Active"
+                ? isSpanish ? "Activa" : "Active"
                 : isSpanish ? "Esperando" : "Waiting"}
             </p>
           </div>
@@ -247,22 +287,38 @@ export default function NovaHelpPage() {
         {/* Current prompt + last question */}
         <div className="grid lg:grid-cols-2 gap-6">
           <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-            <h3 className="text-2xl font-bold">
+            <h3 className="text-xl font-bold mb-4">
               {isSpanish ? "Respuesta actual" : "Current Prompt"}
             </h3>
-            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-5">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
               <p className="text-slate-200 text-lg">{prompt}</p>
             </div>
           </div>
           <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-            <h3 className="text-2xl font-bold">
+            <h3 className="text-xl font-bold mb-4">
               {isSpanish ? "Última pregunta" : "Last Question"}
             </h3>
-            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-5">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
               <p className="text-slate-200 text-lg">{lastQuestion || "—"}</p>
             </div>
           </div>
         </div>
+
+        {/* Activity log */}
+        {activityLog.length > 0 && (
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">
+              Activity Log
+            </h3>
+            <div className="space-y-1 font-mono text-xs">
+              {activityLog.map((line, i) => (
+                <div key={i} className={`text-slate-300 ${i === 0 ? "text-white" : "opacity-70"}`}>
+                  {line}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

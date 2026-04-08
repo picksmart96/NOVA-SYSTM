@@ -71,6 +71,7 @@ export function useVoiceEngine({
   const speakingRef = useRef(false);
   const restartingRef = useRef(false);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ttsWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const modeRef = useRef<"wake" | "active">("wake");
   const onHeardRef = useRef(onHeard);
   useEffect(() => {
@@ -128,18 +129,26 @@ export function useVoiceEngine({
 
   const startRecognition = useCallback(
     (mode: "wake" | "active" = "wake") => {
-      if (!recognitionRef.current || !shouldRunRef.current || speakingRef.current) return;
-      if (restartingRef.current) return;
+      if (!recognitionRef.current || !shouldRunRef.current || speakingRef.current) {
+        console.log("[NOVA voice] startRecognition blocked", { hasRec: !!recognitionRef.current, shouldRun: shouldRunRef.current, speaking: speakingRef.current });
+        return;
+      }
+      if (restartingRef.current) {
+        console.log("[NOVA voice] startRecognition blocked (already restarting)");
+        return;
+      }
 
       restartingRef.current = true;
       modeRef.current = mode;
       setError("");
       setStatus(mode === "active" ? STATUS.ACTIVE_LISTENING : STATUS.WAKE_LISTENING);
+      console.log("[NOVA voice] recognition starting →", mode);
 
       try {
         recognitionRef.current.start();
         startSilenceTimer();
-      } catch {
+      } catch (err) {
+        console.warn("[NOVA voice] recognition.start() threw:", err);
         restartingRef.current = false;
       }
     },
@@ -164,11 +173,21 @@ export function useVoiceEngine({
 
       speakingRef.current = true;
       clearSilenceTimer();
+      // Clear any previous TTS watchdog
+      if (ttsWatchdogRef.current) clearTimeout(ttsWatchdogRef.current);
       stopRecognition();
       setStatus(STATUS.SPEAKING);
+      console.log("[NOVA voice] TTS speaking →", text.slice(0, 60));
 
       try {
         window.speechSynthesis.cancel();
+      } catch {
+        // ignore
+      }
+
+      // Chrome bug: speechSynthesis can get stuck in paused state after cancel()
+      try {
+        if (window.speechSynthesis.paused) window.speechSynthesis.resume();
       } catch {
         // ignore
       }
@@ -180,29 +199,47 @@ export function useVoiceEngine({
       const voice = pickPreferredVoice(lang);
       if (voice) utterance.voice = voice;
 
-      utterance.onend = () => {
+      const handleTTSDone = (reason: string) => {
+        if (!speakingRef.current) return; // already handled
+        console.log("[NOVA voice] TTS done →", reason);
+        if (ttsWatchdogRef.current) clearTimeout(ttsWatchdogRef.current);
         speakingRef.current = false;
         onEnd?.();
         if (shouldRunRef.current) {
-          startRecognition(after);
+          // 150ms delay: Chrome keeps audio pipeline busy just long enough to
+          // reject an immediate recognition.start() with InvalidStateError
+          setTimeout(() => startRecognition(after), 150);
         } else {
           setStatus(STATUS.STOPPED);
         }
       };
 
-      utterance.onerror = () => {
+      utterance.onend = () => handleTTSDone("onend");
+
+      utterance.onerror = (e) => {
+        console.warn("[NOVA voice] TTS error:", e);
+        if (!speakingRef.current) return;
+        if (ttsWatchdogRef.current) clearTimeout(ttsWatchdogRef.current);
         speakingRef.current = false;
-        setError("Speech playback failed.");
         if (shouldRunRef.current) {
-          startRecognition(after);
+          setTimeout(() => startRecognition(after), 150);
         } else {
+          setError("Speech playback failed.");
           setStatus(STATUS.ERROR);
         }
       };
 
       try {
         window.speechSynthesis.speak(utterance);
-      } catch {
+
+        // Watchdog: if onend never fires within 15s, force-restart mic
+        ttsWatchdogRef.current = setTimeout(() => {
+          console.warn("[NOVA voice] TTS watchdog fired — onend never fired, forcing restart");
+          try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+          handleTTSDone("watchdog");
+        }, 15_000);
+      } catch (err) {
+        console.error("[NOVA voice] speechSynthesis.speak threw:", err);
         speakingRef.current = false;
         setStatus(STATUS.ERROR);
         setError("Unable to start speech playback.");
@@ -251,6 +288,7 @@ export function useVoiceEngine({
 
     recognition.onstart = () => {
       restartingRef.current = false;
+      console.log("[NOVA voice] recognition started ✓ mode:", modeRef.current);
       startSilenceTimer();
     };
 
@@ -259,6 +297,7 @@ export function useVoiceEngine({
       clearSilenceTimer();
       const raw: string = event?.results?.[0]?.[0]?.transcript ?? "";
       const heard = raw.toLowerCase().trim();
+      console.log("[NOVA voice] heard:", JSON.stringify(heard));
       setLastHeard(heard);
       setTranscript(heard);
 
@@ -273,6 +312,7 @@ export function useVoiceEngine({
       clearSilenceTimer();
       restartingRef.current = false;
       const code: string = event?.error ?? "unknown";
+      console.log("[NOVA voice] recognition error:", code);
 
       if (code === "not-allowed" || code === "service-not-allowed") {
         setMicPermission("denied");
@@ -284,14 +324,14 @@ export function useVoiceEngine({
 
       if (code === "no-speech" || code === "aborted") {
         if (shouldRunRef.current && !speakingRef.current) {
-          startRecognition(modeRef.current);
+          setTimeout(() => startRecognition(modeRef.current), 150);
         }
         return;
       }
 
       setError(`Recognition error: ${code}`);
       if (shouldRunRef.current && !speakingRef.current) {
-        startRecognition(modeRef.current);
+        setTimeout(() => startRecognition(modeRef.current), 300);
       } else {
         setStatus(STATUS.ERROR);
       }
@@ -300,8 +340,9 @@ export function useVoiceEngine({
     recognition.onend = () => {
       clearSilenceTimer();
       restartingRef.current = false;
+      console.log("[NOVA voice] recognition ended — speaking:", speakingRef.current, "shouldRun:", shouldRunRef.current);
       if (shouldRunRef.current && !speakingRef.current) {
-        startRecognition(modeRef.current);
+        setTimeout(() => startRecognition(modeRef.current), 150);
       }
     };
 
@@ -309,6 +350,7 @@ export function useVoiceEngine({
     shouldRunRef.current = true;
     setInitialized(true);
     setStatus(STATUS.WAKE_LISTENING);
+    console.log("[NOVA voice] initialized — starting wake recognition");
     startRecognition("wake");
     return true;
   }, [clearSilenceTimer, lang, micPermission, startRecognition, startSilenceTimer]);
