@@ -32,19 +32,15 @@ type UseVoiceEngineOptions = {
   silencePrompt?: string;
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-function getRecognitionClass(): typeof SpeechRecognition | null {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyRecognition = any;
+
+function getRecognitionClass(): (new () => AnyRecognition) | null {
   if (typeof window === "undefined") return null;
-  return (
-    (window as unknown as { SpeechRecognition?: typeof SpeechRecognition })
-      .SpeechRecognition ||
-    (
-      window as unknown as {
-        webkitSpeechRecognition?: typeof SpeechRecognition;
-      }
-    ).webkitSpeechRecognition ||
-    null
-  );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any;
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
 function pickPreferredVoice(lang: string): SpeechSynthesisVoice | null {
@@ -69,8 +65,8 @@ export function useVoiceEngine({
   lang = "en-US",
   silenceTimeoutMs = 7000,
 }: UseVoiceEngineOptions = {}) {
-  // Refs — never stale inside callbacks
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  // Refs — stable across renders, never stale inside callbacks
+  const recognitionRef = useRef<AnyRecognition>(null);
   const shouldRunRef = useRef(false);
   const speakingRef = useRef(false);
   const restartingRef = useRef(false);
@@ -217,6 +213,15 @@ export function useVoiceEngine({
 
   // ── Initialize ────────────────────────────────────────────────────────────
   const initialize = useCallback(async (): Promise<boolean> => {
+    // ── IDEMPOTENT GUARD: already have a working recognition → just ensure running ──
+    if (recognitionRef.current && micPermission === "granted") {
+      shouldRunRef.current = true;
+      if (!speakingRef.current && !restartingRef.current) {
+        startRecognition(modeRef.current);
+      }
+      return true;
+    }
+
     const Recognition = getRecognitionClass();
     if (!Recognition) {
       setSupported(false);
@@ -238,7 +243,7 @@ export function useVoiceEngine({
       return false;
     }
 
-    const recognition = new Recognition();
+    const recognition: AnyRecognition = new Recognition();
     recognition.lang = lang;
     recognition.interimResults = false;
     recognition.continuous = false;
@@ -249,9 +254,10 @@ export function useVoiceEngine({
       startSilenceTimer();
     };
 
-    recognition.onresult = async (event: SpeechRecognitionEvent) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onresult = async (event: any) => {
       clearSilenceTimer();
-      const raw = event?.results?.[0]?.[0]?.transcript ?? "";
+      const raw: string = event?.results?.[0]?.[0]?.transcript ?? "";
       const heard = raw.toLowerCase().trim();
       setLastHeard(heard);
       setTranscript(heard);
@@ -262,10 +268,11 @@ export function useVoiceEngine({
       }
     };
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onerror = (event: any) => {
       clearSilenceTimer();
       restartingRef.current = false;
-      const code = (event as SpeechRecognitionErrorEvent).error ?? "unknown";
+      const code: string = event?.error ?? "unknown";
 
       if (code === "not-allowed" || code === "service-not-allowed") {
         setMicPermission("denied");
@@ -304,7 +311,7 @@ export function useVoiceEngine({
     setStatus(STATUS.WAKE_LISTENING);
     startRecognition("wake");
     return true;
-  }, [clearSilenceTimer, lang, startRecognition, startSilenceTimer]);
+  }, [clearSilenceTimer, lang, micPermission, startRecognition, startSilenceTimer]);
 
   // ── Mode switches ─────────────────────────────────────────────────────────
   const startWakeMode = useCallback(() => {
@@ -332,9 +339,16 @@ export function useVoiceEngine({
   }, [abortRecognition, clearSilenceTimer]);
 
   const retryMic = useCallback(async () => {
-    stopAll();
+    // Force full re-init by clearing the recognition ref
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch { /* ignore */ }
+      recognitionRef.current = null;
+    }
+    setInitialized(false);
+    setMicPermission("unknown");
+    shouldRunRef.current = false;
     return initialize();
-  }, [initialize, stopAll]);
+  }, [initialize]);
 
   // ── Cleanup on unmount ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -344,23 +358,23 @@ export function useVoiceEngine({
   }, [stopAll]);
 
   // ── Compat aliases (used by NovaTrainerPage + my-assignments) ─────────────
-  /** Speak text then restart active listening. Compat alias for speak(text, { after:"active" }) */
+  /** Speak then restart active listening. Alias for speak(text, { after:"active" }) */
   const askAndListen = useCallback(
     (text: string) => speak(text, { after: "active" }),
     [speak],
   );
-  /** Start active-mode recognition. Compat alias for startActiveMode(). */
+  /** Start active-mode recognition. Alias for startActiveMode(). */
   const startListening = useCallback(() => startActiveMode(), [startActiveMode]);
-  /** Stop all. Compat alias for stopAll(). */
+  /** Stop all. Alias for stopAll(). */
   const stopListening = useCallback(() => stopAll(), [stopAll]);
-  /** Stop all. Compat alias for stopAll(). */
+  /** Stop all. Alias for stopAll(). */
   const shutdown = useCallback(() => stopAll(), [stopAll]);
-  /** Restart recognition after a manual stop. Compat alias for startActiveMode(). */
+  /** Compat: restart recognition. Maps to startActiveMode(). */
   const scheduleRestart = useCallback(
     (_delayMs?: number) => startActiveMode(),
     [startActiveMode],
   );
-  /** Restart recognition silently. Compat alias for startActiveMode(). */
+  /** Compat: hard stop. Maps to stopAll(). */
   const hardStopListening = useCallback(() => stopAll(), [stopAll]);
 
   // ── Derived state ──────────────────────────────────────────────────────────
