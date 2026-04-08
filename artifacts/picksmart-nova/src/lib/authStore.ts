@@ -38,9 +38,12 @@ interface AuthState {
   accounts: AuthAccount[];
   pendingInvites: PendingInvite[];
   usedTokens: string[];
+  locked: boolean;
 
   login: (username: string, password: string) => boolean;
   logout: () => void;
+  lock: () => void;
+  unlock: (password: string) => boolean;
   createAccount: (data: { username: string; password: string; fullName: string; role: AuthRole }) => void;
   removeAccount: (accountId: string) => void;
   addInvite: (data: { fullName: string; email: string; role: AuthRole }) => string;
@@ -105,13 +108,29 @@ export const useAuthStore = create<AuthState>()(
       accounts: [MASTER_ACCOUNT],
       pendingInvites: [],
       usedTokens: [],
+      locked: false,
 
       login: (username, password) => {
         const found = get().accounts.find(
           (a) => a.username === username && a.password === password && a.status === "active"
         );
         if (found) {
-          set({ currentUser: found });
+          set({ currentUser: found, locked: false });
+          return true;
+        }
+        return false;
+      },
+
+      lock: () => set({ locked: true }),
+
+      unlock: (password) => {
+        const user = get().currentUser;
+        if (!user) return false;
+        const found = get().accounts.find(
+          (a) => a.id === user.id && a.password === password && a.status === "active"
+        );
+        if (found) {
+          set({ locked: false });
           return true;
         }
         return false;

@@ -21,7 +21,7 @@ import LanguageSwitcher from "@/components/layout/LanguageSwitcher";
 export function Layout({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
   const { role, setRole } = useAppStore();
-  const { currentUser, logout } = useAuthStore();
+  const { currentUser, logout, lock } = useAuthStore();
   const [location, navigate] = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const links = useRoleNav();
@@ -121,6 +121,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   <DropdownMenuLabel className="capitalize">{currentUser.fullName}</DropdownMenuLabel>
                   <DropdownMenuLabel className="text-xs text-muted-foreground font-normal -mt-2">{currentUser.username} · {currentUser.role}</DropdownMenuLabel>
                   <DropdownMenuSeparator className="bg-border" />
+                  <DropdownMenuItem
+                    onClick={() => lock()}
+                    className="focus:bg-yellow-500/10"
+                  >
+                    🔒 Lock session
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => { logout(); navigate("/login"); }}
                     className="text-red-400 focus:text-red-400 focus:bg-red-500/10"

@@ -35,6 +35,8 @@ import UsersAccessPage from "@/pages/users-access";
 import SelectorPortalPage from "@/pages/selector-portal";
 import LoginPage from "@/pages/login";
 import InvitePage from "@/pages/invite";
+import LockScreen from "@/components/LockScreen";
+import { useAuthStore } from "@/lib/authStore";
 
 const queryClient = new QueryClient();
 
@@ -157,14 +159,24 @@ function Router() {
   );
 }
 
+function AppInner() {
+  const { locked, currentUser } = useAuthStore();
+  return (
+    <>
+      <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}>
+        <Router />
+      </WouterRouter>
+      <Toaster />
+      {locked && currentUser && <LockScreen />}
+    </>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
+        <AppInner />
       </TooltipProvider>
     </QueryClientProvider>
   );

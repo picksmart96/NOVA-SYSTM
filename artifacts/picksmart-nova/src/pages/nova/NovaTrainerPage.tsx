@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { Activity, Mic } from "lucide-react";
 import { useTrainerStore } from "@/lib/trainerStore";
+import { useAuthStore } from "@/lib/authStore";
 import { ASSIGNMENTS } from "@/data/assignments";
 import NovaTrainerSession from "@/components/nova/NovaTrainerSession";
 
 export default function NovaTrainerPage() {
   const { selectors } = useTrainerStore();
+  const { lock } = useAuthStore();
 
   const [novaIdInput, setNovaIdInput] = useState("");
   const [activeNovaId, setActiveNovaId] = useState("");
@@ -53,7 +55,7 @@ export default function NovaTrainerPage() {
           name: matchedSelector.name,
           fullName: matchedSelector.name,
         }}
-        onExit={() => setActiveNovaId("")}
+        onExit={() => { setActiveNovaId(""); lock(); }}
         autoStart
       />
     );
