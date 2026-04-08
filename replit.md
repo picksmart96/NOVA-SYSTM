@@ -16,7 +16,7 @@ Full-stack warehouse training and assignment management platform combining a pub
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
-- **State**: Zustand (role switcher)
+- **State**: Zustand (role switcher, session store)
 - **Routing**: Wouter
 
 ## Roles & Navigation
@@ -30,13 +30,16 @@ Full-stack warehouse training and assignment management platform combining a pub
 ### Public
 - `/` — HomePage (hero, features)
 - `/training` — Training modules grid
-- `/training/:id` — Module detail
+- `/training/:id` — Module detail (with video player)
+- `/training/lesson/:id` — NOVA-guided lesson session (with video player)
 - `/mistakes` — Common mistakes guide
 - `/progress` — Progress dashboard
 - `/leaderboard` — Ranked leaderboard
 - `/pricing` — Pricing tiers
 
 ### NOVA Internal
+- `/nova-help` — NOVA Help AI voice coach (Whisper STT + gpt-4o-mini)
+- `/nova-trainer` — NOVA Trainer ES3 Script Mode (NOVA ID gate + live session)
 - `/nova` — My Assignments (selector view)
 - `/nova/assignments/:id` — Assignment detail + stops table
 - `/nova/voice/:id` — NOVA voice session simulation
@@ -81,19 +84,62 @@ Full-stack warehouse training and assignment management platform combining a pub
 - **API**: NOVA Help backend sends Spanish system prompt when `language.startsWith("es")`
 
 ## NOVA Help AI Coach
-- **Page**: `/nova-help` — Voice AI Coach section at top, Voice Commands reference, FAQ, Quick Reference cards
+- **Page**: `/nova-help` — Wake word flow, auto-listen loop, session log, hints panels
 - **Backend**: `artifacts/api-server/src/routes/novaHelp.ts` — `POST /api/nova-help`
+- **Transcription**: `POST /api/transcribe` → `gpt-4o-mini-transcribe` via `speechToText()` audio helper + ffmpeg WAV conversion
 - **AI model**: `gpt-4o-mini` via Replit AI Integrations proxy (`@workspace/integrations-openai-ai-server`)
 - **System prompt**: Warehouse-selecting coach, 1–4 sentence answers, practical trainer tone (EN + ES)
 - **Language param**: `{ question, language }` — API returns Spanish when `language.startsWith("es")`
 - **Fallback**: `src/lib/novaHelpMatcher.ts` — keyword scorer over 20 local knowledge entries
-- **Wake word**: "Hey NOVA" / "Hola NOVA" activates listening; "stop" / "parar" silences
-- **Voice engine**: `useVoiceEngine` (named export) — Web Speech API for listen/speak cycle
+- **Wake word detection**: "Hey NOVA"/"Hola NOVA" captured in Whisper transcript triggers greeting
+- **Stop word detection**: "stop"/"parar" → returns to wake listening mode
+- **Auto-listen loop**: After each answer, automatically starts recording next question
+- **Browser compatibility**: Shows fallback message when MediaRecorder not supported
+
+## NOVA Mode Router
+- **File**: `src/lib/novaModeRouter.ts`
+- **`routeNovaInput(input)`**: Classifies text as "workflow" (exact command/pattern match) or "help" (question/AI)
+- **`detectWakeWord(transcript)`**: Returns "en" | "es" | null for "Hey NOVA" / "Hola NOVA"
+- **`detectStopWord(transcript)`**: Returns true for "stop" / "parar"
+
+## NOVA Warehouse Tools
+- **File**: `src/lib/novaWarehouseTools.ts`
+- **`findSelectorByNovaId(novaId)`**: Looks up a selector by NOVA ID
+- **`getAssignmentsForSelector(userId)`**: Filters ASSIGNMENTS by userId
+- **`getAssignmentStops(assignmentId)`**: Returns stops for an assignment
+- **`getSlotByCode(checkCode)`**: Looks up slot by check code
+- **`getDoorInfo(doorNumber)`**: Looks up door staging code
+- **`getWarehouseDefaults()`**: Returns printer/label defaults
+- **`buildSessionContext(opts)`**: Builds AI-injectable context string
+
+## NOVA Session Persistence
+- **Zustand store**: `src/store/novaSessionStore.ts` — `useNovaSessionStore` (persisted to localStorage via `nova-session-v1`)
+- **Storage helpers**: `src/lib/novaSessionStorage.ts` — `saveNovaSession()`, `loadNovaSession()`, `clearNovaSession()`, `hasResumableSession()`
+- **Saved fields**: selectorId, novaId, selectorName, language, equipmentId, maxPalletCount, safetyIndex, currentAssignmentId, currentStopIndex, currentPhase
+- **Resume button**: NOVA Trainer entry screen shows "Resume Session" banner when saved session found
+- **Clear**: resetSession() clears the store; entry screen has "Clear" button next to resume
+
+## NOVA Voice Status Component
+- **File**: `src/components/nova/NovaVoiceStatus.tsx`
+- **`NovaVoiceStatus`**: Colored badge showing current voice state (idle / wake_listening / active_listening / recording / transcribing / thinking / speaking / stopped / error)
+
+## NOVA Trainer
+- **Page**: `/nova-trainer` — NOVA ID gate → full ES3 script session
+- **Voice**: `useVoiceEngine` hook — Web Speech API (webkitSpeechRecognition) with exponential backoff
+- **Note**: Chrome webkitSpeechRecognition gets "aborted" errors in Replit environment — session still works via quick-command buttons and text input
+- **Session store**: Syncs phase/equipment/assignment state to `novaSessionStore` on every change
+- **Resume**: Detects saved sessions on mount, restores phase and all key fields
+
+## Training Video System
+- **Data**: `src/data/lessonVideoMap.ts` — `youtubeId` per module (fill in to enable videos)
+- **Component**: `src/components/training/LessonVideoPlayer.tsx` — shows embedded player or placeholder + YouTube search link
+- **Integration**: Lesson session welcome screen + module detail expandable rows
 
 ## Architecture Notes
 - Frontend is pure Vite SPA, no SSR
 - API is OpenAPI-first, codegen via Orval
 - All data is persisted in PostgreSQL
-- Role switching is client-side via Zustand store (for demo — no auth backend)
-- NOVA voice session is simulated (button-click flow, no actual Web Speech API required)
+- Authentication: username/password via `authStore.ts` (Zustand + localStorage)
+- Master credentials: `draogo96` / `Draogo1996#` (owner role)
 - NOVA Help AI uses Replit-billed OpenAI credits (no user API key required)
+- Whisper replaced by `gpt-4o-mini-transcribe` (whisper-1 not available on Azure-backed proxy)

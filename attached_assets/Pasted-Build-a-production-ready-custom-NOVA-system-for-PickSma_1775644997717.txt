@@ -1,0 +1,376 @@
+Build a production-ready custom NOVA system for PickSmart NOVA.
+
+GOAL
+Create a warehouse-branded voice assistant and workflow engine that combines:
+- training
+- AI help
+- live assignment voice flow
+- trainer/supervisor operations
+- session memory
+- mobile/browser fallback
+
+TECH STACK
+Frontend:
+- React
+- Tailwind
+- Zustand for app/session state
+
+Backend:
+- Node.js + Express
+- WebSocket support for live voice mode
+- OpenAI API server-side only
+
+MAIN SYSTEM LAYERS
+1. Wake / Voice Layer
+2. AI Brain Layer
+3. Warehouse Tool Layer
+4. Session Memory Layer
+5. Mobile / Browser Fallback Layer
+
+==================================================
+1. WAKE / VOICE LAYER
+==================================================
+Build a voice layer for NOVA with these states:
+- idle
+- wake_listening
+- active_listening
+- thinking
+- speaking
+- stopped
+- error
+
+WAKE WORDS
+- hey nova
+- hola nova
+
+STOP WORDS
+- stop
+- parar
+
+BEHAVIOR
+- user taps Start once to allow mic/audio
+- then NOVA stays in wake_listening
+- when user says hey nova / hola nova:
+  NOVA says:
+  - English: "Hi. I'm NOVA. How can I help you with selecting today?"
+  - Spanish: "Hola. Soy NOVA. ¿Cómo puedo ayudarte con selección hoy?"
+- after each NOVA answer, return to active listening
+- if user says stop / parar:
+  stop talking and return to wake_listening
+- if browser voice fails, show fallback mode
+
+FILES
+- src/hooks/useVoiceEngine.js
+- src/hooks/useNovaWakeWord.js
+- src/components/nova/NovaVoiceStatus.jsx
+
+==================================================
+2. AI BRAIN LAYER
+==================================================
+Build NOVA AI Brain with two modes:
+
+MODE A: HELP MODE
+For natural questions like:
+- how do I build a pallet
+- why is my rate low
+- what is a short pick
+- how do I use the pallet jack
+
+MODE B: WORKFLOW MODE
+For structured commands like:
+- load picks
+- ready
+- confirm
+- go to aisle 17
+- slot empty
+- report damage
+
+MODE ROUTER
+If input matches warehouse workflow command:
+- use workflow mode
+Else:
+- use AI help mode
+
+Create:
+- src/lib/novaModeRouter.js
+
+AI HELP MODE
+Use backend OpenAI route.
+Restrict responses to:
+- pallet building
+- stacking
+- safety
+- ergonomics
+- hydration
+- accuracy
+- short pick
+- over pick
+- mispick
+- rate improvement
+- pacing
+- pallet jack handling
+- door staging
+- labels
+- check codes
+- warehouse workflow
+
+Keep answers:
+- short
+- professional
+- practical
+- supportive
+- warehouse-focused
+
+If question is outside scope:
+- English:
+  "I focus on warehouse selecting, pallet building, safety, and performance. Ask me something in that area."
+- Spanish:
+  "Me enfoco en selección de almacén, tarimas, seguridad y rendimiento. Pregúntame algo en esa área."
+
+FILES
+- server/novaHelpRoute.js
+- src/lib/novaHelpApi.js
+- server/novaSystemPrompt.js
+
+==================================================
+3. WAREHOUSE TOOL LAYER
+==================================================
+Connect NOVA to real warehouse app data.
+
+TOOLS NOVA CAN READ
+- selectors
+- nova ids
+- assignments
+- assignment stops
+- slot master
+- warehouse defaults
+- door codes
+- labels
+- trainer sessions
+
+CREATE TOOL FUNCTIONS
+- findSelectorByNovaId(novaId)
+- getAssignmentsForSelector(userId)
+- getAssignmentStops(assignmentNumber)
+- getSlotByCode(checkCode)
+- getDoorInfo(doorNumber)
+- getWarehouseDefaults()
+
+FILES
+- src/lib/novaWarehouseTools.js
+- src/data/assignments.js
+- src/data/assignmentStops.js
+- src/data/slotMaster.js
+- src/data/warehouseDefaults.js
+
+==================================================
+4. SESSION MEMORY LAYER
+==================================================
+Build local session memory for NOVA.
+
+REMEMBER
+- selector id
+- nova id
+- current language
+- current mode
+- current assignment
+- current stop
+- current phase
+- equipment id
+- max pallet count
+- safety progress
+- invalid attempts
+- last discussed help topic
+
+SAVE TO
+- localStorage for browser persistence
+- Zustand store for live session state
+
+CREATE
+- saveNovaSession()
+- loadNovaSession()
+- clearNovaSession()
+
+FILES
+- src/lib/novaSessionStorage.js
+- src/store/novaSessionStore.js
+
+==================================================
+5. MOBILE / BROWSER FALLBACK LAYER
+==================================================
+Build browser compatibility fallback.
+
+RULES
+- if SpeechRecognition is unsupported:
+  show message:
+  "Live voice mode is limited on this browser. Try Chrome for best results."
+- keep text input fallback for NOVA Help
+- keep quick action buttons fallback for NOVA Trainer
+- mobile layout must remain usable
+- buttons must be large enough for touch
+
+==================================================
+6. NOVA HELP PAGE
+==================================================
+Build /nova-help as a real warehouse AI voice coach.
+
+UI
+- title: NOVA Help
+- subtitle: Ask anything about selecting
+- start button
+- state indicator
+- current prompt
+- last heard
+- last question
+- last answer
+- wake hint
+- stop hint
+- text input fallback
+- mobile-friendly design
+
+VOICE FLOW
+- start once
+- say hey nova / hola nova
+- ask question
+- get spoken answer
+- auto listen again
+- stop with stop / parar
+
+FILES
+- src/pages/public/NovaHelpPage.jsx
+
+==================================================
+7. NOVA TRAINER PAGE
+==================================================
+Build /nova-trainer with two steps:
+
+STEP 1: NOVA ID ENTRY
+Show:
+- title:
+  Enter your NOVA ID to access your session
+- input placeholder:
+  NOVA-XXXXX
+- button:
+  Enter NOVA
+- helper text:
+  Your NOVA ID is given to you by your trainer after registration.
+
+Validate against registered selectors.
+If invalid:
+- show:
+  Invalid NOVA ID. Please check with your trainer.
+
+STEP 2: LIVE SESSION
+After valid NOVA ID:
+- load selector
+- load selector assignments
+- start ES3 Script Mode voice session
+
+SESSION FEATURES
+- start once for mic/audio
+- wake with hey nova
+- enter equipment id
+- confirm equipment
+- enter max pallet count
+- safety checklist
+- say load picks
+- load assigned assignment
+- announce aisle and slot
+- strict check code validation
+- say invalid and continue listening if wrong
+- grab qty
+- batch complete flow
+- save progress
+- resume session after refresh
+- stop returns to wake mode
+
+UI
+- Base44-style cockpit layout
+- header
+- selector bar
+- stat cards
+- current prompt panel
+- live data panel
+- assigned work panel
+- quick commands
+- command log
+- resume session button
+
+FILES
+- src/pages/nova/NovaTrainerPage.jsx
+- src/components/nova/NovaTrainerSession.jsx
+
+==================================================
+8. BILINGUAL SUPPORT
+==================================================
+Support English and Spanish across NOVA.
+
+TRANSLATE
+- UI labels
+- prompts
+- wake/stop phrases
+- NOVA Help answers
+- NOVA Trainer prompts
+
+FILES
+- src/i18n.js
+- src/locales/en/common.json
+- src/locales/es/common.json
+
+==================================================
+9. ROUTES
+==================================================
+Ensure routes exist:
+- /nova-help
+- /nova-trainer
+- /trainer-dashboard
+- /supervisor
+- /users-access
+- /warehouse-reference
+
+IMPORTANT
+Fix any wrong routing where NOVA Help opens My Assignments.
+
+==================================================
+10. SERVER SETUP
+==================================================
+Set up Express backend.
+Mount NOVA help route.
+Use OpenAI API server-side only.
+Never expose API key in frontend.
+
+FILES
+- server/index.js
+- server/novaHelpRoute.js
+- server/novaSystemPrompt.js
+
+ENV
+Use:
+OPENAI_API_KEY
+
+==================================================
+11. DESIGN STYLE
+==================================================
+Keep dark navy / slate industrial theme with safety yellow accents.
+Use rounded 2xl / 3xl cards.
+Use clean dashboard spacing.
+Make it look professional and easy to scan.
+Mobile-friendly.
+
+==================================================
+12. BUILD ORDER
+==================================================
+Build in this order:
+1. voice engine
+2. session storage
+3. AI help backend route
+4. NOVA Help page
+5. NOVA ID entry page
+6. NOVA Trainer live session
+7. warehouse tool layer
+8. bilingual support
+9. polish UI
+
+IMPORTANT
+This should become a real custom warehouse AI assistant platform, not a generic chatbot.
+Keep NOVA warehouse-focused at all times.

@@ -13,6 +13,9 @@ import { useVoiceEngine, UseVoiceEngineReturn } from "@/hooks/useVoiceEngine";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "@/lib/authStore";
 import { useTrainerStore, type TrainerSelector } from "@/lib/trainerStore";
+import { useNovaSessionStore } from "@/store/novaSessionStore";
+import { hasResumableSession, loadNovaSession } from "@/lib/novaSessionStorage";
+import { NovaVoiceStatus } from "@/components/nova/NovaVoiceStatus";
 
 const SYSTEM_DEFAULTS = {
   printerNumber: "307",
@@ -503,12 +506,40 @@ export default function NovaTrainerPage() {
     setCurrentStopIndex(0);
     setInvalidCount(0);
     setHelpCount(0);
+    // Clear persisted session
+    useNovaSessionStore.getState().clearSession();
   };
 
   useEffect(() => {
     if (!voice.currentPrompt) return;
     setPromptText(voice.currentPrompt);
   }, [voice.currentPrompt]);
+
+  // ── Session store sync ────────────────────────────────────────────────────
+  const novaSession = useNovaSessionStore();
+
+  // Sync key session state to the store whenever it changes
+  useEffect(() => {
+    if (!matchedSelector) return;
+    novaSession.setSession({
+      selectorId: matchedSelector.userId,
+      novaId: matchedSelector.novaId,
+      selectorName: matchedSelector.name,
+      currentPhase: phase,
+      equipmentId,
+      maxPalletCount,
+      safetyIndex,
+      safetyComplete: phase === PHASES.WAIT_LOAD_PICKS || phase === PHASES.LOAD_SUMMARY ||
+        phase === PHASES.SETUP_ALPHA || phase === PHASES.SETUP_BRAVO ||
+        phase === PHASES.PICK_WAIT_CHECK || phase === PHASES.PICK_WAIT_READY ||
+        phase.startsWith("BATCH_COMPLETE") || phase === PHASES.NEXT_BATCH_WAIT,
+      currentAssignmentId: activeAssignmentId,
+      currentStopIndex,
+      invalidAttempts: invalidCount,
+      helpCount,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, equipmentId, maxPalletCount, safetyIndex, activeAssignmentId, currentStopIndex, invalidCount, helpCount, matchedSelector]);
 
   // Auto-start session as soon as a selector is matched (mic already granted in handleEnterNova)
   const hasAutoStartedRef = useRef(false);
@@ -553,6 +584,29 @@ export default function NovaTrainerPage() {
 
   // ── NOVA ID entry screen ─────────────────────────────────────────────────────
   if (!matchedSelector) {
+    const savedSession = hasResumableSession() ? loadNovaSession() : null;
+
+    const handleResumeSession = async () => {
+      if (!savedSession?.novaId) return;
+      const found = trainerSelectors.find(
+        (s) => (s.novaId ?? "").toUpperCase() === savedSession.novaId!.toUpperCase()
+      );
+      if (!found) {
+        setEntryError("Saved session selector not found. Please enter your NOVA ID.");
+        return;
+      }
+      setEntryError("");
+      await voice.initialize();
+      setMatchedSelector(found);
+      // Restore phase and key fields
+      if (savedSession.equipmentId) setEquipmentId(savedSession.equipmentId);
+      if (savedSession.maxPalletCount) setMaxPalletCount(savedSession.maxPalletCount);
+      if (savedSession.safetyIndex) setSafetyIndex(savedSession.safetyIndex);
+      if (savedSession.currentAssignmentId) setActiveAssignmentId(savedSession.currentAssignmentId);
+      if (savedSession.currentStopIndex !== undefined) setCurrentStopIndex(savedSession.currentStopIndex);
+      if (savedSession.currentPhase) setPhase(savedSession.currentPhase);
+    };
+
     return (
       <div className="min-h-screen bg-[#0d0d1a] text-white flex flex-col">
         {/* Top bar */}
@@ -585,6 +639,34 @@ export default function NovaTrainerPage() {
             <p className="text-slate-300 text-base">Warehouse voice picking trainer</p>
             <p className="text-slate-500 text-sm">Fully automatic — just like Siri</p>
           </div>
+
+          {/* Resume session banner */}
+          {savedSession && (
+            <div className="w-full max-w-md rounded-2xl border border-indigo-500/30 bg-indigo-500/10 px-5 py-4">
+              <p className="text-xs text-indigo-400 font-bold uppercase tracking-widest mb-2">Session Found</p>
+              <p className="text-white font-semibold">
+                {savedSession.selectorName ?? savedSession.novaId}
+              </p>
+              <p className="text-slate-400 text-sm mt-1">
+                Phase: <span className="text-indigo-300 font-semibold">{savedSession.currentPhase}</span>
+                {savedSession.equipmentId && ` · Equipment: ${savedSession.equipmentId}`}
+              </p>
+              <div className="mt-3 flex gap-3">
+                <button
+                  onClick={handleResumeSession}
+                  className="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition"
+                >
+                  Resume Session
+                </button>
+                <button
+                  onClick={() => useNovaSessionStore.getState().clearSession()}
+                  className="px-4 py-3 rounded-xl border border-white/10 text-slate-400 hover:text-red-400 text-sm font-semibold transition"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* NOVA ID field */}
           <div className="w-full max-w-md space-y-3">
