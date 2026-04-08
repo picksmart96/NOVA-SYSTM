@@ -81,6 +81,18 @@ export default function NovaTrainerSession({
   const startedRef = useRef(false);
   const autoWokeRef = useRef(false);
 
+  // Ref-safe speaking state — readable from any closure without staleness
+  const isSpeakingRef = useRef(false);
+  // Queued prompt to speak once current TTS finishes
+  const pendingPromptRef = useRef("");
+  // Stable ref to the speak-with-queue function (updated every effect)
+  const speakPromptRef = useRef<(text: string) => void>(() => {});
+  // Stable ref to sendInput (avoids closure staleness in onmessage)
+  const sendInputRef = useRef<(text: string) => void>(() => {});
+  // Stable ref to voice.speak (always latest) — typed explicitly to avoid forward-ref issue
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const voiceSpeakRef = useRef<((text: string, opts?: any) => void) | null>(null);
+
   const [connected, setConnected] = useState(false);
   const [started, setStarted] = useState(false);
   const [serverError, setServerError] = useState("");
@@ -91,7 +103,7 @@ export default function NovaTrainerSession({
     onHeard: async (_heard: string, raw: string) => {
       const text = raw || _heard;
       setHeardResponse(text);
-      sendInput(text);
+      sendInputRef.current(text);
     },
   });
 
@@ -105,6 +117,29 @@ export default function NovaTrainerSession({
     return "Idle";
   }, [serverError, voice.error, voice.speaking, voice.pttRecording, voice.thinking, voice.listening, voice.pttMode]);
 
+  // Keep voiceSpeakRef current — always latest voice.speak, no stale closures
+  useEffect(() => { voiceSpeakRef.current = voice.speak; });
+
+  // Keep isSpeakingRef in sync with React state
+  useEffect(() => { isSpeakingRef.current = voice.speaking; }, [voice.speaking]);
+
+  // Build the speak-with-queue helper — uses refs so onmessage closures are never stale
+  useEffect(() => {
+    speakPromptRef.current = (text: string) => {
+      isSpeakingRef.current = true;
+      voiceSpeakRef.current?.(text, {
+        after: "active",
+        onEnd: () => {
+          isSpeakingRef.current = false;
+          const queued = pendingPromptRef.current;
+          if (queued) {
+            pendingPromptRef.current = "";
+            speakPromptRef.current(queued);
+          }
+        },
+      });
+    };
+  });
 
   const connectSocket = () => {
     try {
@@ -136,7 +171,7 @@ export default function NovaTrainerSession({
           }
 
           if (msg.type === "state" && msg.state) {
-            // Auto-skip WAIT_WAKE phase when autoStart is true
+            // Auto-skip WAIT_WAKE when autoStart — no TTS is playing so this is safe
             if (autoStart && msg.state.phase === "WAIT_WAKE" && !autoWokeRef.current) {
               autoWokeRef.current = true;
               setTimeout(() => {
@@ -150,14 +185,15 @@ export default function NovaTrainerSession({
             setTrainerState((prev) => ({ ...prev, ...msg.state }));
 
             const newPrompt = msg.state.prompt ?? "";
-            if (
-              startedRef.current &&
-              newPrompt &&
-              newPrompt !== lastSpokenPromptRef.current &&
-              !voice.speaking
-            ) {
+            if (startedRef.current && newPrompt && newPrompt !== lastSpokenPromptRef.current) {
               lastSpokenPromptRef.current = newPrompt;
-              voice.speak(newPrompt, { after: "active" });
+              // Use ref-based speaking check — never stale inside this closure
+              if (isSpeakingRef.current) {
+                // Queue it — speakPromptRef.onEnd will pick it up automatically
+                pendingPromptRef.current = newPrompt;
+              } else {
+                speakPromptRef.current(newPrompt);
+              }
             }
           }
         } catch {
@@ -196,12 +232,19 @@ export default function NovaTrainerSession({
     wsRef.current.send(JSON.stringify({ type: "input", text }));
   };
 
+  // Keep sendInputRef always current so onHeard closure never goes stale
+  useEffect(() => { sendInputRef.current = sendInput; });
+
   const startSession = async () => {
     const ok = await voice.initialize();
     if (!ok) return;
 
     startedRef.current = true;
     setStarted(true);
+
+    // Reset queues on fresh start
+    pendingPromptRef.current = "";
+    isSpeakingRef.current = false;
 
     if (!initializedRef.current) {
       initializedRef.current = true;
@@ -212,7 +255,12 @@ export default function NovaTrainerSession({
 
     setTimeout(() => {
       requestState();
-      voice.speak('Say "Hey NOVA" to begin.');
+      // When autoStart is true the session skips WAIT_WAKE entirely —
+      // no intro speech needed and autoWoke will send "hey nova" once
+      // the socket receives the WAIT_WAKE state (while nothing is speaking).
+      if (!autoStart) {
+        voice.speak('Say "Hey NOVA" to begin.');
+      }
     }, 400);
   };
 
@@ -233,6 +281,8 @@ export default function NovaTrainerSession({
     setStarted(false);
     setHeardResponse("");
     lastSpokenPromptRef.current = "";
+    pendingPromptRef.current = "";
+    isSpeakingRef.current = false;
     setTrainerState(DEFAULT_STATE);
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.close();
