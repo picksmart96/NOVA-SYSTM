@@ -382,10 +382,11 @@ export function createNovaTrainerSession({
     }
 
     if (state.phase === PHASES.PICK_READY) {
-      if (isReady(input) || input === "grab" || isConfirm(input)) {
+      if (isReady(input)) {
         return moveToNextStop();
       }
-      return setPrompt("Ready.");
+      // Ignore anything else (e.g. "grab 5", quantity confirmations) — just wait
+      return snapshot();
     }
 
     if (state.phase === PHASES.COMPLETE_DOOR) {
