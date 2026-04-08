@@ -59,53 +59,58 @@ function digitsOnly(input = "") {
   return wordConverted.replace(/[^0-9]/g, "");
 }
 
+/** Returns true if v contains any of the given substrings */
+function has(v: string, ...terms: string[]): boolean {
+  return terms.some((t) => v.includes(t));
+}
+
 function isConfirm(input = "") {
   const v = normalize(input);
-  return (
-    v === "yes" ||
-    v === "yeah" ||
-    v === "yep" ||
-    v === "confirm" ||
-    v === "confirmed" ||
-    v === "correct" ||
-    v === "affirmative" ||
-    v === "that's correct" ||
-    v === "thats correct" ||
-    v === "si" ||
-    v === "sí" ||
-    v === "okay" ||
-    v === "ok"
-  );
+  return has(v,
+    "yes", "yeah", "yep", "yea",
+    "confirm", "correct", "affirmative",
+    "that's", "thats", "right",
+    "okay", "ok",
+    "si ", "sí", " si",          // "si" with space to avoid false "visiting"
+    "sure", "go ahead", "proceed",
+  ) || v === "si" || v === "sí";
 }
 
 function isDeny(input = "") {
   const v = normalize(input);
-  return v === "no" || v === "nope" || v === "cancel" || v === "negative" || v === "wrong";
+  return has(v, "no ", "nope", "cancel", "negative", "wrong", "incorrect", "redo") || v === "no";
 }
 
 function isLoadPicks(input = "") {
   const v = normalize(input);
-  return (
-    v === "load picks" ||
-    v === "load pick" ||
-    v === "cargar selecciones" ||
-    v === "cargar"
-  );
+  // Accept if input contains a "load/love/lav/lod" sound AND a "pick/pic" sound
+  const hasLoadSound = has(v, "load", "lov", "lod", "lav", "lok", "lot pick", "lob", "lof", "lop");
+  const hasPickSound = has(v, "pick", "pic ", "pik", " pic", "pec", "pek", "peak", "peek");
+  if (hasLoadSound && hasPickSound) return true;
+  // Accept Spanish variants
+  if (has(v, "cargar", "selec", "carga")) return true;
+  // Accept if the phrase is "load picks" like with any accent (broad fallback)
+  if (has(v, "lo", "la", "le") && has(v, "pic", "pik", "pec")) return true;
+  return false;
 }
 
 function isReady(input = "") {
   const v = normalize(input);
-  return v === "ready" || v === "listo" || v === "lista";
+  return has(v,
+    "ready", "redy", "reddy", "rea",
+    "listo", "lista", "listos",
+    "done", "set", "go",
+  );
 }
 
 function isWake(input = "") {
   const v = normalize(input);
-  return v.includes("hey nova") || v.includes("hola nova");
+  return has(v, "hey nova", "hey no", "hola nova", "hola no", "a nova", "ay nova");
 }
 
 function isStop(input = "") {
   const v = normalize(input);
-  return v === "stop" || v === "parar" || v === "para";
+  return has(v, "stop", "parar", "para", "halt", "end session", "terminar");
 }
 
 export interface Selector {
