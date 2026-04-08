@@ -333,32 +333,48 @@ export default function NovaTrainerSession({
           </div>
         )}
 
-        {/* Push-to-talk button — shown when browser voice doesn't work */}
-        {voice.pttMode && started && (
-          <div className="w-full flex flex-col items-center gap-2">
-            <button
-              onMouseDown={() => voice.startPTT()}
-              onMouseUp={() => voice.stopPTT()}
-              onTouchStart={(e) => { e.preventDefault(); voice.startPTT(); }}
-              onTouchEnd={(e) => { e.preventDefault(); voice.stopPTT(); }}
-              disabled={voice.speaking || voice.thinking}
-              className={`w-full h-20 rounded-3xl text-lg font-black transition-all select-none ${
-                voice.pttRecording
-                  ? "bg-red-500 text-white shadow-[0_0_30px_rgba(239,68,68,0.5)] scale-95"
-                  : voice.speaking || voice.thinking
-                  ? "bg-slate-700 text-slate-500 cursor-not-allowed"
-                  : "bg-yellow-400 text-slate-950 hover:bg-yellow-300 active:scale-95"
-              }`}
-            >
-              {voice.pttRecording
-                ? "⏺  Recording… Release to send"
-                : voice.thinking
-                ? "⏳  Processing…"
+        {/* Auto-listening indicator — shown when VAD mode is active */}
+        {voice.vadMode && started && (
+          <div className="w-full flex flex-col items-center gap-3">
+            <div className={`w-full rounded-3xl px-6 py-4 flex flex-col items-center gap-3 transition-all ${
+              voice.pttRecording
+                ? "border border-red-500/40 bg-red-500/10"
                 : voice.speaking
-                ? "🔊  NOVA is speaking…"
-                : "🎙️  Hold to Talk"}
-            </button>
-            <p className="text-xs text-slate-600">Press and hold while speaking, then release</p>
+                ? "border border-yellow-400/30 bg-yellow-400/5"
+                : voice.thinking
+                ? "border border-slate-700 bg-slate-900"
+                : "border border-green-500/30 bg-green-500/5"
+            }`}>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">
+                  {voice.pttRecording ? "⏺" : voice.speaking ? "🔊" : voice.thinking ? "⏳" : "🎙️"}
+                </span>
+                <span className={`text-sm font-bold ${
+                  voice.pttRecording ? "text-red-300"
+                  : voice.speaking ? "text-yellow-300"
+                  : voice.thinking ? "text-slate-400"
+                  : "text-green-300"
+                }`}>
+                  {voice.pttRecording
+                    ? "Recording your response…"
+                    : voice.speaking
+                    ? "NOVA is speaking…"
+                    : voice.thinking
+                    ? "Processing…"
+                    : "Listening — just speak"}
+                </span>
+              </div>
+              {/* Volume bar */}
+              {(voice.listening || voice.pttRecording) && (
+                <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-75 ${voice.pttRecording ? "bg-red-400" : "bg-green-400"}`}
+                    style={{ width: `${Math.min(100, (voice.volume ?? 0) * 3)}%` }}
+                  />
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-slate-600">NOVA will hear you automatically — no button needed</p>
           </div>
         )}
 
