@@ -1,0 +1,841 @@
+import { create } from "zustand";
+
+const initialUsers = [
+  {
+    id: "user-001",
+    name: "soumaila ouedraogo",
+    handle: "@soumaila",
+    level: "Pro Selector",
+    bio: "we are here to help",
+    avatar: "",
+    followers: [],
+    following: [],
+    postsCount: 0,
+    isOnline: true,
+    statusText: "Ready to chat",
+    role: "selector",
+    isBanned: false,
+  },
+  {
+    id: "user-002",
+    name: "Marcus Hill",
+    handle: "@nightshiftmarcus",
+    level: "Pro Selector",
+    bio: "Night shift. Clean pallets. Strong rate.",
+    avatar: "",
+    followers: [],
+    following: [],
+    postsCount: 1,
+    isOnline: true,
+    statusText: "Ready to chat",
+    role: "selector",
+    isBanned: false,
+  },
+  {
+    id: "user-003",
+    name: "Tasha Green",
+    handle: "@stackqueen",
+    level: "Intermediate",
+    bio: "Stack clean. Move fast. Stay safe.",
+    avatar: "",
+    followers: [],
+    following: [],
+    postsCount: 1,
+    isOnline: true,
+    statusText: "Ready to chat",
+    role: "selector",
+    isBanned: false,
+  },
+  {
+    id: "user-004",
+    name: "Andre Lewis",
+    handle: "@andrebuilds",
+    level: "Beginner",
+    bio: "Learning every shift.",
+    avatar: "",
+    followers: [],
+    following: [],
+    postsCount: 0,
+    isOnline: false,
+    statusText: "",
+    role: "selector",
+    isBanned: false,
+  },
+];
+
+const initialPosts = [
+  {
+    id: "post-001",
+    authorId: "user-002",
+    content:
+      "Best stacking advice for new selectors: build a square base first, keep heavy items low, and don't rush the wrap. Clean pallets save time later. 💪",
+    imageUrl: "",
+    hashtags: ["#stackingtips", "#selectorlife"],
+    createdAt: Date.now() - 1000 * 60 * 60 * 6,
+    reactions: {
+      like: ["user-001"],
+      love: ["user-003"],
+      funny: [],
+      wow: [],
+      frustrated: [],
+    },
+    comments: [
+      {
+        id: "comment-001",
+        authorId: "user-003",
+        text: "Facts 🔥 This helps your rate and keeps the load safer.",
+        createdAt: Date.now() - 1000 * 60 * 60 * 5,
+      },
+      {
+        id: "comment-002",
+        authorId: "user-004",
+        text: "I needed this. My first pallets were terrible 😅",
+        createdAt: Date.now() - 1000 * 60 * 60 * 4,
+      },
+    ],
+    savedBy: [],
+    reports: [],
+  },
+  {
+    id: "post-002",
+    authorId: "user-003",
+    content:
+      "What headset commands helped you learn faster? Mine were Ready, Repeat, and Short. Drop yours below. 🎧",
+    imageUrl: "",
+    hashtags: ["#voicepicking", "#warehousewins"],
+    createdAt: Date.now() - 1000 * 60 * 60 * 11,
+    reactions: {
+      like: ["user-001"],
+      love: [],
+      funny: [],
+      wow: [],
+      frustrated: [],
+    },
+    comments: [],
+    savedBy: [],
+    reports: [],
+  },
+];
+
+function uid(prefix = "id") {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export const useSelectorBreakingNewsStore = create((set, get) => ({
+  currentUserId: "user-001",
+  users: initialUsers,
+  posts: initialPosts,
+
+  setCurrentUser: (userId) => set({ currentUserId: userId }),
+
+  createPost: ({ content, imageUrl = "", hashtags = [] }) =>
+    set((state) => {
+      if (!content.trim()) return state;
+
+      const post = {
+        id: uid("post"),
+        authorId: state.currentUserId,
+        content: content.trim(),
+        imageUrl: imageUrl.trim(),
+        hashtags: hashtags.filter(Boolean),
+        createdAt: Date.now(),
+        reactions: {
+          like: [],
+          love: [],
+          funny: [],
+          wow: [],
+          frustrated: [],
+        },
+        comments: [],
+        savedBy: [],
+        reports: [],
+      };
+
+      return {
+        posts: [post, ...state.posts],
+        users: state.users.map((u) =>
+          u.id === state.currentUserId
+            ? { ...u, postsCount: (u.postsCount || 0) + 1 }
+            : u
+        ),
+      };
+    }),
+
+  addComment: (postId, text) =>
+    set((state) => {
+      if (!text.trim()) return state;
+
+      return {
+        posts: state.posts.map((post) =>
+          post.id === postId
+            ? {
+                ...post,
+                comments: [
+                  ...post.comments,
+                  {
+                    id: uid("comment"),
+                    authorId: state.currentUserId,
+                    text: text.trim(),
+                    createdAt: Date.now(),
+                  },
+                ],
+              }
+            : post
+        ),
+      };
+    }),
+
+  toggleReaction: (postId, type) =>
+    set((state) => ({
+      posts: state.posts.map((post) => {
+        if (post.id !== postId) return post;
+
+        const updatedReactions = { ...post.reactions };
+
+        Object.keys(updatedReactions).forEach((key) => {
+          updatedReactions[key] = updatedReactions[key].filter(
+            (id) => id !== state.currentUserId
+          );
+        });
+
+        const alreadyReacted = post.reactions[type]?.includes(state.currentUserId);
+
+        if (!alreadyReacted) {
+          updatedReactions[type] = [
+            ...(updatedReactions[type] || []),
+            state.currentUserId,
+          ];
+        }
+
+        return { ...post, reactions: updatedReactions };
+      }),
+    })),
+
+  toggleSavePost: (postId) =>
+    set((state) => ({
+      posts: state.posts.map((post) => {
+        if (post.id !== postId) return post;
+
+        const saved = post.savedBy.includes(state.currentUserId)
+          ? post.savedBy.filter((id) => id !== state.currentUserId)
+          : [...post.savedBy, state.currentUserId];
+
+        return { ...post, savedBy: saved };
+      }),
+    })),
+
+  reportPost: (postId, reason = "Reported by user") =>
+    set((state) => ({
+      posts: state.posts.map((post) =>
+        post.id === postId
+          ? {
+              ...post,
+              reports: post.reports.some((r) => r.userId === state.currentUserId)
+                ? post.reports
+                : [
+                    ...post.reports,
+                    {
+                      id: uid("report"),
+                      userId: state.currentUserId,
+                      reason,
+                      createdAt: Date.now(),
+                    },
+                  ],
+            }
+          : post
+      ),
+    })),
+
+  followUser: (targetUserId) =>
+    set((state) => {
+      const me = state.users.find((u) => u.id === state.currentUserId);
+      if (!me || targetUserId === state.currentUserId) return state;
+
+      const alreadyFollowing = me.following.includes(targetUserId);
+
+      return {
+        users: state.users.map((u) => {
+          if (u.id === state.currentUserId) {
+            return {
+              ...u,
+              following: alreadyFollowing
+                ? u.following.filter((id) => id !== targetUserId)
+                : [...u.following, targetUserId],
+            };
+          }
+
+          if (u.id === targetUserId) {
+            return {
+              ...u,
+              followers: alreadyFollowing
+                ? u.followers.filter((id) => id !== state.currentUserId)
+                : [...u.followers, state.currentUserId],
+            };
+          }
+
+          return u;
+        }),
+      };
+    }),
+
+  deletePost: (postId) =>
+    set((state) => {
+      const post = state.posts.find((p) => p.id === postId);
+      if (!post) return state;
+
+      return {
+        posts: state.posts.filter((p) => p.id !== postId),
+        users: state.users.map((u) =>
+          u.id === post.authorId
+            ? { ...u, postsCount: Math.max((u.postsCount || 1) - 1, 0) }
+            : u
+        ),
+      };
+    }),
+
+  getCurrentUser: () => {
+    const state = get();
+    return state.users.find((u) => u.id === state.currentUserId);
+  },
+
+  getUserById: (userId) => {
+    const state = get();
+    return state.users.find((u) => u.id === userId);
+  },
+
+  getFeedPosts: () => {
+    const state = get();
+    return [...state.posts].sort((a, b) => b.createdAt - a.createdAt);
+  },
+
+  getSavedPosts: () => {
+    const state = get();
+    return state.posts.filter((p) => p.savedBy.includes(state.currentUserId));
+  },
+
+  getSuggestedMembers: () => {
+    const state = get();
+    const currentUser = state.users.find((u) => u.id === state.currentUserId);
+
+    return state.users.filter(
+      (u) =>
+        u.id !== state.currentUserId &&
+        !currentUser?.following.includes(u.id) &&
+        !u.isBanned
+    );
+  },
+
+  getOnlineUsers: () => {
+    const state = get();
+    return state.users.filter((u) => u.isOnline && !u.isBanned && u.id !== state.currentUserId);
+  },
+
+  getTrendingHashtags: () => {
+    const state = get();
+    const counts = {};
+
+    state.posts.forEach((post) => {
+      post.hashtags.forEach((tag) => {
+        counts[tag] = (counts[tag] || 0) + 1;
+      });
+    });
+
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([tag]) => tag);
+  },
+}));
+2) src/pages/app/SelectorBreakingNewsPage.jsx
+import { useMemo, useState } from "react";
+import { useSelectorBreakingNewsStore } from "../../store/selectorBreakingNewsStore";
+
+function Avatar({ name, size = "md" }) {
+  const dims =
+    size === "lg"
+      ? "h-16 w-16 text-xl"
+      : size === "sm"
+      ? "h-10 w-10 text-sm"
+      : "h-12 w-12 text-base";
+
+  return (
+    <div
+      className={`${dims} flex items-center justify-center rounded-full bg-yellow-400 font-black uppercase text-slate-950`}
+    >
+      {name?.slice(0, 1) || "S"}
+    </div>
+  );
+}
+
+function SidebarCard({ title, children }) {
+  return (
+    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-lg">
+      {title ? <h3 className="text-lg font-bold text-white">{title}</h3> : null}
+      <div className={title ? "mt-4 space-y-3" : ""}>{children}</div>
+    </div>
+  );
+}
+
+function StatBlock({ label, value }) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-950 p-3 text-center">
+      <p className="text-xl font-black text-white">{value}</p>
+      <p className="mt-1 text-xs text-slate-400">{label}</p>
+    </div>
+  );
+}
+
+function formatTime(ts) {
+  const diff = Date.now() - ts;
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  if (hours < 1) return "just now";
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function ReactionButton({ label, emoji, count = 0, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-xl border px-3 py-2 text-sm transition ${
+        active
+          ? "border-yellow-400 bg-yellow-500/10 text-yellow-300"
+          : "border-slate-700 text-slate-300 hover:border-yellow-400 hover:text-white"
+      }`}
+    >
+      {emoji} {label} {count > 0 ? count : ""}
+    </button>
+  );
+}
+
+function PostCard({ post, currentUserId, getUserById, onReact, onComment, onSave, onReport }) {
+  const [comment, setComment] = useState("");
+  const author = getUserById(post.authorId);
+
+  const commentSubmit = () => {
+    if (!comment.trim()) return;
+    onComment(post.id, comment);
+    setComment("");
+  };
+
+  const hasReaction = (type) => post.reactions[type]?.includes(currentUserId);
+
+  return (
+    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-lg">
+      <div className="flex items-start gap-3">
+        <Avatar name={author?.name || "U"} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-bold text-white">{author?.name}</h3>
+            <span className="rounded-full bg-yellow-500/20 px-2.5 py-1 text-xs font-bold text-yellow-300">
+              {author?.level}
+            </span>
+          </div>
+          <p className="text-sm text-slate-400">
+            {author?.handle} • {formatTime(post.createdAt)}
+          </p>
+        </div>
+      </div>
+
+      <p className="mt-4 whitespace-pre-wrap text-slate-200 leading-7">
+        {post.content}
+      </p>
+
+      {post.imageUrl ? (
+        <img
+          src={post.imageUrl}
+          alt="Post"
+          className="mt-4 max-h-96 w-full rounded-2xl object-cover border border-slate-800"
+        />
+      ) : null}
+
+      {post.hashtags?.length ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {post.hashtags.map((tag) => (
+            <span
+              key={tag}
+              className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-300"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        <ReactionButton
+          label="Like"
+          emoji="👍"
+          count={post.reactions.like.length}
+          active={hasReaction("like")}
+          onClick={() => onReact(post.id, "like")}
+        />
+        <ReactionButton
+          label="Love"
+          emoji="❤️"
+          count={post.reactions.love.length}
+          active={hasReaction("love")}
+          onClick={() => onReact(post.id, "love")}
+        />
+        <ReactionButton
+          label="Funny"
+          emoji="😂"
+          count={post.reactions.funny.length}
+          active={hasReaction("funny")}
+          onClick={() => onReact(post.id, "funny")}
+        />
+        <ReactionButton
+          label="Wow"
+          emoji="😮"
+          count={post.reactions.wow.length}
+          active={hasReaction("wow")}
+          onClick={() => onReact(post.id, "wow")}
+        />
+        <ReactionButton
+          label="Frustrated"
+          emoji="😡"
+          count={post.reactions.frustrated.length}
+          active={hasReaction("frustrated")}
+          onClick={() => onReact(post.id, "frustrated")}
+        />
+        <ReactionButton label="Save" emoji="🔖" onClick={() => onSave(post.id)} />
+        <ReactionButton label="Report" emoji="🚩" onClick={() => onReport(post.id)} />
+      </div>
+
+      <div className="mt-5 space-y-3">
+        {post.comments.map((item) => {
+          const commentAuthor = getUserById(item.authorId);
+          return (
+            <div
+              key={item.id}
+              className="rounded-2xl border border-slate-800 bg-slate-950 p-3"
+            >
+              <p className="font-semibold text-white">{commentAuthor?.name}</p>
+              <p className="mt-1 text-sm text-slate-300">{item.text}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-5 flex gap-3">
+        <input
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="Write a comment..."
+          className="flex-1 rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-yellow-400"
+        />
+        <button
+          onClick={commentSubmit}
+          className="rounded-2xl bg-yellow-400 px-4 py-3 font-bold text-slate-950 hover:bg-yellow-300"
+        >
+          Post
+        </button>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2 text-lg">
+        {["😀", "😂", "😎", "🔥", "💪", "👏", "🙌", "❤️", "👍", "😮", "😅", "🎧", "📦", "🚚", "🙏", "✅"].map(
+          (emoji) => (
+            <button
+              key={emoji}
+              className="rounded-xl border border-slate-700 px-2.5 py-2 transition hover:border-yellow-400"
+              onClick={() => setComment((prev) => `${prev}${emoji}`)}
+            >
+              {emoji}
+            </button>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function SelectorBreakingNewsPage() {
+  const {
+    currentUserId,
+    createPost,
+    addComment,
+    toggleReaction,
+    toggleSavePost,
+    reportPost,
+    followUser,
+    getCurrentUser,
+    getUserById,
+    getFeedPosts,
+    getSuggestedMembers,
+    getOnlineUsers,
+    getTrendingHashtags,
+  } = useSelectorBreakingNewsStore();
+
+  const currentUser = getCurrentUser();
+  const posts = getFeedPosts();
+  const suggestedMembers = getSuggestedMembers();
+  const onlineUsers = getOnlineUsers();
+  const trendingHashtags = getTrendingHashtags();
+
+  const [postText, setPostText] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [hashtagInput, setHashtagInput] = useState("");
+
+  const hashtags = useMemo(() => {
+    return hashtagInput
+      .split(" ")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => (item.startsWith("#") ? item : `#${item}`));
+  }, [hashtagInput]);
+
+  const handleCreatePost = () => {
+    createPost({
+      content: postText,
+      imageUrl,
+      hashtags,
+    });
+    setPostText("");
+    setImageUrl("");
+    setHashtagInput("");
+  };
+
+  const menuItems = [
+    "Home Feed",
+    "Profile",
+    "Messages",
+    "Notifications",
+    "Saved Posts",
+    "Groups",
+    "Settings",
+    "Community Policy",
+  ];
+
+  return (
+    <div className="min-h-screen bg-slate-950 px-4 py-6 text-white md:px-6">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <div className="text-center">
+          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-yellow-400">
+            Community
+          </p>
+          <h1 className="mt-3 text-4xl font-black md:text-5xl">
+            Selector Breaking News
+          </h1>
+          <p className="mt-3 text-lg text-slate-300">
+            Built for selectors. Powered by community.
+          </p>
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-4 shadow-lg">
+          <input
+            placeholder="Search posts, people, hashtags"
+            className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-yellow-400"
+          />
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)_300px]">
+          <div className="space-y-6">
+            <SidebarCard>
+              <div className="flex items-center gap-4">
+                <Avatar name={currentUser?.name} size="lg" />
+                <div>
+                  <h2 className="text-lg font-bold">{currentUser?.name}</h2>
+                  <span className="mt-2 inline-flex rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-bold text-yellow-300">
+                    {currentUser?.level}
+                  </span>
+                </div>
+              </div>
+
+              <p className="mt-4 text-sm text-slate-300">{currentUser?.bio}</p>
+
+              <div className="mt-5 grid grid-cols-3 gap-3">
+                <StatBlock label="Following" value={currentUser?.following.length || 0} />
+                <StatBlock label="Followers" value={currentUser?.followers.length || 0} />
+                <StatBlock label="Posts" value={currentUser?.postsCount || 0} />
+              </div>
+            </SidebarCard>
+
+            <SidebarCard title="Menu">
+              {menuItems.map((item) => (
+                <button
+                  key={item}
+                  className="block w-full rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-left text-slate-300 transition hover:border-yellow-400 hover:text-white"
+                >
+                  {item}
+                </button>
+              ))}
+            </SidebarCard>
+
+            <SidebarCard title="Community Policy">
+              <div className="space-y-2 text-sm text-slate-300">
+                <p>✅ Work-related and appropriate pictures only</p>
+                <p>✅ Respect other members</p>
+                <p>🚫 No nudity, hate, threats, or illegal content</p>
+                <p>🚫 No harassment or bullying</p>
+                <p>👑 Owner can warn, suspend, or ban users</p>
+              </div>
+            </SidebarCard>
+          </div>
+
+          <div className="space-y-6">
+            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-lg">
+              <div className="flex items-start gap-3">
+                <Avatar name={currentUser?.name} />
+                <div className="flex-1 space-y-3">
+                  <textarea
+                    value={postText}
+                    onChange={(e) => setPostText(e.target.value)}
+                    rows={4}
+                    placeholder="What's going on in your shift?"
+                    className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-yellow-400"
+                  />
+
+                  <input
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    placeholder="Add image URL (optional)"
+                    className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-yellow-400"
+                  />
+
+                  <input
+                    value={hashtagInput}
+                    onChange={(e) => setHashtagInput(e.target.value)}
+                    placeholder="Add hashtags like: selectorlife stackingtips"
+                    className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-yellow-400"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button className="rounded-2xl border border-slate-700 px-4 py-3 text-sm font-semibold text-slate-300 hover:border-yellow-400 hover:text-white">
+                  Add Photo
+                </button>
+                <button className="rounded-2xl border border-slate-700 px-4 py-3 text-sm font-semibold text-slate-300 hover:border-yellow-400 hover:text-white">
+                  Add Hashtag
+                </button>
+                <button
+                  onClick={handleCreatePost}
+                  className="rounded-2xl bg-yellow-400 px-5 py-3 text-sm font-bold text-slate-950 hover:bg-yellow-300"
+                >
+                  Post to Breaking News
+                </button>
+              </div>
+            </div>
+
+            {posts.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                currentUserId={currentUserId}
+                getUserById={getUserById}
+                onReact={toggleReaction}
+                onComment={addComment}
+                onSave={toggleSavePost}
+                onReport={reportPost}
+              />
+            ))}
+          </div>
+
+          <div className="space-y-6">
+            <SidebarCard title="Trending Hashtags">
+              <div className="flex flex-wrap gap-2">
+                {trendingHashtags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-full border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </SidebarCard>
+
+            <SidebarCard title="Suggested Members">
+              <div className="space-y-4">
+                {suggestedMembers.map((member) => (
+                  <div key={member.id} className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar name={member.name} size="sm" />
+                      <div>
+                        <p className="font-semibold">{member.name}</p>
+                        <p className="text-xs text-slate-400">
+                          {member.followers.length} followers
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => followUser(member.id)}
+                      className="rounded-xl bg-yellow-400 px-3 py-2 text-sm font-bold text-slate-950 hover:bg-yellow-300"
+                    >
+                      Follow
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </SidebarCard>
+
+            <SidebarCard title="Online Now">
+              <div className="space-y-4">
+                {onlineUsers.map((member) => (
+                  <div key={member.id} className="flex items-center gap-3">
+                    <Avatar name={member.name} size="sm" />
+                    <div>
+                      <p className="font-semibold">{member.name}</p>
+                      <p className="text-xs text-green-300">
+                        {member.statusText || "Online"}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </SidebarCard>
+
+            <SidebarCard title="Announcements">
+              <div className="space-y-3 text-sm text-slate-300">
+                <p>
+                  Only appropriate, work-related pictures are allowed on Selector Breaking News.
+                </p>
+                <p>
+                  Owner dashboard controls reports, posts, warnings, suspensions, and bans.
+                </p>
+              </div>
+            </SidebarCard>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+3) Route update
+import SelectorBreakingNewsPage from "./pages/app/SelectorBreakingNewsPage";
+
+<Route path="/selector-breaking-news" element={<SelectorBreakingNewsPage />} />
+4) Navbar label update
+
+Change:
+
+{ label: "Selector Nation", href: "/selector-nation", pageKey: "selector-nation" }
+
+to:
+
+{ label: "Selector Breaking News", href: "/selector-breaking-news", pageKey: "selector-nation" }
+What this gives you now
+
+You now have a working social feed system with:
+
+post creation
+comments
+reactions
+saving
+reporting
+follow/unfollow
+trending hashtags
+suggested members
+online users
+Best next upgrade
+
+The strongest next step is to add owner moderation tools so you can:
+
+review reports
+delete posts
+warn users
+suspend users
+ban users
+
+I can write the owner moderation dashboard for Breaking News next.

@@ -8,9 +8,7 @@ export const STATUS = {
   SPEAKING: "speaking",
   STOPPED: "stopped",
   ERROR: "error",
-  // Auto-VAD states (used when SpeechRecognition is unavailable)
-  VAD_LISTENING: "vad_listening",   // mic open, watching for voice
-  VAD_RECORDING: "vad_recording",   // voice detected, recording
+  VAD_RECORDING: "vad_recording",
 } as const;
 
 type StatusValue = (typeof STATUS)[keyof typeof STATUS];
@@ -30,12 +28,13 @@ type UseVoiceEngineOptions = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecognition = any;
 
-// ── VAD constants (mirrors nova-help thresholds) ──────────────────────────────
-const VAD_VOICE_THRESHOLD = 12;   // RMS above this = someone is speaking
-const VAD_TRIGGER_MS      = 150;  // ms of continuous voice to start recording
-const VAD_SILENCE_THRESHOLD = 8;  // RMS below this = silence
-const VAD_SILENCE_DURATION  = 1400; // ms of silence after speech → stop clip
-const VAD_MIN_RECORD_MS     = 400;  // minimum recording before silence check
+// ── VAD constants ─────────────────────────────────────────────────────────────
+// Replit iframe mic produces low RMS levels. Voice is ~3-8, silence is ~0-2.
+// Using a unified threshold of 3 to distinguish speech from silence.
+const VAD_THRESHOLD        = 3;    // above = speech, below = silence
+const VAD_SILENCE_DURATION = 1400; // ms of silence after speech → process clip
+const VAD_MIN_RECORD_MS    = 500;  // minimum recording before silence check
+const VAD_MAX_NO_SPEECH_MS = 8000; // discard + restart if no speech in 8s
 
 function getRecognitionClass(): (new () => AnyRecognition) | null {
   if (typeof window === "undefined") return null;
@@ -52,19 +51,24 @@ function pickPreferredVoice(lang: string): SpeechSynthesisVoice | null {
   return (
     voices.find((v) => /samantha|aria|ava|zira|karen/i.test(v.name) && v.lang.startsWith(langRoot)) ||
     voices.find((v) => /samantha|aria|ava|zira|karen/i.test(v.name)) ||
-    voices.find((v) => /female/i.test(v.name)) ||
     voices.find((v) => v.lang.startsWith(langRoot) && v.default) ||
     voices[0]
   );
 }
 
 async function transcribeBlob(blob: Blob): Promise<string> {
-  const formData = new FormData();
-  formData.append("audio", blob, "recording.webm");
-  const res = await fetch("/api/transcribe", { method: "POST", body: formData });
+  // Endpoint expects raw audio bytes with Content-Type header (not multipart/form-data)
+  const arrayBuffer = await blob.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer);
+  const contentType = blob.type || "audio/webm";
+  const res = await fetch("/api/transcribe", {
+    method: "POST",
+    headers: { "Content-Type": contentType },
+    body: bytes,
+  });
   if (!res.ok) return "";
-  const data = await res.json() as { text?: string };
-  return (data.text ?? "").toLowerCase().trim();
+  const data = await res.json() as { transcript?: string };
+  return (data.transcript ?? "").toLowerCase().trim();
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -73,7 +77,8 @@ export function useVoiceEngine({
   lang = "en-US",
   silenceTimeoutMs = 7000,
 }: UseVoiceEngineOptions = {}) {
-  // ── SpeechRecognition refs ────────────────────────────────────────────────
+
+  // ── Core refs ─────────────────────────────────────────────────────────────
   const recognitionRef       = useRef<AnyRecognition>(null);
   const shouldRunRef         = useRef(false);
   const speakingRef          = useRef(false);
@@ -85,27 +90,26 @@ export function useVoiceEngine({
   const modeRef              = useRef<"wake" | "active">("wake");
   const langRef              = useRef(lang);
   const onHeardRef           = useRef(onHeard);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const startRecognitionRef  = useRef<((mode: "wake" | "active") => void) | null>(null);
 
-  // ── Auto-VAD refs ─────────────────────────────────────────────────────────
-  const vadActiveRef      = useRef(false);     // VAD mode is running
-  const vadModeRef        = useRef(false);     // true once switched to VAD permanently
-  const vadRecordingRef   = useRef(false);     // currently recording speech
-  const vadSpeakingRef    = useRef(false);     // NOVA TTS is playing (pause VAD)
-  const micStreamRef      = useRef<MediaStream | null>(null);
-  const audioCtxRef       = useRef<AudioContext | null>(null);
-  const mediaRecorderRef  = useRef<MediaRecorder | null>(null);
-  const chunksRef         = useRef<Blob[]>([]);
-  const speechDetectedRef = useRef(false);
-  const silenceStartVADRef = useRef<number | null>(null);
-  const recordStartRef    = useRef<number>(0);
-  const vadLoopRef        = useRef<(() => void) | null>(null); // restart loop fn
+  // ── VAD refs ──────────────────────────────────────────────────────────────
+  const vadModeRef       = useRef(false);  // permanently switched to VAD
+  const vadSpeakingRef   = useRef(false);  // NOVA TTS is playing
+  const vadActiveRef     = useRef(false);  // tick loop running
+  const micStreamRef     = useRef<MediaStream | null>(null);
+  const audioCtxRef      = useRef<AudioContext | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef        = useRef<Blob[]>([]);
+  const speechDetectedRef    = useRef(false);
+  const silenceStartVADRef   = useRef<number | null>(null);
+  const recordStartRef       = useRef<number>(0);
 
-  useEffect(() => { onHeardRef.current = onHeard; });
-  useEffect(() => { langRef.current = lang; }, [lang]);
+  // ── VAD loop stored as a ref updated after every render ───────────────────
+  // Using an unconditional useEffect means the function is always the latest
+  // version with all current refs — no stale closure issues.
+  const startVADRef = useRef<() => Promise<void>>(async () => {});
 
-  // ── State ─────────────────────────────────────────────────────────────────
+  // ── React state ───────────────────────────────────────────────────────────
   const [status,        setStatus]        = useState<StatusValue>(STATUS.IDLE);
   const [supported,     setSupported]     = useState(false);
   const [initialized,   setInitialized]   = useState(false);
@@ -116,6 +120,9 @@ export function useVoiceEngine({
   const [transcript,    setTranscript]    = useState("");
   const [volume,        setVolume]        = useState(0);
   const [vadMode,       setVadMode]       = useState(false);
+
+  useEffect(() => { onHeardRef.current = onHeard; });
+  useEffect(() => { langRef.current = lang; }, [lang]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const clearSilenceTimer = useCallback(() => {
@@ -142,8 +149,12 @@ export function useVoiceEngine({
     try { old.abort(); } catch { /* ignore */ }
   }, [clearSilenceTimer]);
 
-  // ── Auto-VAD: stop current recording and clean up audio context ───────────
-  const stopVAD = useCallback(() => {
+  const stopMicStream = useCallback(() => {
+    micStreamRef.current?.getTracks().forEach((t) => t.stop());
+    micStreamRef.current = null;
+  }, []);
+
+  const stopVADAudio = useCallback(() => {
     vadActiveRef.current = false;
     silenceStartVADRef.current = null;
     setVolume(0);
@@ -153,170 +164,188 @@ export function useVoiceEngine({
     }
   }, []);
 
-  const stopMicStream = useCallback(() => {
-    micStreamRef.current?.getTracks().forEach((t) => t.stop());
-    micStreamRef.current = null;
-  }, []);
+  // ── VAD loop function — stored in ref, updated every render ───────────────
+  // This pattern ensures the function always reads the latest refs without
+  // needing useCallback dependencies or stale closures.
+  useEffect(() => {
+    startVADRef.current = async () => {
+      console.log("[NOVA VAD] startVAD called → vadMode:", vadModeRef.current, "speaking:", vadSpeakingRef.current, "recorder:", !!mediaRecorderRef.current);
 
-  // ── Auto-VAD: transcribe and dispatch ─────────────────────────────────────
-  const processRecording = useCallback(async () => {
-    const recorder = mediaRecorderRef.current;
-    if (!recorder || recorder.state === "inactive") return;
+      if (!vadModeRef.current) return;
+      if (vadSpeakingRef.current) { console.log("[NOVA VAD] deferred — NOVA speaking"); return; }
+      if (mediaRecorderRef.current) { console.log("[NOVA VAD] deferred — already recording"); return; }
 
-    stopVAD();
-    setStatus(STATUS.THINKING);
-    vadRecordingRef.current = false;
+      speechDetectedRef.current = false;
+      silenceStartVADRef.current = null;
+      chunksRef.current = [];
 
-    await new Promise<void>((resolve) => {
-      recorder.onstop = () => resolve();
-      try { recorder.stop(); } catch { resolve(); }
-    });
-
-    stopMicStream();
-    const blob = new Blob(chunksRef.current, { type: recorder.mimeType ?? "audio/webm" });
-    chunksRef.current = [];
-    mediaRecorderRef.current = null;
-
-    const notSpeech = !speechDetectedRef.current || blob.size < 300;
-
-    if (!notSpeech) {
+      // Open microphone
+      let stream: MediaStream;
       try {
-        const text = await transcribeBlob(blob);
-        if (text) {
-          console.log("[NOVA VAD] heard:", JSON.stringify(text));
-          setLastHeard(text);
-          setTranscript(text);
-          if (onHeardRef.current) await onHeardRef.current(text, text);
-        }
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       } catch (err) {
-        console.error("[NOVA VAD] transcription error:", err);
-      }
-    }
-
-    // Restart listening loop after processing (if VAD mode still active)
-    if (vadModeRef.current && !vadSpeakingRef.current) {
-      setTimeout(() => { vadLoopRef.current?.(); }, 200);
-    }
-  }, [stopVAD, stopMicStream]);
-
-  // ── Auto-VAD: main listening loop ─────────────────────────────────────────
-  const startVADListening = useCallback(async () => {
-    if (!vadModeRef.current) return;
-    if (vadSpeakingRef.current) return;      // don't start while NOVA is talking
-    if (mediaRecorderRef.current) return;    // already recording
-
-    setStatus(STATUS.VAD_LISTENING);
-    setVolume(0);
-    speechDetectedRef.current = false;
-    silenceStartVADRef.current = null;
-    chunksRef.current = [];
-
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true } as MediaTrackConstraints,
-      });
-    } catch (err) {
-      console.error("[NOVA VAD] mic error:", err);
-      setError("Microphone unavailable.");
-      setStatus(STATUS.ERROR);
-      return;
-    }
-
-    micStreamRef.current = stream;
-
-    const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-      ? "audio/webm;codecs=opus"
-      : MediaRecorder.isTypeSupported("audio/webm")
-      ? "audio/webm"
-      : "audio/ogg";
-
-    const recorder = new MediaRecorder(stream, { mimeType });
-    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-    mediaRecorderRef.current = recorder;
-    recorder.start(200);
-    recordStartRef.current = Date.now();
-
-    // ── Volume / VAD analysis ──
-    const ctx = new AudioContext();
-    audioCtxRef.current = ctx;
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 512;
-    ctx.createMediaStreamSource(stream).connect(analyser);
-    const buf = new Uint8Array(analyser.frequencyBinCount);
-    vadActiveRef.current = true;
-
-    let voiceStartMs: number | null = null;   // first moment above threshold
-    let triggered = false;                    // voice burst triggered recording phase
-
-    const tick = () => {
-      if (!vadActiveRef.current) return;
-      if (vadSpeakingRef.current) {
-        // NOVA started talking — abort this recording silently
-        vadActiveRef.current = false;
-        mediaRecorderRef.current?.stop();
-        mediaRecorderRef.current = null;
-        chunksRef.current = [];
-        try { ctx.close(); } catch { /* ignore */ }
-        stopMicStream();
-        setVolume(0);
+        console.error("[NOVA VAD] mic error:", err);
+        setError("Microphone unavailable.");
+        setStatus(STATUS.ERROR);
         return;
       }
+      micStreamRef.current = stream;
 
-      analyser.getByteTimeDomainData(buf);
-      let sumSq = 0;
-      for (const v of buf) sumSq += (v - 128) ** 2;
-      const rms = Math.sqrt(sumSq / buf.length);
-      setVolume(Math.round(rms));
+      // Pick best format
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : MediaRecorder.isTypeSupported("audio/ogg")
+        ? "audio/ogg"
+        : "audio/mp4";
 
-      const elapsed = Date.now() - recordStartRef.current;
+      // Start recording immediately
+      const recorder = new MediaRecorder(stream, { mimeType });
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mediaRecorderRef.current = recorder;
+      recorder.start(200);
+      recordStartRef.current = Date.now();
+      console.log("[NOVA VAD] recording started, mimeType:", mimeType);
+      setStatus(STATUS.VAD_RECORDING);
+      setVolume(0);
 
-      if (rms >= VAD_VOICE_THRESHOLD) {
-        if (!voiceStartMs) voiceStartMs = Date.now();
-        if (!triggered && Date.now() - voiceStartMs > VAD_TRIGGER_MS) {
-          triggered = true;
-          vadRecordingRef.current = true;
-          setStatus(STATUS.VAD_RECORDING);
-        }
-        if (triggered) speechDetectedRef.current = true;
-        silenceStartVADRef.current = null;
-      } else {
-        voiceStartMs = null;
-        if (triggered && speechDetectedRef.current && elapsed > VAD_MIN_RECORD_MS) {
-          if (!silenceStartVADRef.current) silenceStartVADRef.current = Date.now();
-          else if (Date.now() - silenceStartVADRef.current > VAD_SILENCE_DURATION) {
-            // Silence confirmed → stop + transcribe
-            vadActiveRef.current = false;
-            processRecording();
-            return;
+      // ── Volume / silence analysis ─────────────────────────────────────────
+      const processClip = async () => {
+        stopVADAudio();
+        setStatus(STATUS.THINKING);
+
+        await new Promise<void>((res) => {
+          recorder.onstop = () => res();
+          try { recorder.stop(); } catch { res(); }
+        });
+        stream.getTracks().forEach((t) => t.stop());
+        micStreamRef.current = null;
+
+        const blob = new Blob(chunksRef.current, { type: mimeType });
+        chunksRef.current = [];
+        mediaRecorderRef.current = null;
+        console.log("[NOVA VAD] clip ready, size:", blob.size, "speech:", speechDetectedRef.current);
+
+        if (speechDetectedRef.current && blob.size >= 300) {
+          try {
+            const text = await transcribeBlob(blob);
+            console.log("[NOVA VAD] transcription:", JSON.stringify(text));
+            if (text) {
+              setLastHeard(text);
+              setTranscript(text);
+              if (onHeardRef.current) await onHeardRef.current(text, text);
+            }
+          } catch (err) {
+            console.error("[NOVA VAD] transcription error:", err);
           }
         }
+
+        // Restart loop
+        if (vadModeRef.current && !vadSpeakingRef.current) {
+          setTimeout(() => { startVADRef.current(); }, 250);
+        }
+      };
+
+      try {
+        const ctx = new AudioContext();
+        audioCtxRef.current = ctx;
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        ctx.createMediaStreamSource(stream).connect(analyser);
+        const buf = new Uint8Array(analyser.frequencyBinCount);
+        vadActiveRef.current = true;
+
+        const tick = () => {
+          if (!vadActiveRef.current) return;
+
+          // NOVA started speaking — abort current clip
+          if (vadSpeakingRef.current) {
+            vadActiveRef.current = false;
+            try { recorder.stop(); } catch { /* ignore */ }
+            mediaRecorderRef.current = null;
+            chunksRef.current = [];
+            try { ctx.close(); } catch { /* ignore */ }
+            stream.getTracks().forEach((t) => t.stop());
+            micStreamRef.current = null;
+            setVolume(0);
+            return;
+          }
+
+          analyser.getByteTimeDomainData(buf);
+          let sumSq = 0;
+          for (const v of buf) sumSq += (v - 128) ** 2;
+          const rms = Math.sqrt(sumSq / buf.length);
+          setVolume(Math.round(rms));
+
+          const elapsed = Date.now() - recordStartRef.current;
+
+          // Log RMS every 60 frames (~1s) for threshold calibration
+          if (Math.random() < 0.016) console.log("[NOVA VAD] rms:", Math.round(rms * 10) / 10);
+
+          // Unified threshold: above = speech, below = silence
+          if (rms >= VAD_THRESHOLD) {
+            speechDetectedRef.current = true;
+            silenceStartVADRef.current = null;
+          } else if (elapsed > VAD_MIN_RECORD_MS && speechDetectedRef.current) {
+            if (!silenceStartVADRef.current) silenceStartVADRef.current = Date.now();
+            else if (Date.now() - silenceStartVADRef.current > VAD_SILENCE_DURATION) {
+              vadActiveRef.current = false;
+              processClip();
+              return;
+            }
+          }
+
+          // Safety: no speech after 8s — discard and restart
+          if (elapsed > VAD_MAX_NO_SPEECH_MS && !speechDetectedRef.current) {
+            console.log("[NOVA VAD] 8s timeout, no speech — restarting");
+            vadActiveRef.current = false;
+            try { recorder.stop(); } catch { /* ignore */ }
+            mediaRecorderRef.current = null;
+            chunksRef.current = [];
+            try { ctx.close(); } catch { /* ignore */ }
+            stream.getTracks().forEach((t) => t.stop());
+            micStreamRef.current = null;
+            setVolume(0);
+            if (vadModeRef.current && !vadSpeakingRef.current) {
+              setTimeout(() => { startVADRef.current(); }, 250);
+            }
+            return;
+          }
+
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      } catch (audioErr) {
+        // AudioContext unavailable — use 5s timed clip fallback
+        console.warn("[NOVA VAD] AudioContext failed, using timed mode:", audioErr);
+        speechDetectedRef.current = true; // assume speech since we can't detect
+        setTimeout(() => {
+          if (mediaRecorderRef.current) processClip();
+        }, 5000);
       }
-
-      requestAnimationFrame(tick);
     };
-    requestAnimationFrame(tick);
-  }, [stopMicStream, processRecording]);
+  }); // no dep array — runs after every render
 
-  // Keep loop ref current
-  useEffect(() => { vadLoopRef.current = startVADListening; }, [startVADListening]);
-
-  // ── Activate VAD mode permanently ─────────────────────────────────────────
+  // ── Activate VAD mode ─────────────────────────────────────────────────────
   const activateVAD = useCallback(() => {
     if (vadModeRef.current) return;
     vadModeRef.current = true;
     setVadMode(true);
     shouldRunRef.current = false;
+    speakingRef.current = false;
+    vadSpeakingRef.current = false;
     killCurrentRecognition();
     console.log("[NOVA VAD] switching to automatic voice detection mode");
-    // Start listening immediately
-    setTimeout(() => startVADListening(), 200);
-  }, [killCurrentRecognition, startVADListening]);
+    // startVADRef is always current (set in unconditional useEffect above)
+    setTimeout(() => {
+      console.log("[NOVA VAD] timer fired — calling startVADRef");
+      startVADRef.current();
+    }, 400);
+  }, [killCurrentRecognition]);
 
   // ── SpeechRecognition core ────────────────────────────────────────────────
   const startRecognition = useCallback(
     (mode: "wake" | "active" = "wake") => {
-      if (vadModeRef.current) return;
+      if (vadModeRef.current) { startVADRef.current(); return; }
       if (!shouldRunRef.current || speakingRef.current) return;
       if (restartingRef.current || recognitionActiveRef.current) return;
 
@@ -375,7 +404,6 @@ export function useVoiceEngine({
 
         if (code === "network" || code === "aborted") {
           serviceRetryRef.current++;
-          // After 3 consecutive failures, switch permanently to auto-VAD
           if (serviceRetryRef.current >= 3) { activateVAD(); return; }
           return;
         }
@@ -430,18 +458,13 @@ export function useVoiceEngine({
 
       setCurrentPrompt(text);
       setTranscript(text);
-
-      // Signal VAD to pause while NOVA speaks
       vadSpeakingRef.current = true;
 
       if (!("speechSynthesis" in window)) {
         vadSpeakingRef.current = false;
         onEnd?.();
-        if (vadModeRef.current) {
-          setTimeout(() => startVADListening(), 200);
-        } else if (shouldRunRef.current) {
-          startRecognition(after);
-        }
+        if (vadModeRef.current) setTimeout(() => startVADRef.current(), 200);
+        else if (shouldRunRef.current) startRecognition(after);
         return;
       }
 
@@ -471,8 +494,8 @@ export function useVoiceEngine({
         onEnd?.();
 
         if (vadModeRef.current) {
-          setStatus(STATUS.VAD_LISTENING);
-          setTimeout(() => { if (vadModeRef.current) startVADListening(); }, 300);
+          setStatus(STATUS.VAD_RECORDING);
+          setTimeout(() => { startVADRef.current(); }, 300);
         } else if (shouldRunRef.current) {
           serviceRetryRef.current = 0;
           setTimeout(() => startRecognition(after), 80);
@@ -481,7 +504,7 @@ export function useVoiceEngine({
         }
       };
 
-      utterance.onend  = () => handleTTSDone("onend");
+      utterance.onend   = () => handleTTSDone("onend");
       utterance.onerror = (e) => {
         console.warn("[NOVA voice] TTS error:", e);
         if (!speakingRef.current) return;
@@ -490,8 +513,8 @@ export function useVoiceEngine({
         vadSpeakingRef.current = false;
         onEnd?.();
         if (vadModeRef.current) {
-          setStatus(STATUS.VAD_LISTENING);
-          setTimeout(() => startVADListening(), 300);
+          setStatus(STATUS.VAD_RECORDING);
+          setTimeout(() => startVADRef.current(), 300);
         } else if (shouldRunRef.current) {
           setTimeout(() => startRecognition(after), 80);
         } else {
@@ -513,15 +536,15 @@ export function useVoiceEngine({
         vadSpeakingRef.current = false;
         onEnd?.();
         if (vadModeRef.current) {
-          setStatus(STATUS.VAD_LISTENING);
-          setTimeout(() => startVADListening(), 300);
+          setStatus(STATUS.VAD_RECORDING);
+          setTimeout(() => startVADRef.current(), 300);
         } else {
           setStatus(STATUS.ERROR);
           setError("Unable to start speech playback.");
         }
       }
     },
-    [clearSilenceTimer, startRecognition, stopRecognition, startVADListening],
+    [clearSilenceTimer, startRecognition, stopRecognition],
   );
 
   // ── Initialize ────────────────────────────────────────────────────────────
@@ -529,7 +552,7 @@ export function useVoiceEngine({
     if (micPermission === "granted" && initialized) {
       if (vadModeRef.current) {
         vadSpeakingRef.current = false;
-        setTimeout(() => startVADListening(), 200);
+        setTimeout(() => startVADRef.current(), 200);
         return true;
       }
       shouldRunRef.current = true;
@@ -539,8 +562,7 @@ export function useVoiceEngine({
       return true;
     }
 
-    const Recognition = getRecognitionClass();
-    setSupported(!!Recognition);
+    setSupported(!!getRecognitionClass());
     setError("");
 
     try {
@@ -557,8 +579,7 @@ export function useVoiceEngine({
     serviceRetryRef.current = 0;
     console.log("[NOVA voice] initialized");
 
-    if (!Recognition) {
-      // No SpeechRecognition at all — go straight to VAD
+    if (!getRecognitionClass()) {
       vadModeRef.current = true;
       setVadMode(true);
     } else {
@@ -566,10 +587,10 @@ export function useVoiceEngine({
     }
 
     return true;
-  }, [initialized, micPermission, startRecognition, startVADListening]);
+  }, [initialized, micPermission, startRecognition]);
 
-  const startWakeMode   = useCallback(() => { if (vadModeRef.current) return; shouldRunRef.current = true; startRecognition("wake"); }, [startRecognition]);
-  const startActiveMode = useCallback(() => { if (vadModeRef.current) return; shouldRunRef.current = true; startRecognition("active"); }, [startRecognition]);
+  const startWakeMode   = useCallback(() => { if (!vadModeRef.current) { shouldRunRef.current = true; startRecognition("wake"); } }, [startRecognition]);
+  const startActiveMode = useCallback(() => { if (!vadModeRef.current) { shouldRunRef.current = true; startRecognition("active"); } }, [startRecognition]);
 
   const stopAll = useCallback(() => {
     shouldRunRef.current = false;
@@ -581,14 +602,13 @@ export function useVoiceEngine({
     try { window.speechSynthesis?.cancel(); } catch { /* ignore */ }
     speakingRef.current = false;
     setStatus(STATUS.STOPPED);
-    // Stop any active VAD recording
     if (mediaRecorderRef.current?.state === "recording") {
       try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
     }
     mediaRecorderRef.current = null;
     stopMicStream();
-    stopVAD();
-  }, [killCurrentRecognition, stopMicStream, stopVAD]);
+    stopVADAudio();
+  }, [killCurrentRecognition, stopMicStream, stopVADAudio]);
 
   const retryMic = useCallback(async () => {
     stopAll();
@@ -607,7 +627,7 @@ export function useVoiceEngine({
   const scheduleRestart  = useCallback((_delayMs?: number) => startActiveMode(), [startActiveMode]);
   const hardStopListening = useCallback(() => stopAll(), [stopAll]);
 
-  const listening = status === STATUS.WAKE_LISTENING || status === STATUS.ACTIVE_LISTENING || status === STATUS.VAD_LISTENING;
+  const listening = status === STATUS.WAKE_LISTENING || status === STATUS.ACTIVE_LISTENING;
   const speaking  = status === STATUS.SPEAKING;
   const thinking  = status === STATUS.THINKING;
   const recording = status === STATUS.VAD_RECORDING;
@@ -642,7 +662,6 @@ export function useVoiceEngine({
       scheduleRestart,
       hardStopListening,
       processing: thinking,
-      // legacy PTT (no-ops now — VAD is automatic)
       pttMode: vadMode,
       pttRecording: recording,
       startPTT: async () => {},
