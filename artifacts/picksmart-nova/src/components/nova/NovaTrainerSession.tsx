@@ -91,15 +91,18 @@ const DEFAULT_STATE: TrainerState = {
 export default function NovaTrainerSession({
   selector,
   onExit,
+  autoStart = false,
 }: {
   selector: Selector;
   onExit?: () => void;
+  autoStart?: boolean;
 }) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initializedRef = useRef(false);
   const lastSpokenPromptRef = useRef("");
   const startedRef = useRef(false);
+  const autoWokeRef = useRef(false);
 
   const [connected, setConnected] = useState(false);
   const [started, setStarted] = useState(false);
@@ -161,6 +164,17 @@ export default function NovaTrainerSession({
           }
 
           if (msg.type === "state" && msg.state) {
+            // Auto-skip WAIT_WAKE phase when autoStart is true
+            if (autoStart && msg.state.phase === "WAIT_WAKE" && !autoWokeRef.current) {
+              autoWokeRef.current = true;
+              setTimeout(() => {
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                  wsRef.current.send(JSON.stringify({ type: "input", text: "hey nova" }));
+                }
+              }, 200);
+              return;
+            }
+
             setTrainerState((prev) => ({ ...prev, ...msg.state }));
 
             const newPrompt = msg.state.prompt ?? "";
@@ -255,7 +269,11 @@ export default function NovaTrainerSession({
     setConnected(false);
   };
 
+  // Auto-launch session when autoStart is true (selector just logged in)
   useEffect(() => {
+    if (autoStart) {
+      startSession();
+    }
     return () => {
       startedRef.current = false;
       try { wsRef.current?.close(); } catch {}
