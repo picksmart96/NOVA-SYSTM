@@ -16,6 +16,7 @@ import ProgressPage from "@/pages/progress";
 import LeaderboardPage from "@/pages/leaderboard";
 import PricingPage from "@/pages/pricing";
 import SelectorNationPage from "@/pages/selector-nation";
+import SelectorBreakingNewsPage from "@/pages/app/SelectorBreakingNewsPage";
 
 import MyAssignmentsPage from "@/pages/nova/my-assignments";
 import AssignmentDetailPage from "@/pages/nova/assignment-detail";
@@ -120,6 +121,13 @@ function Router() {
         <Layout>
           <SubscriptionRoute path="/selector-nation">
             <SelectorNationPage />
+          </SubscriptionRoute>
+        </Layout>
+      </Route>
+      <Route path="/selector-breaking-news">
+        <Layout>
+          <SubscriptionRoute path="/selector-breaking-news">
+            <SelectorBreakingNewsPage />
           </SubscriptionRoute>
         </Layout>
       </Route>
