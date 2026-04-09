@@ -498,6 +498,22 @@ export function useVoiceEngine({
       clearSilenceTimer();
       if (ttsWatchdogRef.current) clearTimeout(ttsWatchdogRef.current);
       if (!vadModeRef.current) stopRecognition();
+
+      // ── iOS AudioSession fix ──────────────────────────────────────────────
+      // On iOS, if the mic is open (VAD recording), the AudioSession is in
+      // "record" mode and will silence TTS. Stop the recorder + mic stream
+      // synchronously before calling speechSynthesis.speak().
+      if (IS_IOS) {
+        if (mediaRecorderRef.current) {
+          try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
+          mediaRecorderRef.current = null;
+          chunksRef.current = [];
+        }
+        stopVADAudio();   // closes AudioContext (releases record mode)
+        stopMicStream();  // releases mic hardware
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       setStatus(STATUS.SPEAKING);
       console.log("[NOVA voice] TTS speaking →", text.slice(0, 60));
 
@@ -583,7 +599,7 @@ export function useVoiceEngine({
         }
       }
     },
-    [clearSilenceTimer, startRecognition, stopRecognition],
+    [clearSilenceTimer, startRecognition, stopRecognition, stopVADAudio, stopMicStream],
   );
 
   // ── Initialize ────────────────────────────────────────────────────────────
@@ -604,6 +620,22 @@ export function useVoiceEngine({
     setSupported(!!getRecognitionClass());
     setError("");
 
+    // ── iOS / Mobile: skip the eager getUserMedia here ────────────────────
+    // On iOS, opening the microphone activates the AudioSession in "record"
+    // mode, which prevents speechSynthesis from being audible. We skip the
+    // permission probe and let the VAD loop request the mic only AFTER the
+    // first TTS prompt has finished speaking.
+    if (IS_MOBILE) {
+      setMicPermission("granted"); // optimistic — VAD will handle real prompt
+      setInitialized(true);
+      serviceRetryRef.current = 0;
+      console.log("[NOVA voice] initialized (mobile fast-path), ios:", IS_IOS);
+      vadModeRef.current = true;
+      setVadMode(true);
+      return true;
+    }
+
+    // ── Desktop: request mic permission now ──────────────────────────────
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
       setMicPermission("granted");
@@ -618,8 +650,7 @@ export function useVoiceEngine({
     serviceRetryRef.current = 0;
     console.log("[NOVA voice] initialized, mobile:", IS_MOBILE, "ios:", IS_IOS);
 
-    // On mobile, skip the unreliable SpeechRecognition and go straight to VAD.
-    if (!getRecognitionClass() || IS_MOBILE) {
+    if (!getRecognitionClass()) {
       vadModeRef.current = true;
       setVadMode(true);
     } else {

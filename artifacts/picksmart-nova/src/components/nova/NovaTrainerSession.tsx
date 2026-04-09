@@ -365,6 +365,18 @@ export default function NovaTrainerSession({
       <div
         className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center gap-10 px-6 select-none"
         onClick={async () => {
+          // ── iOS audio unlock ──────────────────────────────────────────────
+          // speechSynthesis MUST be called synchronously inside the user
+          // gesture to permanently activate the iOS audio session. Any async
+          // work (getUserMedia, state updates) AFTER this point is safe.
+          try {
+            window.speechSynthesis.cancel();
+            const unlock = new SpeechSynthesisUtterance(" ");
+            unlock.volume = 0.01;   // near-silent but non-zero avoids iOS ignoring it
+            unlock.rate   = 10;     // plays in ~10ms so it's gone before real TTS
+            window.speechSynthesis.speak(unlock);
+          } catch { /* older iOS — no-op */ }
+          // ─────────────────────────────────────────────────────────────────
           setMobileTapGate(false);
           await startSession();
         }}
