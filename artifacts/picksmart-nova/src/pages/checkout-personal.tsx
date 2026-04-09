@@ -1,138 +1,70 @@
-import { useEffect, useState } from "react";
-import { useLocation, useSearch } from "wouter";
+import { useLocation } from "wouter";
 import { useAuthStore } from "@/lib/authStore";
-
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-yellow-400 shrink-0 mt-0.5">
-      <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-    </svg>
-  );
-}
-
-const SELECTOR_PLAN = {
-  name: "Selector",
-  price: "$10",
-  period: "per selector",
-  features: [
-    "Access for 1 selector",
-    "All 6 modules",
-    "Progress tracking",
-    "Performance reports",
-    "Trainer support",
-  ],
-};
-
-const PRO_MONTHLY_PLAN = {
-  name: "Pro Monthly",
-  price: "$29.99",
-  period: "month",
-  features: [
-    "All 6 modules",
-    "Video lessons & demonstrations",
-    "Advanced speed techniques",
-    "Pallet building masterclass",
-    "Rate improvement strategies",
-    "New content added monthly",
-  ],
-};
 
 export default function PersonalCheckoutPage() {
   const [, navigate] = useLocation();
-  const search = useSearch();
   const { currentUser, updateSubscription } = useAuthStore();
-  const [done, setDone] = useState(false);
-  const [loading, setLoading] = useState(false);
 
-  const params = new URLSearchParams(search);
-  const planKey = params.get("plan");
-  const plan = planKey === "selector" ? SELECTOR_PLAN : PRO_MONTHLY_PLAN;
+  const params = new URLSearchParams(window.location.search);
+  const billing = params.get("billing") || "monthly";
 
-  useEffect(() => {
-    if (!currentUser) {
-      const dest = `/checkout/personal${search ? `?${search}` : ""}`;
-      navigate(`/login?redirect=${encodeURIComponent(dest)}`);
-    }
-  }, [currentUser, navigate, search]);
+  const plan =
+    billing === "yearly"
+      ? { label: "Professional Single Yearly", price: "$250/year" }
+      : { label: "Professional Single Monthly", price: "$25/month" };
 
-  if (!currentUser) return null;
-
-  function handleActivate() {
-    setLoading(true);
-    setTimeout(() => {
-      updateSubscription("personal");
-      setDone(true);
-      setTimeout(() => navigate("/training"), 2000);
-    }, 900);
-  }
-
-  if (done) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
-        <div className="text-center space-y-5 max-w-md">
-          <div className="text-6xl">🎉</div>
-          <h2 className="text-3xl font-black">{plan.name} Active!</h2>
-          <p className="text-slate-400 text-lg">Your investment is locked in. Taking you to your training hub…</p>
-          <div className="rounded-2xl border border-yellow-400/30 bg-yellow-400/5 px-6 py-4 text-yellow-300 text-sm font-semibold">
-            Welcome to PickSmart NOVA. Let's build something great.
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const completeCheckout = () => {
+    if (!currentUser) { navigate("/login?redirect=/pricing"); return; }
+    updateSubscription("personal");
+    navigate("/training");
+  };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white px-6 py-14">
-      <div className="max-w-md mx-auto space-y-8">
-        <div className="text-center space-y-2">
-          <p className="text-yellow-400 text-xs font-bold uppercase tracking-[0.25em]">Checkout</p>
-          <h1 className="text-4xl font-black">Activate Your Plan</h1>
+    <div className="min-h-screen bg-slate-950 px-6 py-12 text-white">
+      <div className="mx-auto max-w-3xl rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
+
+        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-yellow-400">Checkout</p>
+        <h1 className="mt-3 text-4xl font-black">{plan.label}</h1>
+        <p className="mt-4 text-slate-300">Individual selector access for training and NOVA tools.</p>
+
+        <div className="mt-8 space-y-3 text-slate-300">
+          <p>• Training</p>
+          <p>• NOVA Help</p>
+          <p>• NOVA Trainer</p>
+          <p>• Common Mistakes</p>
+          <p>• Leaderboard</p>
+          <p>• Selector Breaking News</p>
         </div>
 
-        <div className="rounded-3xl border border-yellow-400/30 bg-slate-900 p-8 space-y-6">
-          <div>
-            <p className="text-yellow-400 text-xs font-bold uppercase tracking-widest">Selected plan</p>
-            <h2 className="mt-2 text-2xl font-black">{plan.name}</h2>
-            <div className="mt-4 flex items-end gap-1.5">
-              <span className="text-4xl font-black">{plan.price}</span>
-              <span className="text-slate-400 text-sm pb-1.5">/{plan.period}</span>
-            </div>
-          </div>
-
-          <ul className="space-y-2.5">
-            {plan.features.map((f) => (
-              <li key={f} className="flex items-start gap-2 text-sm text-slate-300">
-                <CheckIcon />
-                {f}
-              </li>
-            ))}
-          </ul>
-
-          <button
-            onClick={handleActivate}
-            disabled={loading}
-            className="w-full rounded-2xl bg-yellow-400 py-4 text-base font-black text-slate-950 hover:bg-yellow-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                </svg>
-                Activating…
-              </span>
-            ) : `Activate — ${plan.price}/${plan.period}`}
-          </button>
-
-          <p className="text-xs text-slate-600 text-center">Secure activation · Cancel anytime · No hidden fees</p>
+        <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+          <p className="text-sm text-slate-400">Plan Price</p>
+          <p className="mt-2 text-3xl font-black">{plan.price}</p>
         </div>
 
-        <p className="text-center text-sm text-slate-600">
-          Want a different plan?{" "}
-          <button onClick={() => navigate("/pricing")} className="text-yellow-400 hover:underline font-semibold">
-            View all plans
-          </button>
-        </p>
+        {!currentUser && (
+          <p className="mt-5 text-sm text-amber-400">
+            You need to be signed in to subscribe.{" "}
+            <button onClick={() => navigate("/login?redirect=/checkout/personal?billing=" + billing)} className="underline font-bold">
+              Sign in
+            </button>
+          </p>
+        )}
+
+        <button
+          onClick={completeCheckout}
+          disabled={!currentUser}
+          className="mt-8 w-full rounded-2xl bg-yellow-400 px-6 py-4 text-lg font-bold text-slate-950 transition hover:bg-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Complete Professional Subscription
+        </button>
+
+        <button
+          onClick={() => navigate("/pricing")}
+          className="mt-3 w-full text-sm text-slate-500 hover:text-slate-300 transition"
+        >
+          ← Back to pricing
+        </button>
+
       </div>
     </div>
   );

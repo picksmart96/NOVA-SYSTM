@@ -1,147 +1,163 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
-import { useAuthStore } from "@/lib/authStore";
-
-function CheckIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-yellow-400 shrink-0 mt-0.5">
-      <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-    </svg>
-  );
-}
-
-const PLANS = [
-  {
-    key: "selector",
-    name: "Selector",
-    tagline: "Train individual warehouse selectors",
-    price: "$10",
-    period: "per selector",
-    badge: null,
-    highlight: false,
-    features: [
-      "Access for 1 selector",
-      "All 6 modules",
-      "Progress tracking",
-      "Performance reports",
-      "Trainer support",
-    ],
-    cta: "Start Training",
-    checkoutPath: "/checkout/personal?plan=selector",
-  },
-  {
-    key: "pro_monthly",
-    name: "Pro Monthly",
-    tagline: "Full access to all training",
-    price: "$29.99",
-    period: "month",
-    badge: "Most Popular",
-    highlight: true,
-    features: [
-      "All 6 modules",
-      "Video lessons & demonstrations",
-      "Advanced speed techniques",
-      "Pallet building masterclass",
-      "Rate improvement strategies",
-      "New content added monthly",
-    ],
-    cta: "Go Pro",
-    checkoutPath: "/checkout/personal",
-  },
-  {
-    key: "pro_annual",
-    name: "Pro Annual",
-    tagline: "Best value — save over 40%",
-    price: "$199.99",
-    period: "year",
-    badge: "Best Value",
-    highlight: false,
-    features: [
-      "Everything in Pro Monthly",
-      "Save $81 per year",
-      "Priority support",
-      "Early access to new modules",
-      "Certification badge",
-    ],
-    cta: "Go Pro Annual",
-    checkoutPath: "/checkout/company",
-  },
-];
 
 export default function PricingPage() {
   const [, navigate] = useLocation();
-  const { currentUser } = useAuthStore();
+  const [singleBilling, setSingleBilling] = useState<"monthly" | "yearly">("monthly");
+  const [companyBilling, setCompanyBilling] = useState<"weekly" | "monthly" | "yearly">("weekly");
 
-  function handleCta(checkoutPath: string) {
-    if (!currentUser) {
-      navigate(`/login?redirect=${encodeURIComponent(checkoutPath)}`);
-      return;
-    }
-    navigate(checkoutPath);
-  }
+  const singlePrice =
+    singleBilling === "monthly"
+      ? { price: "$25", billing: "per month" }
+      : { price: "$250", billing: "per year" };
+
+  const companyPrice =
+    companyBilling === "weekly"
+      ? { price: "$1,660", billing: "per week" }
+      : companyBilling === "monthly"
+      ? { price: "$6,400", billing: "per month" }
+      : { price: "$69,000", billing: "per year" };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white px-6 py-16">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen bg-slate-950 px-6 py-12 text-white">
+      <div className="mx-auto max-w-6xl">
 
-        {/* Hero */}
-        <div className="text-center mb-12">
-          <p className="text-yellow-400 text-xs font-bold uppercase tracking-[0.22em]">Simple Pricing</p>
-          <h1 className="mt-4 text-4xl sm:text-5xl font-black leading-tight">Invest in Your Career</h1>
-          <p className="mt-4 text-slate-400 text-lg max-w-2xl mx-auto">
-            Start free or unlock everything with Pro. Most selectors make back the cost in their first week of better rates.
+        <div className="mb-12 text-center">
+          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-yellow-400">Pricing</p>
+          <h1 className="mt-3 text-5xl font-black">Invest in Your Career</h1>
+          <p className="mx-auto mt-4 max-w-3xl text-lg text-slate-300">
+            Start with professional individual access or unlock full company operations with unlimited team tools.
           </p>
         </div>
 
-        {/* Plan cards */}
-        <div className="grid md:grid-cols-3 gap-6">
-          {PLANS.map((plan) => (
-            <div
-              key={plan.key}
-              className={`relative flex flex-col rounded-3xl border p-8 shadow-xl ${
-                plan.highlight ? "border-yellow-400 bg-slate-900" : "border-slate-800 bg-slate-900"
-              }`}
-            >
-              {plan.badge && (
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                  <span className={`rounded-full px-4 py-1 text-xs font-black ${
-                    plan.badge === "Most Popular" ? "bg-yellow-400 text-slate-950" : "bg-green-500 text-white"
-                  }`}>
-                    {plan.badge}
-                  </span>
-                </div>
-              )}
+        <div className="grid gap-6 md:grid-cols-2">
 
-              <p className="text-yellow-400 text-xs font-semibold uppercase tracking-widest">{plan.tagline}</p>
-              <h2 className="mt-3 text-2xl font-black text-white">{plan.name}</h2>
-
-              <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
-                <div className="flex items-end gap-1.5">
-                  <span className="text-4xl font-black text-white">{plan.price}</span>
-                  <span className="text-slate-400 text-sm pb-1.5">/{plan.period}</span>
-                </div>
+          {/* Professional Single */}
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-yellow-400 font-semibold">Best for individual selectors</p>
+                <h2 className="mt-2 text-3xl font-black">Professional Single</h2>
               </div>
-
-              <ul className="mt-6 space-y-3 flex-1">
-                {plan.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-slate-300 text-sm">
-                    <CheckIcon />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-
-              <button
-                onClick={() => handleCta(plan.checkoutPath)}
-                className={`mt-8 w-full rounded-2xl px-6 py-4 text-base font-black transition ${
-                  plan.highlight
-                    ? "bg-yellow-400 text-slate-950 hover:bg-yellow-300"
-                    : "border border-yellow-400 text-yellow-400 hover:bg-yellow-400 hover:text-slate-950"
-                }`}
-              >
-                {plan.cta}
-              </button>
+              <div className="inline-flex rounded-2xl border border-slate-700 bg-slate-950 p-1">
+                <button
+                  onClick={() => setSingleBilling("monthly")}
+                  className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
+                    singleBilling === "monthly" ? "bg-yellow-400 text-slate-950" : "text-slate-300"
+                  }`}
+                >
+                  Monthly
+                </button>
+                <button
+                  onClick={() => setSingleBilling("yearly")}
+                  className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
+                    singleBilling === "yearly" ? "bg-yellow-400 text-slate-950" : "text-slate-300"
+                  }`}
+                >
+                  Yearly
+                </button>
+              </div>
             </div>
-          ))}
+
+            <div className="mt-5">
+              <p className="text-5xl font-black text-white">{singlePrice.price}</p>
+              <p className="mt-2 text-slate-400">{singlePrice.billing}</p>
+            </div>
+
+            <div className="mt-6 space-y-3 text-slate-300">
+              <p>• Training access</p>
+              <p>• NOVA Help</p>
+              <p>• NOVA Trainer</p>
+              <p>• Common Mistakes</p>
+              <p>• Leaderboard</p>
+              <p>• Selector Breaking News</p>
+              <p>• Monthly or yearly billing</p>
+            </div>
+
+            <button
+              onClick={() => navigate(`/checkout/personal?billing=${singleBilling}`)}
+              className="mt-8 w-full rounded-2xl bg-yellow-400 px-6 py-4 text-lg font-bold text-slate-950 transition hover:bg-yellow-300"
+            >
+              Choose Professional
+            </button>
+          </div>
+
+          {/* Company Unlimited */}
+          <div className="rounded-3xl border border-yellow-400 bg-slate-900 p-8 shadow-xl">
+            <div className="mb-4 inline-flex rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-bold uppercase tracking-wide text-yellow-300">
+              Unlimited Access
+            </div>
+
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-yellow-400 font-semibold">Best for teams and warehouse operations</p>
+                <h2 className="mt-2 text-3xl font-black">Company Unlimited</h2>
+              </div>
+              <div className="inline-flex rounded-2xl border border-slate-700 bg-slate-950 p-1">
+                <button
+                  onClick={() => setCompanyBilling("weekly")}
+                  className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
+                    companyBilling === "weekly" ? "bg-yellow-400 text-slate-950" : "text-slate-300"
+                  }`}
+                >
+                  Weekly
+                </button>
+                <button
+                  onClick={() => setCompanyBilling("monthly")}
+                  className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
+                    companyBilling === "monthly" ? "bg-yellow-400 text-slate-950" : "text-slate-300"
+                  }`}
+                >
+                  Monthly
+                </button>
+                <button
+                  onClick={() => setCompanyBilling("yearly")}
+                  className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
+                    companyBilling === "yearly" ? "bg-yellow-400 text-slate-950" : "text-slate-300"
+                  }`}
+                >
+                  Yearly
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <p className="text-5xl font-black text-white">{companyPrice.price}</p>
+              <p className="mt-2 text-slate-400">{companyPrice.billing}</p>
+            </div>
+
+            <p className="mt-4 text-sm text-yellow-300">Full company access with unlimited team use.</p>
+
+            <div className="mt-6 space-y-3 text-slate-300">
+              <p>• Everything in Professional Single</p>
+              <p>• Trainer Dashboard</p>
+              <p>• Supervisor Dashboard</p>
+              <p>• Unlimited company users</p>
+              <p>• Unlimited training and workflow access</p>
+              <p>• Weekly, monthly, or yearly billing</p>
+            </div>
+
+            <p className="mt-5 text-sm text-red-300">
+              Users & Access and Owner controls remain private to owner only.
+            </p>
+
+            <button
+              onClick={() => navigate(`/checkout/company?billing=${companyBilling}`)}
+              className="mt-8 w-full rounded-2xl bg-yellow-400 px-6 py-4 text-lg font-bold text-slate-950 transition hover:bg-yellow-300"
+            >
+              Choose Company
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-14 rounded-3xl border border-slate-800 bg-slate-900 p-8">
+          <h2 className="text-2xl font-bold">FAQ</h2>
+          <div className="mt-6 space-y-4 text-slate-300">
+            <p><strong>Is Home public?</strong> Yes. Home stays public.</p>
+            <p><strong>Can I choose monthly or yearly as a single user?</strong> Yes.</p>
+            <p><strong>Can Company choose weekly, monthly, or yearly?</strong> Yes.</p>
+            <p><strong>Can Company users access Users & Access?</strong> No. That stays owner-only.</p>
+          </div>
         </div>
 
       </div>

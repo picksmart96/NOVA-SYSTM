@@ -32,6 +32,7 @@ import NovaHelpPage from "@/pages/nova-help";
 import TrainerPortalPage from "@/pages/trainer-portal";
 import SupervisorPage from "@/pages/supervisor";
 import UsersAccessPage from "@/pages/users-access";
+import ChoosePlanPage from "@/pages/choose-plan";
 import PersonalCheckoutPage from "@/pages/checkout-personal";
 import CompanyCheckoutPage from "@/pages/checkout-company";
 import OwnerPage from "@/pages/owner";
@@ -59,6 +60,9 @@ function Router() {
       </Route>
       <Route path="/pricing">
         <Layout><PricingPage /></Layout>
+      </Route>
+      <Route path="/choose-plan">
+        <Layout><ChoosePlanPage /></Layout>
       </Route>
       <Route path="/checkout/personal">
         <Layout><PersonalCheckoutPage /></Layout>

@@ -1,0 +1,64 @@
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useAuthStore } from "../../store/authStore";
+
+export default function PersonalCheckoutPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { user, setUser } = useAuthStore();
+
+  const billing = searchParams.get("billing") || "monthly";
+
+  const plan =
+    billing === "yearly"
+      ? { label: "Professional Single Yearly", price: "$250/year" }
+      : { label: "Professional Single Monthly", price: "$25/month" };
+
+  const completeCheckout = () => {
+    if (!user) return navigate("/");
+
+    setUser({
+      ...user,
+      isSubscribed: true,
+      subscriptionPlan: "personal",
+      subscriptionBilling: billing,
+      role: user.role || "selector",
+    });
+
+    navigate("/training");
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 px-6 py-12 text-white">
+      <div className="mx-auto max-w-3xl rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
+        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-yellow-400">
+          Checkout
+        </p>
+        <h1 className="mt-3 text-4xl font-black">{plan.label}</h1>
+        <p className="mt-4 text-slate-300">
+          Individual selector access for training and NOVA tools.
+        </p>
+
+        <div className="mt-8 space-y-3 text-slate-300">
+          <p>• Training</p>
+          <p>• NOVA Help</p>
+          <p>• NOVA Trainer</p>
+          <p>• Common Mistakes</p>
+          <p>• Leaderboard</p>
+          <p>• Selector Breaking News</p>
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+          <p className="text-sm text-slate-400">Plan Price</p>
+          <p className="mt-2 text-3xl font-black">{plan.price}</p>
+        </div>
+
+        <button
+          onClick={completeCheckout}
+          className="mt-8 w-full rounded-2xl bg-yellow-400 px-6 py-4 text-lg font-bold text-slate-950 transition hover:bg-yellow-300"
+        >
+          Complete Professional Subscription
+        </button>
+      </div>
+    </div>
+  );
+}
