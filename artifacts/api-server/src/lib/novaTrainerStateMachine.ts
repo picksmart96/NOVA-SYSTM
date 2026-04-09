@@ -139,6 +139,8 @@ export interface TrainerSnapshot {
   invalidCount: number;
   commandLog: CommandLogEntry[];
   defaults: typeof DEFAULTS;
+  autoAdvance?: boolean;
+  autoAdvanceDelayMs?: number;
 }
 
 export function createNovaTrainerSession({
@@ -253,6 +255,11 @@ export function createNovaTrainerSession({
   }
 
   function handleWorkflowInput(rawInput = ""): TrainerSnapshot {
+    // Internal auto-advance signal — skip to next stop without waiting for "ready"
+    if (rawInput === "__AUTO_NEXT__" && state.phase === PHASES.PICK_READY) {
+      return moveToNextStop();
+    }
+
     const input = normalize(rawInput);
     log("USER", rawInput || input);
 
@@ -376,16 +383,20 @@ export function createNovaTrainerSession({
         state.invalidCount += 1;
         return setPrompt(`You said ${digits}. Invalid.`);
       }
+      // Correct check code — speak grab prompt then auto-advance to next slot
       state.phase = PHASES.PICK_READY;
       const side = state.currentStopIndex % 2 === 0 ? "Alpha" : "Bravo";
-      return setPrompt(`Grab ${stop.qty} ${side}`);
+      const prompt = `Grab ${stop.qty} ${side}`;
+      state.prompt = prompt;
+      log("NOVA", prompt);
+      return { ...snapshot(), autoAdvance: true, autoAdvanceDelayMs: 900 };
     }
 
     if (state.phase === PHASES.PICK_READY) {
-      if (isReady(input)) {
+      // Fallback: selector manually says "ready" (e.g. if auto-advance signal was lost)
+      if (isReady(input) || isConfirm(input)) {
         return moveToNextStop();
       }
-      // Ignore anything else (e.g. "grab 5", quantity confirmations) — just wait
       return snapshot();
     }
 

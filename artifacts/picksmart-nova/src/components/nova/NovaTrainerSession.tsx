@@ -44,6 +44,8 @@ interface TrainerState {
   invalidCount: number;
   commandLog: { id: number; type: string; text: string; at: string }[];
   defaults: { printerNumber: string; alphaLabelNumber: string; bravoLabelNumber: string };
+  autoAdvance?: boolean;
+  autoAdvanceDelayMs?: number;
 }
 
 
@@ -86,6 +88,8 @@ export default function NovaTrainerSession({
   const isSpeakingRef = useRef(false);
   // Queued prompt to speak once current TTS finishes
   const pendingPromptRef = useRef("");
+  // When set, fires __AUTO_NEXT__ after TTS ends instead of checking the queue
+  const autoAdvancePendingRef = useRef<{ delayMs: number } | null>(null);
   // Stable ref to the speak-with-queue function (updated every effect)
   const speakPromptRef = useRef<(text: string) => void>(() => {});
   // Stable ref to sendInput (avoids closure staleness in onmessage)
@@ -134,6 +138,16 @@ export default function NovaTrainerSession({
         after: "active",
         onEnd: () => {
           isSpeakingRef.current = false;
+          // If auto-advance is pending, fire __AUTO_NEXT__ after the delay
+          const advance = autoAdvancePendingRef.current;
+          if (advance) {
+            autoAdvancePendingRef.current = null;
+            setTimeout(() => {
+              sendInputRef.current("__AUTO_NEXT__");
+            }, advance.delayMs);
+            return;
+          }
+          // Otherwise drain the queued prompt (normal flow)
           const queued = pendingPromptRef.current;
           if (queued) {
             pendingPromptRef.current = "";
@@ -188,8 +202,15 @@ export default function NovaTrainerSession({
             setTrainerState((prev) => ({ ...prev, ...msg.state }));
 
             const newPrompt = msg.state.prompt ?? "";
+            const autoAdvance = msg.state.autoAdvance ?? false;
+            const autoAdvanceDelayMs = msg.state.autoAdvanceDelayMs ?? 900;
+
             if (startedRef.current && newPrompt && newPrompt !== lastSpokenPromptRef.current) {
               lastSpokenPromptRef.current = newPrompt;
+              // Prime auto-advance before speaking so onEnd can fire it
+              if (autoAdvance) {
+                autoAdvancePendingRef.current = { delayMs: autoAdvanceDelayMs };
+              }
               // Use ref-based speaking check — never stale inside this closure
               if (isSpeakingRef.current) {
                 // Queue it — speakPromptRef.onEnd will pick it up automatically
