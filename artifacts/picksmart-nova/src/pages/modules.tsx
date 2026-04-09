@@ -1,8 +1,9 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { LESSON_CONTENT } from "@/data/lessonContent";
 import { useProgressStore } from "@/lib/progressStore";
 import { Clock, BookOpen, Headphones, CheckCircle2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import LockedAction from "@/components/paywall/LockedAction";
 
 const DIFFICULTY_COLORS = {
   beginner: "bg-green-500/10 text-green-400 border-green-500/30",
@@ -13,6 +14,7 @@ const DIFFICULTY_COLORS = {
 export default function ModulesPage() {
   const { t } = useTranslation();
   const { progress } = useProgressStore();
+  const [, navigate] = useLocation();
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -114,9 +116,9 @@ export default function ModulesPage() {
                   )}
 
                   <div className="mt-auto">
-                    <Link
-                      href={`/training/lesson/${lesson.moduleId}`}
-                      className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl bg-yellow-400 text-slate-950 font-black hover:bg-yellow-300 transition-all active:scale-[0.98]"
+                    <LockedAction
+                      onAllowedClick={() => navigate(`/training/lesson/${lesson.moduleId}`)}
+                      className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl bg-yellow-400 text-slate-950 font-black hover:bg-yellow-300 transition-all active:scale-[0.98] cursor-pointer select-none"
                     >
                       <Headphones className="h-4 w-4" />
                       {isPassed
@@ -124,7 +126,7 @@ export default function ModulesPage() {
                         : isStarted
                         ? t("training.continueLesson")
                         : t("training.startLesson")}
-                    </Link>
+                    </LockedAction>
                   </div>
                 </div>
               </div>

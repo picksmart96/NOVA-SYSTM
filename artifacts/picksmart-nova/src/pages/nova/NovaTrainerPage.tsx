@@ -4,6 +4,7 @@ import { useTrainerStore } from "@/lib/trainerStore";
 import { useAuthStore } from "@/lib/authStore";
 import { ASSIGNMENTS } from "@/data/assignments";
 import NovaTrainerSession from "@/components/nova/NovaTrainerSession";
+import LockedAction from "@/components/paywall/LockedAction";
 
 export default function NovaTrainerPage() {
   const { selectors } = useTrainerStore();
@@ -106,13 +107,14 @@ export default function NovaTrainerPage() {
               />
             </div>
 
-            <button
-              onClick={handleEnterNova}
-              disabled={loading || !novaIdInput.trim()}
-              className="w-full rounded-2xl bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {loading ? "Starting…" : "Begin Session"}
-            </button>
+            <LockedAction onAllowedClick={handleEnterNova} className="w-full">
+              <button
+                disabled={loading || !novaIdInput.trim()}
+                className="w-full rounded-2xl bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {loading ? "Starting…" : "Begin Session"}
+              </button>
+            </LockedAction>
           </div>
         </div>
 

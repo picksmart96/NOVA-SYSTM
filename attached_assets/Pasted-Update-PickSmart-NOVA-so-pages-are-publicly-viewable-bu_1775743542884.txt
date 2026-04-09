@@ -1,0 +1,81 @@
+Update PickSmart NOVA so pages are publicly viewable, but protected actions require subscription.
+
+GOAL
+Do not fully lock users out of pages.
+Let visitors open and scroll pages.
+When they try to use premium features, ask them to subscribe.
+
+NEW ACCESS BEHAVIOR
+- Home page stays public
+- Pricing stays public
+- Training page can be viewed publicly
+- NOVA Help page can be viewed publicly
+- NOVA Trainer page can be viewed publicly
+- Common Mistakes can be viewed publicly
+- Leaderboard can be viewed publicly
+- Selector Breaking News can be viewed publicly
+
+BUT
+If user is not subscribed:
+- do not block page viewing
+- do not redirect them away
+- instead show a subscribe prompt when they try to use premium actions
+
+PREMIUM ACTIONS EXAMPLES
+Training:
+- Start Module
+- Start Lesson
+- Take Quiz
+
+NOVA Help:
+- Start NOVA Help
+- Ask NOVA
+
+NOVA Trainer:
+- Enter NOVA
+- Start Session
+- Voice workflow
+
+Leaderboard:
+- full leaderboard interaction if needed
+
+Selector Breaking News:
+- create post
+- comment
+- react
+- message
+- save post
+
+Trainer Dashboard:
+- entering dashboard should require valid access
+- non-authorized visitors can see a preview page with subscribe prompt
+
+Supervisor Dashboard:
+- same preview behavior for public
+- full dashboard only for allowed subscribed role
+
+IMPLEMENTATION
+1. Replace hard redirects on content pages with soft access control
+2. Create reusable subscription prompt modal/banner
+3. Add locked action wrappers
+4. Keep route protection only for truly private admin/owner pages:
+   - Users & Access
+   - Owner
+5. For other pages:
+   - allow page rendering
+   - gate only premium actions
+
+FILES
+- src/components/paywall/SubscribePromptModal.jsx
+- src/components/paywall/LockedAction.jsx
+- update Training page
+- update NOVA Help page
+- update NOVA Trainer page
+- update Common Mistakes page
+- update Leaderboard page
+- update Selector Breaking News page
+- keep Owner and Users & Access fully protected
+
+IMPORTANT
+Scrolling and reading should remain public.
+Only active usage should require subscription.

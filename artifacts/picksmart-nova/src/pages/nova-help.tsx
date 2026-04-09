@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { askNovaHelp, transcribeAudio } from "@/lib/novaHelpApi";
 import { detectWakeWord, detectStopWord } from "@/lib/novaModeRouter";
 import { NovaVoiceStatus, type VoiceStateKey } from "@/components/nova/NovaVoiceStatus";
+import LockedAction from "@/components/paywall/LockedAction";
 
 // ─── Safety check script (mirrors NOVA Trainer exactly) ─────────────────────
 const SAFETY_ITEMS_EN = [
@@ -1068,12 +1069,11 @@ export default function NovaHelpPage() {
 
         {/* Start / text input */}
         {!sessionActive ? (
-          <button
-            onClick={startSession}
-            className="w-full py-5 rounded-xl bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-bold text-lg tracking-wide transition-all duration-200 shadow-[0_0_30px_rgba(139,92,246,0.35)]"
-          >
-            {isSpanish ? "Iniciar Sesión" : "Start Session"}
-          </button>
+          <LockedAction onAllowedClick={startSession} className="w-full">
+            <button className="w-full py-5 rounded-xl bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-bold text-lg tracking-wide transition-all duration-200 shadow-[0_0_30px_rgba(139,92,246,0.35)]">
+              {isSpanish ? "Iniciar Sesión" : "Start Session"}
+            </button>
+          </LockedAction>
         ) : (
           <form onSubmit={handleTextSubmit} className="w-full flex gap-3">
             <input

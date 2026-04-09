@@ -75,103 +75,53 @@ function Router() {
         <Layout><CompanyCheckoutPage /></Layout>
       </Route>
 
-      {/* ── Subscription required — selector+ ── */}
+      {/* ── Publicly viewable — premium actions gated inside each page ── */}
       <Route path="/training">
-        <Layout>
-          <SubscriptionRoute path="/training">
-            <ModulesPage />
-          </SubscriptionRoute>
-        </Layout>
+        <Layout><ModulesPage /></Layout>
       </Route>
       <Route path="/training/lesson/:id">
-        <SubscriptionRoute path="/training/lesson/:id">
-          <LessonSessionPage />
-        </SubscriptionRoute>
+        <LessonSessionPage />
       </Route>
       <Route path="/training/:id">
-        <Layout>
-          <SubscriptionRoute path="/training/:id">
-            <ModuleDetailPage />
-          </SubscriptionRoute>
-        </Layout>
+        <Layout><ModuleDetailPage /></Layout>
       </Route>
       <Route path="/mistakes">
-        <Layout>
-          <SubscriptionRoute path="/mistakes">
-            <CommonMistakesPage />
-          </SubscriptionRoute>
-        </Layout>
+        <Layout><CommonMistakesPage /></Layout>
       </Route>
       <Route path="/mistakes/coaching/:id">
-        <SubscriptionRoute path="/mistakes/coaching/:id">
-          <MistakeCoachingPage />
-        </SubscriptionRoute>
+        <MistakeCoachingPage />
       </Route>
       <Route path="/progress">
-        <Layout>
-          <SubscriptionRoute path="/progress">
-            <ProgressPage />
-          </SubscriptionRoute>
-        </Layout>
+        <Layout><ProgressPage /></Layout>
       </Route>
       <Route path="/leaderboard">
-        <Layout>
-          <SubscriptionRoute path="/leaderboard">
-            <LeaderboardPage />
-          </SubscriptionRoute>
-        </Layout>
+        <Layout><LeaderboardPage /></Layout>
       </Route>
       <Route path="/selector-nation">
-        <Layout>
-          <SubscriptionRoute path="/selector-nation">
-            <SelectorNationPage />
-          </SubscriptionRoute>
-        </Layout>
+        <Layout><SelectorNationPage /></Layout>
       </Route>
       <Route path="/selector-breaking-news">
-        <Layout>
-          <SubscriptionRoute path="/selector-breaking-news">
-            <SelectorBreakingNewsPage />
-          </SubscriptionRoute>
-        </Layout>
+        <Layout><SelectorBreakingNewsPage /></Layout>
       </Route>
       <Route path="/nova-help">
-        <Layout>
-          <SubscriptionRoute path="/nova-help">
-            <NovaHelpPage />
-          </SubscriptionRoute>
-        </Layout>
+        <Layout><NovaHelpPage /></Layout>
       </Route>
       <Route path="/nova-trainer">
-        <SubscriptionRoute path="/nova-trainer">
-          <NovaTrainerPage />
-        </SubscriptionRoute>
+        <NovaTrainerPage />
       </Route>
       <Route path="/selector">
-        <SubscriptionRoute path="/selector">
-          <Layout><SelectorPortalPage /></Layout>
-        </SubscriptionRoute>
+        <Layout><SelectorPortalPage /></Layout>
       </Route>
 
       {/* NOVA assignment pages */}
       <Route path="/nova">
-        <Layout>
-          <SubscriptionRoute path="/nova">
-            <MyAssignmentsPage />
-          </SubscriptionRoute>
-        </Layout>
+        <Layout><MyAssignmentsPage /></Layout>
       </Route>
       <Route path="/nova/assignments/:id">
-        <Layout>
-          <SubscriptionRoute path="/nova/assignments/:id">
-            <AssignmentDetailPage />
-          </SubscriptionRoute>
-        </Layout>
+        <Layout><AssignmentDetailPage /></Layout>
       </Route>
       <Route path="/nova/voice/:id">
-        <SubscriptionRoute path="/nova/voice/:id">
-          <VoiceSessionPage />
-        </SubscriptionRoute>
+        <VoiceSessionPage />
       </Route>
 
       {/* Trainer tools */}

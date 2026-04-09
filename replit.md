@@ -139,6 +139,15 @@ Full-stack warehouse training and assignment management platform combining a pub
 - **File**: `src/components/nova/NovaVoiceStatus.tsx`
 - **`NovaVoiceStatus`**: Colored badge showing current voice state (idle / wake_listening / active_listening / recording / transcribing / thinking / speaking / stopped / error)
 
+## Soft Paywall System
+- **Components**: `src/components/paywall/LockedAction.tsx` + `src/components/paywall/SubscribePromptModal.tsx`
+- **Approach**: Content pages are publicly viewable; premium *actions* are gated
+- **`LockedAction`**: Wraps any clickable area; uses `onClickCapture` to intercept child button clicks before they fire when locked; owner always bypasses; `onAllowedClick` navigates when allowed
+- **`SubscribePromptModal`**: Dark navy modal with "View Plans" / "Subscribe Now" / "Continue Browsing" buttons
+- **Gated actions**: Start Lesson (modules), Start Coaching (mistakes), Begin Session (NOVA Trainer), Start Session (NOVA Help), reactions/comments/post (Selector Breaking News)
+- **All content pages** (`/training`, `/mistakes`, `/nova-help`, `/nova-trainer`, `/leaderboard`, `/selector-breaking-news`, `/selector-nation`) are publicly accessible — no SubscriptionRoute wrapper
+- **Protected pages**: Trainer Portal, Supervisor Dashboard, Owner, Users & Access remain role-gated via SubscriptionRoute
+
 ## NOVA Trainer
 - **Page**: `/nova-trainer` — NOVA ID gate → full ES3 script session
 - **Voice**: `useVoiceEngine` hook — Web Speech API (webkitSpeechRecognition) with exponential backoff

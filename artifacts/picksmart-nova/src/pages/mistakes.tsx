@@ -1,8 +1,9 @@
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import { MISTAKES } from "@/data/mistakesData";
 import { useProgressStore } from "@/lib/progressStore";
 import { Headphones, CheckCircle2, AlertTriangle, ShieldAlert } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import LockedAction from "@/components/paywall/LockedAction";
 
 const RISK_COLORS = {
   critical: "bg-red-500/10 text-red-400 border-red-500/30",
@@ -30,6 +31,7 @@ const CATEGORY_ICONS: Record<string, typeof AlertTriangle> = {
 export default function CommonMistakesPage() {
   const { t } = useTranslation();
   const { mistakeProgress } = useProgressStore();
+  const [, navigate] = useLocation();
 
   const totalPassed = Object.values(mistakeProgress).filter(m => m.passed).length;
 
@@ -120,9 +122,9 @@ export default function CommonMistakesPage() {
                   )}
 
                   <div className="mt-auto">
-                    <Link
-                      href={`/mistakes/coaching/${mistake.id}`}
-                      className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-slate-800 text-white font-bold border border-slate-700 hover:border-yellow-400 hover:text-yellow-400 transition-all active:scale-[0.98] text-sm"
+                    <LockedAction
+                      onAllowedClick={() => navigate(`/mistakes/coaching/${mistake.id}`)}
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-slate-800 text-white font-bold border border-slate-700 hover:border-yellow-400 hover:text-yellow-400 transition-all active:scale-[0.98] text-sm cursor-pointer select-none"
                     >
                       <Headphones className="h-4 w-4" />
                       {isPassed
@@ -130,7 +132,7 @@ export default function CommonMistakesPage() {
                         : isStarted
                         ? t("mistakes.continueCoaching")
                         : t("mistakes.startCoaching")}
-                    </Link>
+                    </LockedAction>
                   </div>
                 </div>
               </div>
