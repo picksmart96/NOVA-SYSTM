@@ -28,6 +28,11 @@ type UseVoiceEngineOptions = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecognition = any;
 
+// ── Platform detection ─────────────────────────────────────────────────────────
+const IS_IOS    = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+                  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const IS_MOBILE = IS_IOS || /Mobi|Android/i.test(navigator.userAgent);
+
 // ── VAD constants ─────────────────────────────────────────────────────────────
 // Replit iframe mic produces low RMS levels. Voice is ~3-8, silence is ~0-2.
 // Using a unified threshold of 3 to distinguish speech from silence.
@@ -86,6 +91,7 @@ export function useVoiceEngine({
   const recognitionActiveRef = useRef(false);
   const silenceTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ttsWatchdogRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const iosKeepAliveRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const serviceRetryRef      = useRef(0);
   const modeRef              = useRef<"wake" | "active">("wake");
   const langRef              = useRef(lang);
@@ -248,6 +254,10 @@ export function useVoiceEngine({
       try {
         const ctx = new AudioContext();
         audioCtxRef.current = ctx;
+        // iOS starts AudioContext in "suspended" state — must resume explicitly
+        if (ctx.state === "suspended") {
+          try { await ctx.resume(); } catch { /* ignore */ }
+        }
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 512;
         ctx.createMediaStreamSource(stream).connect(analyser);
@@ -404,7 +414,10 @@ export function useVoiceEngine({
 
         if (code === "network" || code === "aborted") {
           serviceRetryRef.current++;
-          if (serviceRetryRef.current >= 3) { activateVAD(); return; }
+          // Mobile browsers (especially iOS) have unreliable SpeechRecognition
+          // — fall back to VAD after just 1 network failure on mobile.
+          const retryThreshold = IS_MOBILE ? 1 : 3;
+          if (serviceRetryRef.current >= retryThreshold) { activateVAD(); return; }
           return;
         }
 
@@ -485,10 +498,21 @@ export function useVoiceEngine({
       const voice = pickPreferredVoice(langRef.current);
       if (voice) utterance.voice = voice;
 
+      // iOS keepalive: prevent iOS from pausing speechSynthesis mid-sentence
+      if (iosKeepAliveRef.current) clearInterval(iosKeepAliveRef.current);
+      if (IS_IOS) {
+        iosKeepAliveRef.current = setInterval(() => {
+          try {
+            if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+          } catch { /* ignore */ }
+        }, 4000);
+      }
+
       const handleTTSDone = (reason: string) => {
         if (!speakingRef.current) return;
         console.log("[NOVA voice] TTS done →", reason);
         if (ttsWatchdogRef.current) clearTimeout(ttsWatchdogRef.current);
+        if (iosKeepAliveRef.current) { clearInterval(iosKeepAliveRef.current); iosKeepAliveRef.current = null; }
         speakingRef.current = false;
         vadSpeakingRef.current = false;
         onEnd?.();
@@ -525,11 +549,13 @@ export function useVoiceEngine({
 
       try {
         window.speechSynthesis.speak(utterance);
+        // Watchdog: proportional to text length. iOS TTS is slower so give more headroom.
+        const watchdogMs = Math.max(6000, text.length * (IS_MOBILE ? 120 : 80));
         ttsWatchdogRef.current = setTimeout(() => {
           console.warn("[NOVA voice] TTS watchdog — forcing restart");
           try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
           handleTTSDone("watchdog");
-        }, 15_000);
+        }, watchdogMs);
       } catch (err) {
         console.error("[NOVA voice] speechSynthesis.speak threw:", err);
         speakingRef.current = false;
@@ -577,9 +603,10 @@ export function useVoiceEngine({
 
     setInitialized(true);
     serviceRetryRef.current = 0;
-    console.log("[NOVA voice] initialized");
+    console.log("[NOVA voice] initialized, mobile:", IS_MOBILE, "ios:", IS_IOS);
 
-    if (!getRecognitionClass()) {
+    // On mobile, skip the unreliable SpeechRecognition and go straight to VAD.
+    if (!getRecognitionClass() || IS_MOBILE) {
       vadModeRef.current = true;
       setVadMode(true);
     } else {

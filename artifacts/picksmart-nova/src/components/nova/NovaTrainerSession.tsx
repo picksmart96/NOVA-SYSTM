@@ -2,6 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useVoiceEngine } from "@/hooks/useVoiceEngine";
 import { matchCommand } from "@/lib/novaCommandMatcher";
 
+// Mobile / iOS browsers require a user gesture before AudioContext + speech APIs
+// are unlocked. Detect here so we can show a tap-to-start gate.
+const IS_MOBILE =
+  /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
 interface Selector {
   userId: string;
   novaId: string;
@@ -103,6 +109,8 @@ export default function NovaTrainerSession({
   const [serverError, setServerError] = useState("");
   const [heardResponse, setHeardResponse] = useState("");
   const [trainerState, setTrainerState] = useState<TrainerState>(DEFAULT_STATE);
+  // On mobile, require one tap before starting (unlocks iOS AudioContext + TTS)
+  const [mobileTapGate, setMobileTapGate] = useState(autoStart && IS_MOBILE);
 
   const voice = useVoiceEngine({
     onHeard: async (_heard: string, raw: string) => {
@@ -315,9 +323,10 @@ export default function NovaTrainerSession({
     setConnected(false);
   };
 
-  // Auto-launch session when autoStart is true (selector just logged in)
+  // Auto-launch session when autoStart is true.
+  // On mobile, we skip this and show a tap-gate instead (iOS blocks audio without a gesture).
   useEffect(() => {
-    if (autoStart) {
+    if (autoStart && !IS_MOBILE) {
       startSession();
     }
     return () => {
@@ -338,6 +347,37 @@ export default function NovaTrainerSession({
     : voice.pttMode
     ? "👆"
     : "⏸";
+
+  // ── Mobile tap gate ──────────────────────────────────────────────────────────
+  // iOS/Android block AudioContext + TTS without a user gesture. We show this
+  // full-screen screen first; tapping it IS the gesture that unlocks audio.
+  if (mobileTapGate) {
+    return (
+      <div
+        className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center gap-10 px-6 select-none"
+        onClick={async () => {
+          setMobileTapGate(false);
+          await startSession();
+        }}
+      >
+        <div className="text-center space-y-4 pointer-events-none">
+          <div className="text-7xl animate-pulse">🎙️</div>
+          <p className="text-yellow-400 text-xs uppercase tracking-widest font-bold">PickSmart NOVA</p>
+          <h1 className="text-3xl font-black leading-tight">
+            {selector.fullName ?? selector.name ?? selector.novaId}
+          </h1>
+          <p className="text-slate-400 text-sm">Tap anywhere to start your session</p>
+        </div>
+        <div className="rounded-3xl border-2 border-yellow-400 bg-yellow-400/10 px-10 py-6 pointer-events-none">
+          <p className="text-yellow-300 font-black text-xl text-center">TAP TO BEGIN</p>
+          <p className="text-slate-400 text-xs text-center mt-1">NOVA will greet you and start listening</p>
+        </div>
+        <p className="text-slate-600 text-xs text-center max-w-xs">
+          Microphone access will be requested after tapping.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
