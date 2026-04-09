@@ -153,6 +153,6 @@ export const pricingPlans = [
       "Early access to new modules",
       "Certification badge",
     ],
-    cta: "Best Value",
+    cta: "Go Annual",
   },
 ];

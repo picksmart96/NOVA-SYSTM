@@ -557,7 +557,7 @@
       "plans": [
         { "title": "Selector", "subtitle": "Train individual warehouse selectors", "price": "$10", "suffix": "/per selector", "cta": "Start Training", "features": ["Access for 1 selector", "All 6 training modules", "Progress tracking", "Performance reports", "Trainer support"] },
         { "title": "Pro Monthly", "subtitle": "Full access to all training", "price": "$29.99", "suffix": "/month", "cta": "Go Pro", "featured": true, "features": ["All 6 training modules", "Video lessons & demonstrations", "Advanced speed techniques", "Pallet building masterclass", "Rate improvement strategies", "New content added monthly"] },
-        { "title": "Pro Annual", "subtitle": "Best value — save over 40%", "price": "$199.99", "suffix": "/year", "cta": "Best Value", "features": ["Everything in Pro Monthly", "Save $81 per year", "Priority support", "Early access to new modules", "Certification badge"] }
+        { "title": "Pro Annual", "subtitle": "Best value — save over 40%", "price": "$199.99", "suffix": "/year", "cta": "Go Annual", "features": ["Everything in Pro Monthly", "Save $81 per year", "Priority support", "Early access to new modules", "Certification badge"] }
       ]
     },
     "finalCta": {

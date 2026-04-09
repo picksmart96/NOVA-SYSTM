@@ -557,7 +557,7 @@
       "plans": [
         { "title": "Selector", "subtitle": "Capacita selectores individuales", "price": "$10", "suffix": "/por selector", "cta": "Comenzar Capacitación", "features": ["Acceso para 1 selector", "Los 6 módulos de capacitación", "Seguimiento de progreso", "Informes de rendimiento", "Soporte de entrenador"] },
         { "title": "Pro Mensual", "subtitle": "Acceso completo a toda la capacitación", "price": "$29.99", "suffix": "/mes", "cta": "Ir Pro", "featured": true, "features": ["Los 6 módulos de capacitación", "Lecciones y demostraciones en video", "Técnicas avanzadas de velocidad", "Clase magistral de construcción de tarimas", "Estrategias de mejora de tasa", "Contenido nuevo mensual"] },
-        { "title": "Pro Anual", "subtitle": "Mejor valor — ahorra más del 40%", "price": "$199.99", "suffix": "/año", "cta": "Mejor Valor", "features": ["Todo en Pro Mensual", "Ahorra $81 por año", "Soporte prioritario", "Acceso anticipado a nuevos módulos", "Insignia de certificación"] }
+        { "title": "Pro Anual", "subtitle": "Mejor valor — ahorra más del 40%", "price": "$199.99", "suffix": "/año", "cta": "Ir Anual", "features": ["Todo en Pro Mensual", "Ahorra $81 por año", "Soporte prioritario", "Acceso anticipado a nuevos módulos", "Insignia de certificación"] }
       ]
     },
     "finalCta": {
