@@ -253,8 +253,9 @@ export const useAuthStore = create<AuthState>()(
               fullName: invite.fullName,
               role: invite.role,
               status: "active",
-              subscriptionPlan: null,
-              isSubscribed: false,
+              // Invited users get full access — they're brought in under the company plan
+              subscriptionPlan: "company" as const,
+              isSubscribed: true,
               createdAt: new Date().toISOString(),
             },
           ],
