@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Copy, ExternalLink, Globe } from "lucide-react";
+import { Copy, ExternalLink, Globe, Key } from "lucide-react";
+import { OWNER_TOKEN } from "./owner-access";
 import { useAuthStore, AuthAccount, AuthRole } from "@/lib/authStore";
 
 // ── Mock data for demo sections ───────────────────────────────────────────────
@@ -39,48 +40,91 @@ const PLANS = [
   },
 ];
 
-// ── Public Page Link ──────────────────────────────────────────────────────────
+// ── Public Page Link + Owner Magic Link ───────────────────────────────────────
 function PublicPageLink() {
-  const [copied, setCopied] = useState(false);
-  const base = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
-  const publicUrl = `${window.location.origin}${base}/`;
+  const [copiedPublic, setCopiedPublic] = useState(false);
+  const [copiedMagic,  setCopiedMagic]  = useState(false);
 
-  function copy() {
+  const base      = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
+  const publicUrl = `${window.location.origin}${base}/`;
+  const magicUrl  = `${window.location.origin}${base}/owner-access?token=${OWNER_TOKEN}`;
+
+  function copyPublic() {
     navigator.clipboard.writeText(publicUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedPublic(true);
+    setTimeout(() => setCopiedPublic(false), 2000);
+  }
+
+  function copyMagic() {
+    navigator.clipboard.writeText(magicUrl);
+    setCopiedMagic(true);
+    setTimeout(() => setCopiedMagic(false), 2000);
   }
 
   return (
-    <div className="rounded-3xl border border-yellow-400/40 bg-yellow-400/5 p-6">
-      <div className="flex items-center gap-3 mb-3">
-        <div className="w-9 h-9 rounded-xl bg-yellow-400/20 flex items-center justify-center">
-          <Globe className="w-4 h-4 text-yellow-400" />
+    <div className="flex flex-col gap-4">
+      {/* Public home page */}
+      <div className="rounded-3xl border border-yellow-400/40 bg-yellow-400/5 p-6">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-9 h-9 rounded-xl bg-yellow-400/20 flex items-center justify-center">
+            <Globe className="w-4 h-4 text-yellow-400" />
+          </div>
+          <div>
+            <p className="font-black text-white text-sm">Public Page Link</p>
+            <p className="text-xs text-slate-400">Share this link to send people to the public home page</p>
+          </div>
         </div>
-        <div>
-          <p className="font-black text-white text-sm">Public Page Link</p>
-          <p className="text-xs text-slate-400">Share this link to send people to the public home page</p>
+        <div className="flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3">
+          <p className="flex-1 font-mono text-sm text-yellow-300 truncate">{publicUrl}</p>
+          <button
+            onClick={copyPublic}
+            className="flex items-center gap-1.5 rounded-xl bg-yellow-400 px-3 py-1.5 text-xs font-black text-slate-950 hover:bg-yellow-300 transition shrink-0"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            {copiedPublic ? "Copied!" : "Copy"}
+          </button>
+          <a
+            href={publicUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 rounded-xl border border-slate-700 px-3 py-1.5 text-xs font-bold text-slate-300 hover:border-yellow-400 hover:text-yellow-400 transition shrink-0"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            Open
+          </a>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3">
-        <p className="flex-1 font-mono text-sm text-yellow-300 truncate">{publicUrl}</p>
-        <button
-          onClick={copy}
-          className="flex items-center gap-1.5 rounded-xl bg-yellow-400 px-3 py-1.5 text-xs font-black text-slate-950 hover:bg-yellow-300 transition shrink-0"
-        >
-          <Copy className="w-3.5 h-3.5" />
-          {copied ? "Copied!" : "Copy"}
-        </button>
-        <a
-          href={publicUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 rounded-xl border border-slate-700 px-3 py-1.5 text-xs font-bold text-slate-300 hover:border-yellow-400 hover:text-yellow-400 transition shrink-0"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-          Open
-        </a>
+      {/* Owner magic link */}
+      <div className="rounded-3xl border border-red-500/30 bg-red-500/5 p-6">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-9 h-9 rounded-xl bg-red-500/20 flex items-center justify-center">
+            <Key className="w-4 h-4 text-red-400" />
+          </div>
+          <div>
+            <p className="font-black text-white text-sm">Owner Magic Link <span className="ml-2 rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-bold text-red-400">Private</span></p>
+            <p className="text-xs text-slate-400">Visit this URL to log in instantly as owner — keep it secret</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3">
+          <p className="flex-1 font-mono text-xs text-red-300 truncate">{magicUrl}</p>
+          <button
+            onClick={copyMagic}
+            className="flex items-center gap-1.5 rounded-xl bg-red-500 px-3 py-1.5 text-xs font-black text-white hover:bg-red-400 transition shrink-0"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            {copiedMagic ? "Copied!" : "Copy"}
+          </button>
+          <a
+            href={magicUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 rounded-xl border border-slate-700 px-3 py-1.5 text-xs font-bold text-slate-300 hover:border-red-400 hover:text-red-400 transition shrink-0"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            Test
+          </a>
+        </div>
       </div>
     </div>
   );

@@ -36,6 +36,7 @@ import ChoosePlanPage from "@/pages/choose-plan";
 import PersonalCheckoutPage from "@/pages/checkout-personal";
 import CompanyCheckoutPage from "@/pages/checkout-company";
 import OwnerPage from "@/pages/owner";
+import OwnerAccessPage from "@/pages/owner-access";
 
 import SelectorPortalPage from "@/pages/selector-portal";
 import LoginPage from "@/pages/login";
@@ -49,6 +50,9 @@ function Router() {
   return (
     <Switch>
       {/* ── Fully public — no login or subscription needed ── */}
+      <Route path="/owner-access">
+        <OwnerAccessPage />
+      </Route>
       <Route path="/login">
         <LoginPage />
       </Route>
