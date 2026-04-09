@@ -278,8 +278,9 @@ export const useAuthStore = create<AuthState>()(
         accounts: state.accounts,
         pendingInvites: state.pendingInvites,
         usedTokens: state.usedTokens,
-        // currentUser and locked are intentionally excluded —
-        // every page load / tab close requires a fresh login.
+        // Persist currentUser so sessions survive page refresh and direct link visits.
+        // locked is excluded so the screen never auto-locks on load.
+        currentUser: state.currentUser,
       }),
     }
   )
