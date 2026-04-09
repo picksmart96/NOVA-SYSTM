@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2 } from "lucide-react";
+import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon } from "lucide-react";
 import { Link } from "wouter";
 import { OWNER_TOKEN } from "./owner-access";
 import { useAuthStore, AuthAccount, AuthRole } from "@/lib/authStore";
 import { useAccessStore } from "@/lib/accessStore";
+import { useWarehouseStore } from "@/lib/warehouseStore";
+import { DEFAULT_WAREHOUSES, SYSTEM_TYPE_LABEL } from "@/data/warehouses";
 
 // ── Mock data for demo sections ───────────────────────────────────────────────
 const ADMIN_STATS = {
@@ -335,14 +337,24 @@ function UserManagement() {
 // ── Invite Management ─────────────────────────────────────────────────────────
 function InviteManagement() {
   const { addInvite, pendingInvites } = useAuthStore();
+  const { customWarehouses } = useWarehouseStore();
+  const allWarehouses = [...DEFAULT_WAREHOUSES, ...customWarehouses];
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<AuthRole>("selector");
+  const [warehouseSlug, setWarehouseSlug] = useState(allWarehouses[0]?.slug ?? "");
   const [lastLink, setLastLink] = useState<string | null>(null);
 
   function sendInvite() {
     if (!fullName.trim() || !email.trim()) return;
-    const token = addInvite({ fullName: fullName.trim(), email: email.trim(), role });
+    const selectedWarehouse = allWarehouses.find((w) => w.slug === warehouseSlug) ?? null;
+    const token = addInvite({
+      fullName: fullName.trim(),
+      email: email.trim(),
+      role,
+      warehouseId: selectedWarehouse?.id ?? null,
+      warehouseSlug: selectedWarehouse?.slug ?? null,
+    });
     const link = `${window.location.origin}/invite/${token}`;
     setLastLink(link);
     setFullName("");
@@ -374,6 +386,18 @@ function InviteManagement() {
             <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
           ))}
         </select>
+        <select
+          value={warehouseSlug}
+          onChange={(e) => setWarehouseSlug(e.target.value)}
+          className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm"
+        >
+          <option value="">— No warehouse —</option>
+          {allWarehouses.map((wh) => (
+            <option key={wh.id} value={wh.slug}>
+              {wh.name} ({wh.systemType === "es3" ? "ES3" : "Standard"})
+            </option>
+          ))}
+        </select>
         <button
           onClick={sendInvite}
           className="w-full rounded-xl bg-yellow-400 py-2.5 font-black text-slate-950 hover:bg-yellow-300 transition text-sm"
@@ -386,6 +410,11 @@ function InviteManagement() {
         <div className="mt-4 rounded-xl border border-yellow-400/30 bg-yellow-400/5 p-3">
           <p className="text-xs text-yellow-400 font-bold mb-1">Invite link generated:</p>
           <p className="text-xs text-slate-300 break-all font-mono">{lastLink}</p>
+          {warehouseSlug && (
+            <p className="text-xs text-slate-500 mt-1">
+              Warehouse: {allWarehouses.find((w) => w.slug === warehouseSlug)?.name ?? warehouseSlug}
+            </p>
+          )}
           <button
             onClick={() => navigator.clipboard.writeText(lastLink)}
             className="mt-2 text-xs text-yellow-400 hover:underline"
@@ -403,7 +432,7 @@ function InviteManagement() {
               <div key={inv.token} className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 flex justify-between items-center">
                 <div>
                   <p className="text-sm font-semibold">{inv.fullName}</p>
-                  <p className="text-xs text-slate-500">{inv.email} · {inv.role}</p>
+                  <p className="text-xs text-slate-500">{inv.email} · {inv.role}{inv.warehouseSlug ? ` · ${inv.warehouseSlug}` : ""}</p>
                 </div>
                 <RoleBadge role={inv.role} />
               </div>
@@ -834,10 +863,13 @@ function LinkRow({
 
 function LinkLibrary() {
   const { copied, copy } = useCopy();
+  const { customWarehouses } = useWarehouseStore();
   const base = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
   const origin = window.location.origin;
 
   const url = (path: string) => `${origin}${base}${path}`;
+
+  const allWarehouses = [...DEFAULT_WAREHOUSES, ...customWarehouses];
 
   const sections = [
     {
@@ -853,6 +885,8 @@ function LinkLibrary() {
       links: [
         { key: "home",    label: "Home Page",     description: "Public-facing landing page",         url: url("/"),          icon: Globe,   accent: "green"  as const },
         { key: "pricing", label: "Pricing Page",  description: "Pricing plans for new subscribers",  url: url("/pricing"),   icon: ShieldCheck, accent: "green" as const },
+        { key: "privacy", label: "Privacy Policy", description: "Data protection & warehouse isolation policy", url: url("/privacy"), icon: ShieldCheck, accent: "green" as const },
+        { key: "terms",   label: "Terms of Service", description: "Platform terms, acceptable use, subscriptions", url: url("/terms"), icon: ShieldCheck, accent: "green" as const },
       ],
     },
     {
@@ -860,7 +894,7 @@ function LinkLibrary() {
       links: [
         { key: "training",  label: "Training Modules",       description: "All training content",            url: url("/training"),        icon: BookOpen, accent: "blue" as const },
         { key: "trainer",   label: "Trainer Dashboard",      description: "Trainer portal (trainer+ role)",  url: url("/trainer-portal"),  icon: Activity, accent: "blue" as const },
-        { key: "nova",      label: "NOVA Trainer",           description: "Voice picking simulator",         url: url("/nova-trainer"),    icon: Mic,      accent: "blue" as const },
+        { key: "nova",      label: "NOVA Trainer",           description: "Voice picking simulator (ES3 only)",  url: url("/nova-trainer"),    icon: Mic,      accent: "blue" as const },
         { key: "supervisor",label: "Supervisor Dashboard",   description: "Supervisor tools",                url: url("/supervisor"),      icon: ShieldCheck, accent: "purple" as const },
       ],
     },
@@ -893,6 +927,74 @@ function LinkLibrary() {
           </div>
         </div>
       ))}
+
+      {/* Warehouse Invite Links */}
+      <div>
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Warehouse Invite Links</p>
+        <p className="text-xs text-slate-600 mb-3">
+          Share these links with your warehouse team. ES3 links include NOVA Trainer. Standard links do not.
+        </p>
+        <div className="flex flex-col gap-3">
+          {allWarehouses.map((wh) => {
+            const warehouseUrl = url(`/w/${wh.slug}`);
+            const isES3 = wh.systemType === "es3";
+            return (
+              <div
+                key={wh.id}
+                className={`rounded-2xl border p-4 flex flex-col sm:flex-row sm:items-center gap-4 ${
+                  isES3
+                    ? "border-yellow-400/30 bg-yellow-400/5"
+                    : "border-slate-700 bg-slate-900"
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                  isES3 ? "bg-yellow-400/20" : "bg-slate-800"
+                }`}>
+                  <WarehouseIcon className={`w-4 h-4 ${isES3 ? "text-yellow-400" : "text-slate-400"}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-bold text-white text-sm">{wh.name}</p>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                      isES3
+                        ? "bg-yellow-400/20 text-yellow-300"
+                        : "bg-slate-700 text-slate-300"
+                    }`}>
+                      {SYSTEM_TYPE_LABEL[wh.systemType]}
+                    </span>
+                    <span className="rounded-full px-2 py-0.5 text-xs font-bold bg-slate-800 text-slate-400">
+                      {wh.allowedFeatures.length} features
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5 font-mono truncate">{warehouseUrl}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => copy(wh.id, warehouseUrl)}
+                    className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black transition ${
+                      isES3
+                        ? "bg-yellow-400 text-slate-950 hover:bg-yellow-300"
+                        : "bg-slate-700 text-white hover:bg-slate-600"
+                    }`}
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    {copied === wh.id ? "Copied!" : "Copy"}
+                  </button>
+                  <a
+                    href={warehouseUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 rounded-xl border border-slate-700 px-3 py-1.5 text-xs font-bold text-slate-300 hover:border-yellow-400 hover:text-yellow-400 transition"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Open
+                  </a>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -939,11 +1041,14 @@ const AUTH_ROLES: Record<RoleKey, AuthRole | null> = {
 function UsersAccessSection() {
   const { currentUser, addInvite } = useAuthStore();
   const { appUsers, novaAccounts, inviteAppUser, createNovaAccount, deactivateNovaAccount } = useAccessStore();
+  const { customWarehouses } = useWarehouseStore();
+  const allWarehouses = [...DEFAULT_WAREHOUSES, ...customWarehouses];
 
   const [inviteForm, setInviteForm] = useState({
     fullName: "John Smith",
     email: "someone@example.com",
     role: "Selector" as RoleKey,
+    warehouseSlug: allWarehouses[0]?.slug ?? "",
   });
 
   const [accountForm, setAccountForm] = useState({
@@ -983,8 +1088,15 @@ function UsersAccessSection() {
     const name = inviteForm.fullName.trim();
     const email = inviteForm.email.trim();
     const role = inviteForm.role;
+    const selectedWarehouse = allWarehouses.find((w) => w.slug === inviteForm.warehouseSlug) ?? null;
     if (authRole) {
-      const token = addInvite({ fullName: name, email, role: authRole });
+      const token = addInvite({
+        fullName: name,
+        email,
+        role: authRole,
+        warehouseId: selectedWarehouse?.id ?? null,
+        warehouseSlug: selectedWarehouse?.slug ?? null,
+      });
       const url = `${window.location.origin}/invite/${token}`;
       setGeneratedInviteUrl(url);
       setGeneratedInviteName(name);
@@ -993,7 +1105,7 @@ function UsersAccessSection() {
     } else {
       setGeneratedInviteUrl(null);
     }
-    setInviteForm({ fullName: "", email: "", role: "Selector" });
+    setInviteForm({ fullName: "", email: "", role: "Selector", warehouseSlug: allWarehouses[0]?.slug ?? "" });
   };
 
   const handleSendEmail = () => {
@@ -1067,6 +1179,29 @@ function UsersAccessSection() {
               >
                 {allowedRoles.map((r) => <option key={r}>{r}</option>)}
               </select>
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-2">Assign to Warehouse</label>
+              <select
+                value={inviteForm.warehouseSlug}
+                onChange={(e) => setInviteForm((p) => ({ ...p, warehouseSlug: e.target.value }))}
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition"
+              >
+                <option value="">— No warehouse assigned —</option>
+                {allWarehouses.map((wh) => (
+                  <option key={wh.id} value={wh.slug}>
+                    {wh.name} ({wh.systemType === "es3" ? "ES3" : "Standard"})
+                  </option>
+                ))}
+              </select>
+              {inviteForm.warehouseSlug && (() => {
+                const wh = allWarehouses.find((w) => w.slug === inviteForm.warehouseSlug);
+                return wh ? (
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    {wh.allowedFeatures.length} features · {wh.systemType === "es3" ? "Includes NOVA Trainer" : "No NOVA Trainer"}
+                  </p>
+                ) : null;
+              })()}
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 space-y-3">
               <p className="text-sm text-yellow-300 font-semibold leading-snug">
