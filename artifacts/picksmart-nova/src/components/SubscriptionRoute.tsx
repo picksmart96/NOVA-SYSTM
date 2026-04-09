@@ -96,7 +96,7 @@ export function SubscriptionRoute({ children, requiredRole = "selector", path, m
             View Plans
           </button>
 
-          <p className="text-xs text-slate-600">Starting at $10 · Cancel anytime · No hidden fees</p>
+          <p className="text-xs text-slate-600">Starting at $25/month · Cancel anytime · No hidden fees</p>
         </div>
       </div>
     );

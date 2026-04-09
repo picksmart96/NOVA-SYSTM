@@ -1,0 +1,317 @@
+Yes — this is the right setup for a multi-warehouse SaaS.
+
+You want 3 things at once:
+
+Separate accounts for different warehouses
+NOVA Trainer only for ES3 warehouses
+A strong privacy / security page and internal policy so clients know their warehouse data stays private
+
+That architecture is solid. It also matches what regulators and security guidance expect: clear privacy promises, clear access controls, and strong separation of customer data. The FTC warns companies that privacy and security promises need to match real controls, California requires clear privacy notices for covered businesses, and NIST recommends strong access control and data protection practices.
+
+Best product structure
+
+Use multi-tenant architecture.
+
+That means every warehouse becomes its own tenant:
+
+Warehouse A account
+Warehouse B account
+Warehouse C account
+
+Each tenant gets:
+
+its own users
+its own selectors
+its own trainer/supervisor accounts
+its own posts, sessions, assignments, reports
+its own NOVA Help memory and warehouse data
+
+And most important:
+
+one warehouse must never be able to see another warehouse’s data. That is the kind of data separation your privacy page should promise only if your system truly enforces it. FTC enforcement makes that important.
+Product split
+ES3 warehouse link
+
+Use this for warehouses that want full ES3 voice workflow:
+
+Home
+Training
+NOVA Help
+NOVA Trainer
+Common Mistakes
+Leaderboard
+Selector Breaking News
+Trainer Dashboard
+Supervisor Dashboard
+Non-ES3 warehouse link
+
+Use this for warehouses that do not use the ES3 trainer workflow:
+
+Home
+Training
+NOVA Help
+Common Mistakes
+Leaderboard
+Selector Breaking News
+Trainer Dashboard
+Supervisor Dashboard
+
+No NOVA Trainer on that link.
+
+That is cleaner than trying to force every warehouse into the same workflow.
+
+Replit Agent master prompt
+
+Paste this into Replit:
+
+Convert PickSmart NOVA into a multi-warehouse SaaS platform with warehouse-specific access and product configuration.
+
+GOAL
+Support multiple warehouses as separate private accounts.
+Each warehouse must have isolated data and isolated access.
+NOVA Help should exist inside each warehouse account.
+NOVA Trainer should be available only for ES3 warehouses.
+Other warehouses should get a version of the product without NOVA Trainer.
+
+CORE MODEL
+Add a warehouse / tenant model.
+
+Each warehouse has:
+- id
+- name
+- slug
+- systemType
+- subscriptionPlan
+- isSubscribed
+- isActive
+- allowedFeatures
+- createdAt
+- updatedAt
+
+systemType values:
+- es3
+- standard
+
+FEATURE RULES
+If warehouse.systemType === "es3":
+- enable NOVA Trainer
+- enable NOVA Help
+- enable Training
+- enable dashboards
+
+If warehouse.systemType !== "es3":
+- disable NOVA Trainer
+- keep NOVA Help
+- keep Training
+- keep dashboards
+
+DATA ISOLATION
+Every warehouse must be isolated from other warehouses.
+Assignments, selectors, posts, dashboards, users, messages, and reports must belong to one warehouseId.
+Users can only access records for their own warehouseId.
+
+LINK STRUCTURE
+Create warehouse-specific app links using route prefixes or slugs.
+
+Examples:
+- /w/es3-warehouse-name
+- /w/standard-warehouse-name
+
+ALTERNATIVE
+Support direct invite links per warehouse:
+- ES3 warehouse links include NOVA Trainer
+- Standard warehouse links do not include NOVA Trainer
+
+ACCESS RULES
+- Users only see pages allowed by their warehouse features and role
+- Owner can still see everything across all warehouses
+- Users & Access and Owner remain owner-only
+
+PAGES
+For ES3 warehouse:
+- Home
+- Training
+- NOVA Help
+- NOVA Trainer
+- Common Mistakes
+- Leaderboard
+- Selector Breaking News
+- Trainer Dashboard
+- Supervisor Dashboard
+
+For standard warehouse:
+- Home
+- Training
+- NOVA Help
+- Common Mistakes
+- Leaderboard
+- Selector Breaking News
+- Trainer Dashboard
+- Supervisor Dashboard
+
+FILES TO UPDATE
+- src/lib/accessControl.js
+- src/store/authStore.js
+- src/data/warehouses.js
+- src/pages/public/HomePage.jsx
+- router setup
+- navbar/menu filtering
+- invite link generation
+
+PRIVACY PAGE
+Create a public Privacy page that clearly states:
+- each warehouse account is private
+- one customer team cannot access another customer’s data
+- customer information is not shared across warehouse accounts except as required by law or approved service providers
+- access is role-based and limited
+- data is protected with reasonable security safeguards
+- customer data is used only to operate, support, secure, and improve the service
+- owner/admin access is restricted
+- privacy requests can be made by contacting the company
+
+IMPORTANT
+Do not claim absolute guarantees like “never ever possible under any circumstance.”
+Use strong but realistic language:
+- private
+- isolated
+- restricted
+- protected
+- not shared with other customer teams
+
+FILES
+- src/pages/public/PrivacyPage.jsx
+- src/pages/public/TermsPage.jsx
+
+POLICY
+Create a company privacy policy and acceptable use / security policy suitable for a SaaS warehouse training platform.
+Make it professional and client-facing.
+Recommended data model
+
+Use a new warehouses table:
+
+export const warehouses = [
+  {
+    id: "wh-001",
+    name: "ES3 Lancaster",
+    slug: "es3-lancaster",
+    systemType: "es3",
+    subscriptionPlan: "company",
+    isSubscribed: true,
+    isActive: true,
+    allowedFeatures: [
+      "training",
+      "nova-help",
+      "nova-trainer",
+      "common-mistakes",
+      "leaderboard",
+      "selector-breaking-news",
+      "trainer-dashboard",
+      "supervisor-dashboard"
+    ]
+  },
+  {
+    id: "wh-002",
+    name: "Standard Dallas",
+    slug: "standard-dallas",
+    systemType: "standard",
+    subscriptionPlan: "company",
+    isSubscribed: true,
+    isActive: true,
+    allowedFeatures: [
+      "training",
+      "nova-help",
+      "common-mistakes",
+      "leaderboard",
+      "selector-breaking-news",
+      "trainer-dashboard",
+      "supervisor-dashboard"
+    ]
+  }
+];
+
+Then every user gets:
+
+{
+  id: "user-001",
+  warehouseId: "wh-001",
+  role: "selector",
+  isSubscribed: true
+}
+
+And every warehouse record set gets:
+
+{
+  id: "post-001",
+  warehouseId: "wh-001"
+}
+
+That is the cleanest way to separate data.
+
+Privacy page draft
+
+Here is a strong public-facing version you can use.
+
+Privacy Page copy
+
+Privacy and Data Protection
+
+At PickSmart NOVA, we treat customer and warehouse data as private and confidential. Each warehouse account is maintained as a separate environment, and customer teams are not permitted to access another customer’s assignments, users, messages, reports, training records, or operational data. Access to data inside each warehouse account is controlled by role-based permissions and limited to authorized users.
+
+We collect and use information only as needed to provide, secure, support, maintain, and improve the platform. Depending on how the service is used, this may include account information, user profile details, training activity, assignment progress, community activity, device and browser information, support communications, and other operational usage data. We do not share one customer’s warehouse data with another customer team. We may disclose information only when required by law, to protect rights and security, or to approved service providers that help us operate the platform under appropriate confidentiality and security obligations.
+
+We use reasonable administrative, technical, and organizational safeguards designed to protect customer data, including access restrictions, authentication controls, role-based permissions, and data protection practices appropriate for the service. Because no system can honestly promise perfect or absolute security, our commitment is to implement, maintain, and improve safeguards consistent with the risks of the service and the data we process. NIST guidance strongly supports this kind of access control and data protection approach.
+
+If your company uses AI-powered features such as NOVA Help, customer inputs and outputs should be handled under your service’s privacy and security controls. If you use OpenAI’s business/API services for these features, OpenAI states that business/API customer data is not used to train models by default and that customers own and control their business data.
+
+If you are a California resident and your use falls within applicable law, you may have rights relating to access, deletion, correction, and information about how personal information is used, subject to exceptions and legal requirements. The California Department of Justice explains those rights under the CCPA and related regulations.
+
+For privacy questions, account requests, or security concerns, contact:
+privacy@yourcompany.com
+
+Internal policy to protect your company
+
+This is the policy your company should follow internally.
+
+Data Security and Customer Isolation Policy
+
+1. Customer isolation
+Each warehouse account must be logically separated by warehouseId or tenant ID. No application query, API response, admin screen, report, export, or message view may return another warehouse’s data to a user outside that warehouse unless the user is an authorized owner/admin with platform-wide privileges.
+
+2. Least-privilege access
+Users must receive the minimum role access needed to do their job. Selector, trainer, supervisor, and owner roles must be enforced both in the menu and at the route/API/data layer.
+
+3. Owner-only access
+Users & Access, Owner controls, pricing controls, moderation controls, and cross-warehouse administration must remain owner-only.
+
+4. Authentication and secrets
+Tokens, API keys, invite links, and owner access credentials must be stored securely and never exposed in public frontend code. Secrets should be managed through environment variables and rotated when needed.
+
+5. Data minimization
+Collect only the personal and operational data needed to run the service.
+
+6. Logging and audit trail
+Security-sensitive actions such as invites, bans, plan changes, role changes, exports, and owner access must be logged.
+
+7. Vendor controls
+Any third-party service that processes customer data must be reviewed for privacy and security suitability.
+
+8. Incident response
+The company must maintain a process for investigating suspected breaches, containing access issues, documenting what happened, and notifying affected parties when required.
+
+9. Promise discipline
+Do not claim “absolute security,” “unbreakable protection,” or “never accessible by anyone.” The FTC has made clear that companies can face problems when privacy promises outrun their actual controls. Use accurate promises and back them with real safeguards.
+
+Link structure recommendation
+
+Use these kinds of links:
+
+ES3 warehouse
+https://yourapp.com/w/es3-lancaster
+Standard warehouse
+https://yourapp.com/w/standard-dallas
+
+Then on load:
+
+look up the warehouse by slug
+apply allowedFeatures
+hide or show NOVA Trainer automatically

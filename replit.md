@@ -2,7 +2,23 @@
 
 ## Overview
 
-Full-stack warehouse training and assignment management platform combining a public training website with a role-based internal NOVA voice-directed picking system.
+Full-stack **multi-warehouse SaaS** training and operations platform. Each warehouse account is a private, isolated tenant. NOVA Trainer (ES3 voice workflow) is exclusive to ES3-type warehouses. Standard warehouses get all other features. Owner (`draogo96`) bypasses all feature and subscription checks.
+
+## Multi-Warehouse Architecture
+- **Warehouse model**: `src/data/warehouses.ts` — Warehouse type, ES3 vs Standard feature sets
+- **Warehouse store**: `src/lib/warehouseStore.ts` — Zustand store (persisted); `useWarehouse()` hook
+- **Access control**: `src/lib/accessControl.ts` — `canAccessFeature(feature, warehouse, role)`
+- **Warehouse entry routes**: `/w/:slug` — branded entry page showing warehouse features
+- **Feature gating**: NOVA Trainer shown only for ES3 warehouses OR owner role
+- **DB schema**: `lib/db/src/schema/warehouses.ts` — `warehouses` + `warehouse_users` tables
+- **Invite tokens**: Include `warehouseId`/`warehouseSlug` — users tied to warehouse on accept
+- **Data isolation**: Each user has optional `warehouseId` + `warehouseSlug` on their account
+
+## ES3 Features (8 total)
+training, nova-help, nova-trainer, common-mistakes, leaderboard, selector-breaking-news, trainer-dashboard, supervisor-dashboard
+
+## Standard Features (7 total — no nova-trainer)
+training, nova-help, common-mistakes, leaderboard, selector-breaking-news, trainer-dashboard, supervisor-dashboard
 
 ## Stack
 

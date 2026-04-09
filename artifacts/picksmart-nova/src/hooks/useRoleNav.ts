@@ -1,7 +1,9 @@
+import { useEffect } from "react";
 import { useAppStore } from "@/lib/store";
 import { useAuthStore } from "@/lib/authStore";
 import type { AuthRole } from "@/lib/authStore";
 import { useTranslation } from "react-i18next";
+import { useWarehouseStore, useWarehouse } from "@/lib/warehouseStore";
 
 export interface NavLink {
   href: string;
@@ -24,10 +26,19 @@ export function useRoleNav(): NavLink[] {
   const { t } = useTranslation();
   const { currentUser } = useAuthStore();
   const { role: demoRole } = useAppStore();
+  const { warehouse, hasFeature } = useWarehouse();
+  const { setWarehouseBySlug } = useWarehouseStore();
 
-  // Role for public/community links — can use demo role
+  // IMPORTANT: All hooks must be called before any early returns.
+  // Sync warehouse context from logged-in user's warehouseSlug.
+  useEffect(() => {
+    if (currentUser?.warehouseSlug && !warehouse) {
+      setWarehouseBySlug(currentUser.warehouseSlug);
+    }
+  }, [currentUser?.warehouseSlug, warehouse, setWarehouseBySlug]);
+
   const publicRole: string = currentUser?.role ?? demoRole;
-
+  const isOwner = currentUser?.role === "owner";
   const plan = currentUser?.subscriptionPlan ?? null;
 
   // Personal plan: restricted pages only
@@ -43,18 +54,20 @@ export function useRoleNav(): NavLink[] {
 
   const links: NavLink[] = [];
 
-  // Always-visible public links
   links.push(
     { href: "/", label: t("nav.home"), group: "public" },
     { href: "/training", label: t("nav.training"), group: "public" },
-    { href: "/nova-trainer", label: t("nav.novaTrainer"), group: "nova" },
-    { href: "/nova-help", label: t("nav.novaHelp"), group: "nova" },
   );
 
-  // Trainer Dashboard, Supervisor Dashboard, Users & Access — hidden from nav entirely.
-  // Pages remain accessible by direct URL with proper role protection.
-  // Only the owner Control Center and Users & Access appear (owner-only, not in public nav).
-  if (currentUser?.role === "owner") {
+  // NOVA Trainer: only for ES3 warehouses — owner always sees it
+  const showNovaTrainer = isOwner || hasFeature("nova-trainer");
+  if (showNovaTrainer) {
+    links.push({ href: "/nova-trainer", label: t("nav.novaTrainer"), group: "nova" });
+  }
+
+  links.push({ href: "/nova-help", label: t("nav.novaHelp"), group: "nova" });
+
+  if (isOwner) {
     links.push({ href: "/owner", label: "Control Center", group: "owner" });
   }
 
@@ -69,9 +82,6 @@ export function useRoleNav(): NavLink[] {
       { href: "/selector-breaking-news", label: t("nav.selectorNation"), group: "public" },
     );
   }
-
-  // Trainer tools, supervisor tools, and pricing — hidden from nav.
-  // Accessible via direct URL with proper route protection.
 
   return links;
 }

@@ -1,6 +1,7 @@
 export * from "./assignments";
 export * from "./warehouse";
 export * from "./training";
+export * from "./warehouses";
 export * from "./social-users";
 export * from "./social-posts";
 export * from "./social-comments";

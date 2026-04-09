@@ -43,6 +43,9 @@ import LoginPage from "@/pages/login";
 import InvitePage from "@/pages/invite";
 import LockScreen from "@/components/LockScreen";
 import { useAuthStore } from "@/lib/authStore";
+import PrivacyPage from "@/pages/privacy";
+import TermsPage from "@/pages/terms";
+import WarehouseEntryPage from "@/pages/warehouse-entry";
 
 function RedirectToOwner() {
   const [, navigate] = useLocation();
@@ -193,6 +196,19 @@ function Router() {
             <OwnerPage />
           </SubscriptionRoute>
         </Layout>
+      </Route>
+
+      {/* ── Public legal / policy pages ── */}
+      <Route path="/privacy">
+        <PrivacyPage />
+      </Route>
+      <Route path="/terms">
+        <TermsPage />
+      </Route>
+
+      {/* ── Warehouse deep-link entry ── */}
+      <Route path="/w/:slug">
+        <WarehouseEntryPage />
       </Route>
 
       <Route>

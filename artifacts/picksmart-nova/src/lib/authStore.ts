@@ -25,6 +25,9 @@ export interface AuthAccount {
   subscriptionPlan: "owner" | "personal" | "company" | null;
   isSubscribed: boolean;
   createdAt: string;
+  /** Warehouse this user belongs to. Null = unassigned (owner sees all). */
+  warehouseId?: string | null;
+  warehouseSlug?: string | null;
 }
 
 export interface PendingInvite {
@@ -33,6 +36,8 @@ export interface PendingInvite {
   email: string;
   role: AuthRole;
   createdAt: string;
+  warehouseId?: string | null;
+  warehouseSlug?: string | null;
 }
 
 interface AuthState {
@@ -52,7 +57,7 @@ interface AuthState {
   changeRole: (accountId: string, role: AuthRole) => void;
   createAccount: (data: { username: string; password: string; fullName: string; role: AuthRole }) => void;
   removeAccount: (accountId: string) => void;
-  addInvite: (data: { fullName: string; email: string; role: AuthRole }) => string;
+  addInvite: (data: { fullName: string; email: string; role: AuthRole; warehouseId?: string | null; warehouseSlug?: string | null }) => string;
   acceptInvite: (token: string, username: string, password: string) => boolean;
   getInvite: (token: string) => PendingInvite | undefined;
 }
@@ -72,11 +77,13 @@ const MASTER_ACCOUNT: AuthAccount = {
 // ── Self-contained invite token helpers ──────────────────────────────────
 // Tokens encode invite data as base64 JSON so they work across devices.
 
-function encodeInviteToken(data: { fullName: string; email: string; role: AuthRole }): string {
+function encodeInviteToken(data: { fullName: string; email: string; role: AuthRole; warehouseId?: string | null; warehouseSlug?: string | null }): string {
   const payload = {
     fullName: data.fullName,
     email: data.email,
     role: data.role,
+    warehouseId: data.warehouseId ?? null,
+    warehouseSlug: data.warehouseSlug ?? null,
     nonce: Math.random().toString(36).slice(2, 10),
     createdAt: new Date().toISOString(),
   };
@@ -103,6 +110,8 @@ function decodeInviteToken(token: string): PendingInvite | null {
       email: obj.email,
       role: obj.role as AuthRole,
       createdAt: obj.createdAt ?? new Date().toISOString(),
+      warehouseId: obj.warehouseId ?? null,
+      warehouseSlug: obj.warehouseSlug ?? null,
     };
   } catch {
     return null;
@@ -218,7 +227,6 @@ export const useAuthStore = create<AuthState>()(
 
       addInvite: (data) => {
         const token = encodeInviteToken(data);
-        // Also store a record for the invites list view (optional UI use)
         set((state) => ({
           pendingInvites: [
             ...state.pendingInvites,
@@ -227,6 +235,8 @@ export const useAuthStore = create<AuthState>()(
               fullName: data.fullName,
               email: data.email,
               role: data.role,
+              warehouseId: data.warehouseId ?? null,
+              warehouseSlug: data.warehouseSlug ?? null,
               createdAt: new Date().toISOString(),
             },
           ],
@@ -258,10 +268,11 @@ export const useAuthStore = create<AuthState>()(
               fullName: invite.fullName,
               role: invite.role,
               status: "active",
-              // Invited users get full access — they're brought in under the company plan
               subscriptionPlan: "company" as const,
               isSubscribed: true,
               createdAt: new Date().toISOString(),
+              warehouseId: invite.warehouseId ?? null,
+              warehouseSlug: invite.warehouseSlug ?? null,
             },
           ],
           // Mark token as used so it can't be reused

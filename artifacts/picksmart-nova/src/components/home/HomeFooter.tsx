@@ -14,7 +14,7 @@ export default function HomeFooter() {
           </p>
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-6">
+        <div className="grid sm:grid-cols-3 gap-6">
           <div>
             <h4 className="text-white font-semibold mb-3">{t("home.footer.trainingLabel")}</h4>
             <div className="space-y-2 text-slate-400">
@@ -29,6 +29,13 @@ export default function HomeFooter() {
             <div className="space-y-2 text-slate-400">
               <Link href="/nova" className="block hover:text-yellow-400">{t("home.footer.myAssignments")}</Link>
               <Link href="/leaderboard" className="block hover:text-yellow-400">{t("home.footer.leaderboard")}</Link>
+            </div>
+          </div>
+          <div>
+            <h4 className="text-white font-semibold mb-3">Legal</h4>
+            <div className="space-y-2 text-slate-400">
+              <Link href="/privacy" className="block hover:text-yellow-400">Privacy Policy</Link>
+              <Link href="/terms" className="block hover:text-yellow-400">Terms of Service</Link>
             </div>
           </div>
         </div>
