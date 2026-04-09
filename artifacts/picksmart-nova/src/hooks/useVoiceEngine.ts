@@ -52,7 +52,20 @@ function pickPreferredVoice(lang: string): SpeechSynthesisVoice | null {
   if (!("speechSynthesis" in window)) return null;
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return null;
-  const langRoot = lang.split("-")[0];
+  const langRoot = lang.split("-")[0]; // "en" or "es"
+  const isSpanish = langRoot === "es";
+
+  if (isSpanish) {
+    // Prefer clear Spanish US voices (Paulina=macOS, Monica=iOS, Google Español)
+    return (
+      voices.find((v) => /paulina|monica|diego|juan|jorge|ximena/i.test(v.name) && v.lang.startsWith("es")) ||
+      voices.find((v) => /google español|google es|es-us|es-mx/i.test(v.name + v.lang)) ||
+      voices.find((v) => v.lang.startsWith("es") && v.default) ||
+      voices.find((v) => v.lang.startsWith("es")) ||
+      voices[0]
+    );
+  }
+
   return (
     voices.find((v) => /samantha|aria|ava|zira|karen/i.test(v.name) && v.lang.startsWith(langRoot)) ||
     voices.find((v) => /samantha|aria|ava|zira|karen/i.test(v.name)) ||

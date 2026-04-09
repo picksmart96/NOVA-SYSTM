@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage, Server } from "node:http";
-import { createNovaTrainerSession, type NovaTrainerSession } from "./novaTrainerStateMachine.js";
+import { createNovaTrainerSession, type NovaTrainerSession, type Lang } from "./novaTrainerStateMachine.js";
 import { ASSIGNMENTS, ASSIGNMENT_STOPS } from "./assignmentData.js";
 import { logger } from "./logger.js";
 
@@ -17,7 +17,7 @@ export function attachNovaRealtimeServer(httpServer: Server) {
 
     ws.on("message", (raw) => {
       try {
-        const msg = JSON.parse(String(raw)) as { type: string; selector?: { userId: string; novaId: string; fullName?: string }; text?: string };
+        const msg = JSON.parse(String(raw)) as { type: string; selector?: { userId: string; novaId: string; fullName?: string }; lang?: Lang; text?: string };
 
         if (msg.type === "init") {
           const { selector } = msg;
@@ -28,6 +28,7 @@ export function attachNovaRealtimeServer(httpServer: Server) {
 
           sessionId = `${selector.userId}:${selector.novaId}`;
 
+          const lang: Lang = msg.lang === "es" ? "es" : "en";
           const session = createNovaTrainerSession({
             selector: {
               userId: selector.userId,
@@ -36,6 +37,7 @@ export function attachNovaRealtimeServer(httpServer: Server) {
             },
             assignments: ASSIGNMENTS,
             assignmentStops: ASSIGNMENT_STOPS,
+            lang,
           });
 
           sessions.set(sessionId, session);

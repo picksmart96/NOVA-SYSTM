@@ -22,18 +22,33 @@ export const PHASES = {
 } as const;
 
 export type Phase = (typeof PHASES)[keyof typeof PHASES];
+export type Lang = "en" | "es";
 
-const SAFETY_ITEMS = [
-  "Brakes okay?",
-  "Battery guard okay?",
-  "Horn okay?",
-  "Wheels okay?",
-  "Hydraulics okay?",
-  "Controls okay?",
-  "Steering okay?",
-  "Welds okay?",
-  "Electric wiring okay?",
-];
+// ── Safety items (bilingual) ───────────────────────────────────────────────────
+const SAFETY_ITEMS: Record<Lang, string[]> = {
+  en: [
+    "Brakes okay?",
+    "Battery guard okay?",
+    "Horn okay?",
+    "Wheels okay?",
+    "Hydraulics okay?",
+    "Controls okay?",
+    "Steering okay?",
+    "Welds okay?",
+    "Electric wiring okay?",
+  ],
+  es: [
+    "¿Frenos bien?",
+    "¿Protector de batería bien?",
+    "¿Bocina bien?",
+    "¿Llantas bien?",
+    "¿Hidráulicos bien?",
+    "¿Controles bien?",
+    "¿Dirección bien?",
+    "¿Soldaduras bien?",
+    "¿Cableado eléctrico bien?",
+  ],
+};
 
 const DEFAULTS = {
   printerNumber: "307",
@@ -54,12 +69,10 @@ function normalize(input = "") {
 
 function digitsOnly(input = "") {
   const base = normalize(input);
-  // First try replacing number words with digits
   const wordConverted = base.split(/\s+/).map((w) => WORD_DIGITS[w] ?? w).join("");
   return wordConverted.replace(/[^0-9]/g, "");
 }
 
-/** Returns true if v contains any of the given substrings */
 function has(v: string, ...terms: string[]): boolean {
   return terms.some((t) => v.includes(t));
 }
@@ -71,7 +84,7 @@ function isConfirm(input = "") {
     "confirm", "correct", "affirmative",
     "that's", "thats", "right",
     "okay", "ok",
-    "si ", "sí", " si",          // "si" with space to avoid false "visiting"
+    "si ", "sí", " si",
     "sure", "go ahead", "proceed",
   ) || v === "si" || v === "sí";
 }
@@ -83,13 +96,10 @@ function isDeny(input = "") {
 
 function isLoadPicks(input = "") {
   const v = normalize(input);
-  // Accept if input contains a "load/love/lav/lod" sound AND a "pick/pic" sound
   const hasLoadSound = has(v, "load", "lov", "lod", "lav", "lok", "lot pick", "lob", "lof", "lop");
   const hasPickSound = has(v, "pick", "pic ", "pik", " pic", "pec", "pek", "peak", "peek");
   if (hasLoadSound && hasPickSound) return true;
-  // Accept Spanish variants
-  if (has(v, "cargar", "selec", "carga")) return true;
-  // Accept if the phrase is "load picks" like with any accent (broad fallback)
+  if (has(v, "cargar", "selec", "carga", "cargar picks", "cargar pix")) return true;
   if (has(v, "lo", "la", "le") && has(v, "pic", "pik", "pec")) return true;
   return false;
 }
@@ -111,6 +121,58 @@ function isWake(input = "") {
 function isStop(input = "") {
   const v = normalize(input);
   return has(v, "stop", "parar", "para", "halt", "end session", "terminar");
+}
+
+// ── Prompt builders (bilingual) ───────────────────────────────────────────────
+function makePrompts(lang: Lang) {
+  const es = lang === "es";
+  return {
+    waitWake:     es ? 'Di "Hola NOVA" para comenzar.'                            : 'Say "Hey NOVA" to begin.',
+    noAssignment: es ? "No tienes ninguna asignación."                             : "No assignment assigned to your username.",
+    enterEquip:   es ? "Ingresa el número de equipo."                              : "Enter equipment ID.",
+    confirmEquip: (id: string) =>
+                  es ? `Confirma equipo ${id}.`                                    : `Confirm equipment ${id}.`,
+    enterMaxPallet: (id: string) =>
+                  es ? `Ingresa la cantidad máxima de tarimas para el gato ${id}.` : `Enter maximum pallet count for jack ${id}.`,
+    confirmMaxPallet: es ? "Confirma la cantidad máxima de tarimas."               : "Confirm maximum pallet count.",
+    enterMaxPalletSimple: es ? "Ingresa la cantidad máxima de tarimas."            : "Enter maximum pallet count.",
+    sayLoadPicks: es ? "Di cargar picks."                                          : "Say load picks.",
+    toReady:      es ? "Para continuar di listo."                                  : "To continue say ready.",
+    loadSummary:  (a: ServerAssignment) =>
+                  es ? `Pasillo inicio ${a.startAisle} pasillo final ${a.endAisle}. ` +
+                       `Total cajas ${a.totalCases}. Tarimas ${a.pallets}. ` +
+                       `Meta estimada ${a.goalTimeMinutes} minutos. ` +
+                       `Para continuar di listo.`
+                     : `Start aisle ${a.startAisle} end aisle ${a.endAisle}. ` +
+                       `Total cases ${a.totalCases}. Pallets ${a.pallets}. ` +
+                       `Estimated goal ${a.goalTimeMinutes} minutes. ` +
+                       `To continue say ready.`,
+    posAlpha:     es ? "Coloca tarima alfa consigue chep."                         : "Position alpha pallet get chep.",
+    posBravo:     es ? "Coloca tarima bravo consigue chep."                        : "Position bravo pallet get chep.",
+    noStops:      es ? "No hay paradas encontradas."                               : "No stops found.",
+    newAisle:     (stop: ServerStop) =>
+                  es ? `Nuevo pasillo ${stop.aisle} posición ${stop.slot}`         : `New aisle ${stop.aisle} slot ${stop.slot}`,
+    repeatAisle:  (stop: ServerStop) =>
+                  es ? `Pasillo ${stop.aisle} posición ${stop.slot}`               : `Aisle ${stop.aisle} slot ${stop.slot}`,
+    grab:         (stop: ServerStop, next: string) =>
+                  es ? `Toma ${stop.qty}.${next}`                                  : `Grab ${stop.qty}.${next}`,
+    nextAisle:    (stop: ServerStop) =>
+                  es ? ` Pasillo ${stop.aisle} posición ${stop.slot}`              : ` Aisle ${stop.aisle} slot ${stop.slot}`,
+    lastStop:     es ? " Última parada completa"                                   : " Last stop complete",
+    invalid:      (said: string) =>
+                  es ? `Dijiste ${said}. Inválido.`                                : `You said ${said}. Invalid.`,
+    deliverBravo: (n: string | number) =>
+                  es ? `Lote completo entrega tarima bravo a puerta ${n}`          : `Batch complete deliver pallet bravo to door ${n}`,
+    applyAlpha:   es ? "Aplica etiquetas a tarima alfa"                            : "Apply labels to pallet alpha",
+    applyBravo:   es ? "Aplica etiquetas a tarima bravo"                           : "Apply labels to pallet bravo",
+    deliverBravoStage: (n: string | number) =>
+                  es ? `Entrega tarima bravo a puerta ${n}`                        : `Deliver bravo pallet to door ${n}`,
+    deliverAlphaStage: (n: string | number) =>
+                  es ? `Entrega tarima alfa a puerta ${n}`                         : `Deliver alpha pallet to door ${n}`,
+    stopped:      es ? 'NOVA detenido. Di "Hola NOVA" para activarme de nuevo.'    : 'NOVA stopped. Say "Hey NOVA" to wake me again.',
+    safetyFailed: (item: string) =>
+                  es ? `Fallo de seguridad. ${item} Sesión detenida.`              : `Safety failed. ${item} Session stopped.`,
+  };
 }
 
 export interface Selector {
@@ -139,6 +201,7 @@ export interface TrainerSnapshot {
   invalidCount: number;
   commandLog: CommandLogEntry[];
   defaults: typeof DEFAULTS;
+  lang: Lang;
   autoAdvance?: boolean;
   autoAdvanceDelayMs?: number;
 }
@@ -147,19 +210,23 @@ export function createNovaTrainerSession({
   selector,
   assignments,
   assignmentStops,
+  lang = "en",
 }: {
   selector: Selector;
   assignments: ServerAssignment[];
   assignmentStops: Record<string, ServerStop[]>;
+  lang?: Lang;
 }) {
   const myAssignments = assignments.filter(
     (a) => !a.archived && a.selectorUserId === selector.userId
   );
 
+  const P = makePrompts(lang);
+
   const state = {
     selector,
     phase: PHASES.WAIT_WAKE as Phase,
-    prompt: 'Say "Hey NOVA" to begin.',
+    prompt: P.waitWake,
     equipmentId: "",
     maxPalletCount: "2",
     safetyIndex: 0,
@@ -220,23 +287,19 @@ export function createNovaTrainerSession({
       invalidCount: state.invalidCount,
       commandLog: state.commandLog.slice(0, 40),
       defaults: DEFAULTS,
+      lang,
     };
   }
 
   function startAssignedBatch(): TrainerSnapshot {
     const assignment = myAssignments[0];
     if (!assignment) {
-      return setPrompt("No assignment assigned to your username.");
+      return setPrompt(P.noAssignment);
     }
     state.activeAssignmentId = assignment.id;
     state.currentStopIndex = 0;
     state.phase = PHASES.LOAD_SUMMARY;
-    return setPrompt(
-      `Start aisle ${assignment.startAisle} end aisle ${assignment.endAisle}. ` +
-        `Total cases ${assignment.totalCases}. Pallets ${assignment.pallets}. ` +
-        `Estimated goal ${assignment.goalTimeMinutes} minutes. ` +
-        `To continue say ready.`
-    );
+    return setPrompt(P.loadSummary(assignment));
   }
 
   function moveToNextStop(): TrainerSnapshot {
@@ -245,17 +308,14 @@ export function createNovaTrainerSession({
       state.currentStopIndex += 1;
       state.phase = PHASES.PICK_CHECK;
       const stop = currentStop()!;
-      return setPrompt(`New aisle ${stop.aisle} slot ${stop.slot}`);
+      return setPrompt(P.newAisle(stop));
     }
     state.phase = PHASES.COMPLETE_DOOR;
     const assignment = currentAssignment();
-    return setPrompt(
-      `Batch complete deliver pallet bravo to door ${assignment?.doorNumber ?? ""}`
-    );
+    return setPrompt(P.deliverBravo(assignment?.doorNumber ?? ""));
   }
 
   function handleWorkflowInput(rawInput = ""): TrainerSnapshot {
-    // Internal auto-advance signal — skip to next stop without waiting for "ready"
     if (rawInput === "__AUTO_NEXT__" && state.phase === PHASES.PICK_READY) {
       return moveToNextStop();
     }
@@ -265,152 +325,142 @@ export function createNovaTrainerSession({
 
     if (isStop(input)) {
       state.phase = PHASES.STOPPED;
-      return setPrompt('NOVA stopped. Say "Hey NOVA" to wake me again.');
+      return setPrompt(P.stopped);
     }
 
     if (state.phase === PHASES.WAIT_WAKE || state.phase === PHASES.STOPPED) {
       if (isWake(input)) {
         state.phase = PHASES.SIGN_ON_EQUIPMENT;
-        return setPrompt("Enter equipment ID.");
+        return setPrompt(P.enterEquip);
       }
       return snapshot();
     }
 
     if (state.phase === PHASES.SIGN_ON_EQUIPMENT) {
       const digits = digitsOnly(input);
-      if (!digits) return setPrompt("Enter equipment ID.");
+      if (!digits) return setPrompt(P.enterEquip);
       state.equipmentId = digits;
       state.phase = PHASES.CONFIRM_EQUIPMENT;
-      return setPrompt(`Confirm equipment ${digits}.`);
+      return setPrompt(P.confirmEquip(digits));
     }
 
     if (state.phase === PHASES.CONFIRM_EQUIPMENT) {
       if (isConfirm(input)) {
         state.phase = PHASES.MAX_PALLET_COUNT;
-        return setPrompt(
-          `Enter maximum pallet count for jack ${state.equipmentId}.`
-        );
+        return setPrompt(P.enterMaxPallet(state.equipmentId));
       }
       if (isDeny(input)) {
         state.equipmentId = "";
         state.phase = PHASES.SIGN_ON_EQUIPMENT;
-        return setPrompt("Enter equipment ID.");
+        return setPrompt(P.enterEquip);
       }
-      return setPrompt(`Confirm equipment ${state.equipmentId}.`);
+      return setPrompt(P.confirmEquip(state.equipmentId));
     }
 
     if (state.phase === PHASES.MAX_PALLET_COUNT) {
       const digits = digitsOnly(input);
-      if (!digits) return setPrompt("Enter maximum pallet count.");
+      if (!digits) return setPrompt(P.enterMaxPalletSimple);
       state.maxPalletCount = digits;
       state.phase = PHASES.CONFIRM_MAX_PALLET_COUNT;
-      return setPrompt("Confirm maximum pallet count.");
+      return setPrompt(P.confirmMaxPallet);
     }
 
     if (state.phase === PHASES.CONFIRM_MAX_PALLET_COUNT) {
       if (isConfirm(input)) {
         state.phase = PHASES.SAFETY;
         state.safetyIndex = 0;
-        return setPrompt(SAFETY_ITEMS[0]);
+        return setPrompt(SAFETY_ITEMS[lang][0]);
       }
       if (isDeny(input)) {
         state.phase = PHASES.MAX_PALLET_COUNT;
-        return setPrompt(
-          `Enter maximum pallet count for jack ${state.equipmentId}.`
-        );
+        return setPrompt(P.enterMaxPallet(state.equipmentId));
       }
-      return setPrompt("Confirm maximum pallet count.");
+      return setPrompt(P.confirmMaxPallet);
     }
 
     if (state.phase === PHASES.SAFETY) {
-      const item = SAFETY_ITEMS[state.safetyIndex];
+      const item = SAFETY_ITEMS[lang][state.safetyIndex];
       if (isConfirm(input)) {
-        if (state.safetyIndex < SAFETY_ITEMS.length - 1) {
+        if (state.safetyIndex < SAFETY_ITEMS[lang].length - 1) {
           state.safetyIndex += 1;
-          return setPrompt(SAFETY_ITEMS[state.safetyIndex]);
+          return setPrompt(SAFETY_ITEMS[lang][state.safetyIndex]);
         }
         state.phase = PHASES.WAIT_LOAD_PICKS;
-        return setPrompt("Say load picks.");
+        return setPrompt(P.sayLoadPicks);
       }
       if (isDeny(input)) {
         state.failedSafetyItem = item;
         state.phase = PHASES.STOPPED;
-        return setPrompt(`Safety failed. ${item} Session stopped.`);
+        return setPrompt(P.safetyFailed(item));
       }
       return setPrompt(item);
     }
 
     if (state.phase === PHASES.WAIT_LOAD_PICKS) {
       if (isLoadPicks(input)) return startAssignedBatch();
-      return setPrompt("Say load picks.");
+      return setPrompt(P.sayLoadPicks);
     }
 
     if (state.phase === PHASES.LOAD_SUMMARY) {
       if (isReady(input)) {
         state.phase = PHASES.SETUP_ALPHA;
-        return setPrompt("Position alpha pallet get chep.");
+        return setPrompt(P.posAlpha);
       }
-      return setPrompt("To continue say ready.");
+      return setPrompt(P.toReady);
     }
 
     if (state.phase === PHASES.SETUP_ALPHA) {
       if (isReady(input)) {
         state.phase = PHASES.SETUP_BRAVO;
-        return setPrompt("Position bravo pallet get chep.");
+        return setPrompt(P.posBravo);
       }
-      return setPrompt("Position alpha pallet get chep.");
+      return setPrompt(P.posAlpha);
     }
 
     if (state.phase === PHASES.SETUP_BRAVO) {
       if (isReady(input)) {
         state.phase = PHASES.PICK_CHECK;
         const stop = currentStop();
-        if (!stop) return setPrompt("No stops found.");
-        return setPrompt(`New aisle ${stop.aisle} slot ${stop.slot}`);
+        if (!stop) return setPrompt(P.noStops);
+        return setPrompt(P.newAisle(stop));
       }
-      return setPrompt("Position bravo pallet get chep.");
+      return setPrompt(P.posBravo);
     }
 
     if (state.phase === PHASES.PICK_CHECK) {
       const stop = currentStop();
       if (!stop) return snapshot();
 
-      // "nova repeat" / "repeat" → re-announce current aisle and slot
-      if (input === "repeat") {
-        return setPrompt(`Aisle ${stop.aisle} slot ${stop.slot}`);
+      if (input === "repeat" || input === "repite" || input === "repetir") {
+        return setPrompt(P.repeatAisle(stop));
       }
 
       const digits = digitsOnly(input);
       if (!digits) {
         state.invalidCount += 1;
-        return setPrompt(`You said ${input || "nothing"}. Invalid.`);
+        return setPrompt(P.invalid(input || (lang === "es" ? "nada" : "nothing")));
       }
       if (digits !== stop.checkCode) {
         state.invalidCount += 1;
-        return setPrompt(`You said ${digits}. Invalid.`);
+        return setPrompt(P.invalid(digits));
       }
-      // Correct check code — speak grab + next-stop call, then auto-advance
       state.phase = PHASES.PICK_READY;
       const nextIndex = state.currentStopIndex + 1;
       const upNext = currentStops()[nextIndex] ?? null;
-      const nextCall = upNext
-        ? ` Aisle ${upNext.aisle} slot ${upNext.slot}`
-        : " Last stop complete";
-      const prompt = `Grab ${stop.qty}.${nextCall}`;
+      const nextCall = upNext ? P.nextAisle(upNext) : P.lastStop;
+      const prompt = P.grab(stop, nextCall);
       state.prompt = prompt;
       log("NOVA", prompt);
       return { ...snapshot(), autoAdvance: true, autoAdvanceDelayMs: 700 };
     }
 
     if (state.phase === PHASES.PICK_READY) {
-      // Fallback: selector manually says "ready" (e.g. if auto-advance signal was lost)
       if (isReady(input) || isConfirm(input)) {
         return moveToNextStop();
       }
-      // Repeat → re-announce current aisle and slot even in ready window
-      if (input === "repeat") {
+      if (input === "repeat" || input === "repite" || input === "repetir") {
         const stop = currentStop();
-        if (stop) return setPrompt(`Aisle ${stop.aisle} slot ${stop.slot}`);
+        if (stop) return setPrompt(P.repeatAisle(stop));
       }
       return snapshot();
     }
@@ -419,11 +469,9 @@ export function createNovaTrainerSession({
       const assignment = currentAssignment();
       if (digitsOnly(input) === String(assignment?.doorCode ?? "")) {
         state.phase = PHASES.COMPLETE_ALPHA;
-        return setPrompt("Apply labels to pallet alpha");
+        return setPrompt(P.applyAlpha);
       }
-      return setPrompt(
-        `Batch complete deliver pallet bravo to door ${assignment?.doorNumber ?? ""}`
-      );
+      return setPrompt(P.deliverBravo(assignment?.doorNumber ?? ""));
     }
 
     if (state.phase === PHASES.COMPLETE_ALPHA) {
@@ -434,9 +482,9 @@ export function createNovaTrainerSession({
         digits === DEFAULTS.alphaLabelNumber
       ) {
         state.phase = PHASES.COMPLETE_BRAVO;
-        return setPrompt("Apply labels to pallet bravo");
+        return setPrompt(P.applyBravo);
       }
-      return setPrompt("Apply labels to pallet alpha");
+      return setPrompt(P.applyAlpha);
     }
 
     if (state.phase === PHASES.COMPLETE_BRAVO) {
@@ -444,35 +492,27 @@ export function createNovaTrainerSession({
       if (input.includes("bravo") || digits === DEFAULTS.bravoLabelNumber) {
         state.phase = PHASES.COMPLETE_STAGE_BRAVO;
         const assignment = currentAssignment();
-        return setPrompt(
-          `Deliver bravo pallet to door ${assignment?.doorNumber ?? ""}`
-        );
+        return setPrompt(P.deliverBravoStage(assignment?.doorNumber ?? ""));
       }
-      return setPrompt("Apply labels to pallet bravo");
+      return setPrompt(P.applyBravo);
     }
 
     if (state.phase === PHASES.COMPLETE_STAGE_BRAVO) {
       const assignment = currentAssignment();
       if (digitsOnly(input) === String(assignment?.doorCode ?? "")) {
         state.phase = PHASES.COMPLETE_STAGE_ALPHA;
-        return setPrompt(
-          `Deliver alpha pallet to door ${assignment?.doorNumber ?? ""}`
-        );
+        return setPrompt(P.deliverAlphaStage(assignment?.doorNumber ?? ""));
       }
-      return setPrompt(
-        `Deliver bravo pallet to door ${assignment?.doorNumber ?? ""}`
-      );
+      return setPrompt(P.deliverBravoStage(assignment?.doorNumber ?? ""));
     }
 
     if (state.phase === PHASES.COMPLETE_STAGE_ALPHA) {
       const assignment = currentAssignment();
       if (digitsOnly(input) === String(assignment?.doorCode ?? "")) {
         state.phase = PHASES.WAIT_LOAD_PICKS;
-        return setPrompt("Say load picks.");
+        return setPrompt(P.sayLoadPicks);
       }
-      return setPrompt(
-        `Deliver alpha pallet to door ${assignment?.doorNumber ?? ""}`
-      );
+      return setPrompt(P.deliverAlphaStage(assignment?.doorNumber ?? ""));
     }
 
     return snapshot();

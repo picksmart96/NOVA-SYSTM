@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useVoiceEngine } from "@/hooks/useVoiceEngine";
 import { matchCommand } from "@/lib/novaCommandMatcher";
 
@@ -104,6 +105,12 @@ export default function NovaTrainerSession({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const voiceSpeakRef = useRef<((text: string, opts?: any) => void) | null>(null);
 
+  const { i18n } = useTranslation();
+  // "en" or "es" — tracks the live language toggle
+  const lang = (i18n.language?.startsWith("es") ? "es" : "en") as "en" | "es";
+  // TTS locale: es-US gives a clear US-Spanish voice on most browsers
+  const ttsLang = lang === "es" ? "es-US" : "en-US";
+
   const [connected, setConnected] = useState(false);
   const [started, setStarted] = useState(false);
   const [serverError, setServerError] = useState("");
@@ -120,6 +127,7 @@ export default function NovaTrainerSession({
       setHeardResponse(text);
       sendInputRef.current(normalized);
     },
+    lang: ttsLang,
   });
 
   const voiceStateLabel = useMemo(() => {
@@ -177,6 +185,7 @@ export default function NovaTrainerSession({
         ws.send(
           JSON.stringify({
             type: "init",
+            lang,
             selector: {
               userId: selector.userId,
               novaId: selector.novaId,
@@ -366,14 +375,20 @@ export default function NovaTrainerSession({
           <h1 className="text-3xl font-black leading-tight">
             {selector.fullName ?? selector.name ?? selector.novaId}
           </h1>
-          <p className="text-slate-400 text-sm">Tap anywhere to start your session</p>
+          <p className="text-slate-400 text-sm">
+            {lang === "es" ? "Toca en cualquier parte para iniciar" : "Tap anywhere to start your session"}
+          </p>
         </div>
         <div className="rounded-3xl border-2 border-yellow-400 bg-yellow-400/10 px-10 py-6 pointer-events-none">
-          <p className="text-yellow-300 font-black text-xl text-center">TAP TO BEGIN</p>
-          <p className="text-slate-400 text-xs text-center mt-1">NOVA will greet you and start listening</p>
+          <p className="text-yellow-300 font-black text-xl text-center">
+            {lang === "es" ? "TOCA PARA COMENZAR" : "TAP TO BEGIN"}
+          </p>
+          <p className="text-slate-400 text-xs text-center mt-1">
+            {lang === "es" ? "NOVA te saludará y empezará a escuchar" : "NOVA will greet you and start listening"}
+          </p>
         </div>
         <p className="text-slate-600 text-xs text-center max-w-xs">
-          Microphone access will be requested after tapping.
+          {lang === "es" ? "Se solicitará acceso al micrófono al tocar." : "Microphone access will be requested after tapping."}
         </p>
       </div>
     );
@@ -388,18 +403,23 @@ export default function NovaTrainerSession({
           <span className="text-xs font-bold text-yellow-400">{selector.novaId}</span>
           <span className="text-xs text-slate-500">·</span>
           <span className="text-xs text-slate-400">{selector.fullName ?? selector.name}</span>
+          {lang === "es" && (
+            <span className="ml-1 rounded-full bg-yellow-400/15 border border-yellow-400/30 px-2 py-0.5 text-xs font-bold text-yellow-300">
+              🇪🇸 ES
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <span className="text-base leading-none">{micIcon}</span>
           {!connected && (
-            <span className="text-xs text-red-400">Offline</span>
+            <span className="text-xs text-red-400">{lang === "es" ? "Desconectado" : "Offline"}</span>
           )}
           {onExit && (
             <button
               onClick={() => { resetSession(); onExit(); }}
               className="text-xs text-slate-500 hover:text-slate-300 transition"
             >
-              Exit
+              {lang === "es" ? "Salir" : "Exit"}
             </button>
           )}
         </div>
