@@ -142,7 +142,7 @@ export const pricingPlans = [
   },
   {
     title: "Pro Annual",
-    subtitle: "Best value — save over 40%",
+    subtitle: "Save over 40% annually",
     price: "$199.99",
     suffix: "/year",
     featured: false,
