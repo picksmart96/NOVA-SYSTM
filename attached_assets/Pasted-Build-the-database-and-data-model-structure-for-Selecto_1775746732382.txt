@@ -1,0 +1,612 @@
+Build the database and data model structure for Selector Breaking News as a scalable social platform inside PickSmart NOVA.
+
+GOAL
+Create a Facebook-style warehouse social network data structure that supports:
+- users
+- profiles
+- posts
+- comments
+- replies
+- reactions
+- saved posts
+- follows
+- notifications
+- messages
+- conversations
+- groups
+- group memberships
+- reports
+- bans
+- announcements
+- moderation logs
+
+DATABASE
+Use a relational structure suitable for PostgreSQL / Supabase.
+
+IMPORTANT
+This must be scalable and normalized.
+Do not store everything in one giant posts object.
+Split related entities into tables.
+
+TABLES TO CREATE
+
+1. users
+Fields:
+- id
+- email
+- password_hash or auth_provider_id
+- role
+- subscription_plan
+- is_subscribed
+- is_banned
+- created_at
+- updated_at
+
+2. profiles
+Fields:
+- id
+- user_id
+- full_name
+- username
+- bio
+- avatar_url
+- cover_image_url
+- level_badge
+- location
+- shift_type
+- status_text
+- is_online
+- followers_count
+- following_count
+- posts_count
+- created_at
+- updated_at
+
+3. posts
+Fields:
+- id
+- author_user_id
+- group_id nullable
+- post_type
+- content
+- image_url nullable
+- video_url nullable
+- visibility
+- is_pinned
+- is_deleted
+- like_count
+- love_count
+- funny_count
+- wow_count
+- frustrated_count
+- comments_count
+- shares_count
+- saves_count
+- reports_count
+- created_at
+- updated_at
+
+4. post_hashtags
+Fields:
+- id
+- post_id
+- hashtag
+
+5. comments
+Fields:
+- id
+- post_id
+- author_user_id
+- parent_comment_id nullable
+- content
+- is_deleted
+- reactions_count
+- created_at
+- updated_at
+
+6. comment_reactions
+Fields:
+- id
+- comment_id
+- user_id
+- reaction_type
+- created_at
+
+7. post_reactions
+Fields:
+- id
+- post_id
+- user_id
+- reaction_type
+- created_at
+
+8. saved_posts
+Fields:
+- id
+- user_id
+- post_id
+- created_at
+
+9. follows
+Fields:
+- id
+- follower_user_id
+- following_user_id
+- created_at
+
+10. conversations
+Fields:
+- id
+- conversation_type
+- created_at
+- updated_at
+
+11. conversation_members
+Fields:
+- id
+- conversation_id
+- user_id
+- last_read_at
+- joined_at
+
+12. messages
+Fields:
+- id
+- conversation_id
+- sender_user_id
+- content
+- image_url nullable
+- is_deleted
+- created_at
+
+13. notifications
+Fields:
+- id
+- user_id
+- actor_user_id nullable
+- type
+- entity_type
+- entity_id
+- message
+- is_read
+- created_at
+
+14. groups
+Fields:
+- id
+- name
+- slug
+- description
+- cover_image_url
+- created_by_user_id
+- is_private
+- is_archived
+- members_count
+- posts_count
+- created_at
+- updated_at
+
+15. group_members
+Fields:
+- id
+- group_id
+- user_id
+- role
+- joined_at
+
+16. reports
+Fields:
+- id
+- reporter_user_id
+- target_type
+- target_id
+- reason
+- status
+- reviewed_by_user_id nullable
+- reviewed_at nullable
+- created_at
+
+17. bans
+Fields:
+- id
+- user_id
+- banned_by_user_id
+- reason
+- status
+- created_at
+- expires_at nullable
+
+18. announcements
+Fields:
+- id
+- title
+- content
+- created_by_user_id
+- is_pinned
+- is_active
+- created_at
+- updated_at
+
+19. moderation_logs
+Fields:
+- id
+- admin_user_id
+- action_type
+- target_type
+- target_id
+- notes
+- created_at
+
+REQUIREMENTS
+- add indexes on commonly searched fields
+- add foreign keys
+- add unique constraints where needed
+- usernames must be unique
+- email must be unique
+- follows should prevent duplicate follower/following pairs
+- saved_posts should prevent duplicate saves
+- post_reactions should prevent duplicate reaction per user per post
+- comment_reactions should prevent duplicate reaction per user per comment
+
+OUTPUT
+- create SQL schema file
+- create seed data file
+- create JS/TS data model interfaces or types if app uses them
+- create helper docs explaining relationships
+Actual scalable database structure
+
+Below is the structure I recommend.
+
+1. users
+
+This is the account/auth table.
+
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT,
+  role TEXT NOT NULL DEFAULT 'selector',
+  subscription_plan TEXT NOT NULL DEFAULT 'personal',
+  is_subscribed BOOLEAN NOT NULL DEFAULT false,
+  is_banned BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+2. profiles
+
+Keep profile info separate from auth.
+
+CREATE TABLE profiles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  full_name TEXT NOT NULL,
+  username TEXT UNIQUE NOT NULL,
+  bio TEXT DEFAULT '',
+  avatar_url TEXT DEFAULT '',
+  cover_image_url TEXT DEFAULT '',
+  level_badge TEXT DEFAULT 'Beginner',
+  location TEXT DEFAULT '',
+  shift_type TEXT DEFAULT '',
+  status_text TEXT DEFAULT '',
+  is_online BOOLEAN NOT NULL DEFAULT false,
+  followers_count INT NOT NULL DEFAULT 0,
+  following_count INT NOT NULL DEFAULT 0,
+  posts_count INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+3. posts
+
+This is the main feed content.
+
+CREATE TABLE posts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  author_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  group_id UUID NULL,
+  post_type TEXT NOT NULL DEFAULT 'text',
+  content TEXT NOT NULL,
+  image_url TEXT DEFAULT '',
+  video_url TEXT DEFAULT '',
+  visibility TEXT NOT NULL DEFAULT 'public',
+  is_pinned BOOLEAN NOT NULL DEFAULT false,
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  like_count INT NOT NULL DEFAULT 0,
+  love_count INT NOT NULL DEFAULT 0,
+  funny_count INT NOT NULL DEFAULT 0,
+  wow_count INT NOT NULL DEFAULT 0,
+  frustrated_count INT NOT NULL DEFAULT 0,
+  comments_count INT NOT NULL DEFAULT 0,
+  shares_count INT NOT NULL DEFAULT 0,
+  saves_count INT NOT NULL DEFAULT 0,
+  reports_count INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+4. post_hashtags
+
+Normalized hashtags.
+
+CREATE TABLE post_hashtags (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  hashtag TEXT NOT NULL
+);
+
+CREATE INDEX idx_post_hashtags_hashtag ON post_hashtags(hashtag);
+5. comments
+
+Supports replies with parent_comment_id.
+
+CREATE TABLE comments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  author_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  parent_comment_id UUID NULL REFERENCES comments(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  reactions_count INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+6. post_reactions
+
+One user, one reaction per post.
+
+CREATE TABLE post_reactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reaction_type TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE(post_id, user_id)
+);
+7. comment_reactions
+CREATE TABLE comment_reactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  comment_id UUID NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reaction_type TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE(comment_id, user_id)
+);
+8. saved_posts
+CREATE TABLE saved_posts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, post_id)
+);
+9. follows
+CREATE TABLE follows (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  follower_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  following_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE(follower_user_id, following_user_id)
+);
+
+Add a check in app logic so a user cannot follow themselves.
+
+10. conversations
+CREATE TABLE conversations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_type TEXT NOT NULL DEFAULT 'direct',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+11. conversation_members
+CREATE TABLE conversation_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  last_read_at TIMESTAMP,
+  joined_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE(conversation_id, user_id)
+);
+12. messages
+CREATE TABLE messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  sender_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  image_url TEXT DEFAULT '',
+  is_deleted BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_messages_conversation_id_created_at
+ON messages(conversation_id, created_at DESC);
+13. notifications
+CREATE TABLE notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  type TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id UUID,
+  message TEXT NOT NULL,
+  is_read BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_notifications_user_id_is_read
+ON notifications(user_id, is_read);
+14. groups
+CREATE TABLE groups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
+  description TEXT DEFAULT '',
+  cover_image_url TEXT DEFAULT '',
+  created_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  is_private BOOLEAN NOT NULL DEFAULT false,
+  is_archived BOOLEAN NOT NULL DEFAULT false,
+  members_count INT NOT NULL DEFAULT 0,
+  posts_count INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+15. group_members
+CREATE TABLE group_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL DEFAULT 'member',
+  joined_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE(group_id, user_id)
+);
+16. reports
+CREATE TABLE reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reporter_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  target_type TEXT NOT NULL,
+  target_id UUID NOT NULL,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',
+  reviewed_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_reports_status ON reports(status);
+17. bans
+CREATE TABLE bans (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  banned_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMP
+);
+18. announcements
+CREATE TABLE announcements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  is_pinned BOOLEAN NOT NULL DEFAULT false,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+19. moderation_logs
+CREATE TABLE moderation_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  action_type TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_id UUID NOT NULL,
+  notes TEXT DEFAULT '',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+Suggested enum values
+
+Use these values in app logic.
+
+role
+selector
+trainer
+supervisor
+owner
+subscription_plan
+personal
+company
+owner
+post_type
+text
+image
+video
+question
+announcement
+training_clip
+reaction_type
+like
+love
+funny
+wow
+frustrated
+notification type
+like
+comment
+reply
+follow
+mention
+message
+report_update
+group_invite
+report status
+open
+reviewed
+dismissed
+action_taken
+Why this is scalable
+
+This structure is good because:
+
+users and profiles are separate
+posts don’t store giant nested objects
+comments are normalized
+reactions are normalized
+follows are normalized
+messaging is separated into conversations + messages
+moderation has its own tables
+groups have their own membership table
+
+That means it can grow without turning into a mess.
+
+What to build next after this
+
+The best next step is:
+
+1. SQL schema file
+
+Create:
+
+database/schema.sql
+2. Seed file
+
+Create:
+
+database/seed.sql
+3. Frontend API layer
+
+Create:
+
+src/lib/selectorBreakingNewsApi.js
+4. Owner moderation dashboard
+
+Use:
+
+reports
+bans
+moderation logs
+Best next prompt for Replit
+
+Paste this next:
+
+Create the actual SQL schema and seed file for Selector Breaking News using the database structure provided.
+
+OUTPUT
+- database/schema.sql
+- database/seed.sql
+
+USE
+- PostgreSQL syntax
+- foreign keys
+- indexes
+- unique constraints
+- sample seed users
+- sample seed profiles
+- sample seed posts
+- sample comments
+- sample follows
+- sample notifications
+- sample groups
+- sample reports
+
+IMPORTANT
+Make the schema production-ready and aligned with the PickSmart NOVA social platform.
+
+If you want, I can write the full schema.sql and seed.sql next.
