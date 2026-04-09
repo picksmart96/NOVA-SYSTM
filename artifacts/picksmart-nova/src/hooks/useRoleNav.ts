@@ -59,12 +59,6 @@ export function useRoleNav(): NavLink[] {
     { href: "/training", label: t("nav.training"), group: "public" },
   );
 
-  // NOVA Trainer: only for ES3 warehouses — owner always sees it
-  const showNovaTrainer = isOwner || hasFeature("nova-trainer");
-  if (showNovaTrainer) {
-    links.push({ href: "/nova-trainer", label: t("nav.novaTrainer"), group: "nova" });
-  }
-
   links.push({ href: "/nova-help", label: t("nav.novaHelp"), group: "nova" });
 
   if (isOwner) {
