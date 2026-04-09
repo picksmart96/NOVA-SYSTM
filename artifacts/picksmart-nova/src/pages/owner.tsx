@@ -1409,7 +1409,7 @@ type Tab = typeof TABS[number];
 
 export default function OwnerPage() {
   const stats = ADMIN_STATS;
-  const [activeTab, setActiveTab] = useState<Tab>("Dashboard");
+  const [activeTab, setActiveTab] = useState<Tab>("Users & Access");
 
   return (
     <div className="min-h-screen bg-slate-950 text-white px-4 sm:px-6 py-10">
