@@ -216,7 +216,7 @@ function Router() {
       </Route>
       <Route path="/owner">
         <Layout>
-          <SubscriptionRoute path="/owner" requiredRole="owner">
+          <SubscriptionRoute path="/owner" requiredRole="owner" masterOnly>
             <OwnerPage />
           </SubscriptionRoute>
         </Layout>
