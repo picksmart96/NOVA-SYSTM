@@ -1,10 +1,11 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/layout";
 import { SubscriptionRoute } from "@/components/SubscriptionRoute";
+import SubscribePromptModal from "@/components/paywall/SubscribePromptModal";
 import NotFound from "@/pages/not-found";
 
 import HomePage from "@/pages/home";
@@ -53,6 +54,29 @@ function RedirectToOwner() {
   return null;
 }
 
+/**
+ * GatedRoute — blocks unsubscribed / not-logged-in visitors from viewing any
+ * content page. Instead of rendering the page at all, it immediately shows the
+ * subscribe modal. Closing the modal sends the visitor back to the home page.
+ */
+function GatedRoute({ children }: { children: React.ReactNode }) {
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const [, navigate] = useLocation();
+  const [open, setOpen] = useState(true);
+
+  const isOwner = currentUser?.role === "owner";
+  const isSubscribed = isOwner || !!currentUser?.isSubscribed;
+
+  if (isSubscribed) return <>{children}</>;
+
+  return (
+    <SubscribePromptModal
+      open={open}
+      onClose={() => { setOpen(false); navigate("/"); }}
+    />
+  );
+}
+
 const queryClient = new QueryClient();
 
 function Router() {
@@ -84,53 +108,53 @@ function Router() {
         <Layout><CompanyCheckoutPage /></Layout>
       </Route>
 
-      {/* ── Publicly viewable — premium actions gated inside each page ── */}
+      {/* ── Gated — requires active subscription to view any content ── */}
       <Route path="/training">
-        <Layout><ModulesPage /></Layout>
+        <Layout><GatedRoute><ModulesPage /></GatedRoute></Layout>
       </Route>
       <Route path="/training/lesson/:id">
-        <LessonSessionPage />
+        <GatedRoute><LessonSessionPage /></GatedRoute>
       </Route>
       <Route path="/training/:id">
-        <Layout><ModuleDetailPage /></Layout>
+        <Layout><GatedRoute><ModuleDetailPage /></GatedRoute></Layout>
       </Route>
       <Route path="/mistakes">
-        <Layout><CommonMistakesPage /></Layout>
+        <Layout><GatedRoute><CommonMistakesPage /></GatedRoute></Layout>
       </Route>
       <Route path="/mistakes/coaching/:id">
-        <MistakeCoachingPage />
+        <GatedRoute><MistakeCoachingPage /></GatedRoute>
       </Route>
       <Route path="/progress">
-        <Layout><ProgressPage /></Layout>
+        <Layout><GatedRoute><ProgressPage /></GatedRoute></Layout>
       </Route>
       <Route path="/leaderboard">
-        <Layout><LeaderboardPage /></Layout>
+        <Layout><GatedRoute><LeaderboardPage /></GatedRoute></Layout>
       </Route>
       <Route path="/selector-nation">
-        <Layout><SelectorNationPage /></Layout>
+        <Layout><GatedRoute><SelectorNationPage /></GatedRoute></Layout>
       </Route>
       <Route path="/selector-breaking-news">
-        <Layout><SelectorBreakingNewsPage /></Layout>
+        <Layout><GatedRoute><SelectorBreakingNewsPage /></GatedRoute></Layout>
       </Route>
       <Route path="/nova-help">
-        <Layout><NovaHelpPage /></Layout>
+        <Layout><GatedRoute><NovaHelpPage /></GatedRoute></Layout>
       </Route>
       <Route path="/nova-trainer">
-        <NovaTrainerPage />
+        <GatedRoute><NovaTrainerPage /></GatedRoute>
       </Route>
       <Route path="/selector">
-        <Layout><SelectorPortalPage /></Layout>
+        <Layout><GatedRoute><SelectorPortalPage /></GatedRoute></Layout>
       </Route>
 
       {/* NOVA assignment pages */}
       <Route path="/nova">
-        <Layout><MyAssignmentsPage /></Layout>
+        <Layout><GatedRoute><MyAssignmentsPage /></GatedRoute></Layout>
       </Route>
       <Route path="/nova/assignments/:id">
-        <Layout><AssignmentDetailPage /></Layout>
+        <Layout><GatedRoute><AssignmentDetailPage /></GatedRoute></Layout>
       </Route>
       <Route path="/nova/voice/:id">
-        <VoiceSessionPage />
+        <GatedRoute><VoiceSessionPage /></GatedRoute>
       </Route>
 
       {/* Trainer tools */}

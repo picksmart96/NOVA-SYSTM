@@ -17,6 +17,17 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { useTranslation } from "react-i18next";
 import LanguageSwitcher from "@/components/layout/LanguageSwitcher";
+import SubscribePromptModal from "@/components/paywall/SubscribePromptModal";
+
+// Paths that are always free — no subscription required to visit.
+const FREE_PATHS = ["/", "/pricing", "/choose-plan", "/login", "/privacy", "/terms"];
+function isFree(href: string) {
+  return FREE_PATHS.includes(href) ||
+    href.startsWith("/checkout") ||
+    href.startsWith("/owner-access") ||
+    href.startsWith("/invite") ||
+    href.startsWith("/w/");
+}
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
@@ -24,7 +35,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { currentUser, logout, lock } = useAuthStore();
   const [location, navigate] = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [subscribeOpen, setSubscribeOpen] = useState(false);
   const links = useRoleNav();
+
+  // Subscription check — owner always passes, everyone else needs isSubscribed.
+  const isOwner = currentUser?.role === "owner";
+  const isSubscribed = isOwner || !!currentUser?.isSubscribed;
+
+  // Intercept nav clicks: if the link requires subscription, show modal instead.
+  const handleNavClick = (e: React.MouseEvent, href: string) => {
+    if (!isSubscribed && !isFree(href)) {
+      e.preventDefault();
+      setSubscribeOpen(true);
+    }
+  };
 
   const displayRole = currentUser?.role ?? role;
 
@@ -63,6 +87,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Link
                   key={link.href}
                   href={link.href}
+                  onClick={(e) => handleNavClick(e, link.href)}
                   className={`px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
                     isActive(link.href)
                       ? "bg-secondary text-secondary-foreground"
@@ -90,7 +115,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
                           </DropdownMenuLabel>
                           {overflow.map(link => (
                             <DropdownMenuItem key={link.href} asChild>
-                              <Link href={link.href} className={`cursor-pointer ${isActive(link.href) ? "text-primary" : ""}`}>
+                              <Link
+                                href={link.href}
+                                onClick={(e) => handleNavClick(e, link.href)}
+                                className={`cursor-pointer ${isActive(link.href) ? "text-primary" : ""}`}
+                              >
                                 {link.label}
                               </Link>
                             </DropdownMenuItem>
@@ -188,7 +217,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <Link
                       key={link.href}
                       href={link.href}
-                      onClick={() => setIsMobileMenuOpen(false)}
+                      onClick={(e) => {
+                        if (!isSubscribed && !isFree(link.href)) {
+                          e.preventDefault();
+                          setIsMobileMenuOpen(false);
+                          setSubscribeOpen(true);
+                        } else {
+                          setIsMobileMenuOpen(false);
+                        }
+                      }}
                       className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-md ${
                         isActive(link.href)
                           ? "bg-secondary text-secondary-foreground"
@@ -208,6 +245,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 flex flex-col">
         {children}
       </main>
+
+      {/* Global subscribe gate modal — triggered by nav clicks for unsubscribed visitors */}
+      <SubscribePromptModal
+        open={subscribeOpen}
+        onClose={() => setSubscribeOpen(false)}
+      />
     </div>
   );
 }
