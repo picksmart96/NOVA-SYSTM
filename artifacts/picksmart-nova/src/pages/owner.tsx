@@ -355,7 +355,8 @@ function InviteManagement() {
       warehouseId: selectedWarehouse?.id ?? null,
       warehouseSlug: selectedWarehouse?.slug ?? null,
     });
-    const link = `${window.location.origin}/invite/${token}`;
+    const base = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
+    const link = `${window.location.origin}${base}/invite/${token}`;
     setLastLink(link);
     setFullName("");
     setEmail("");
@@ -1097,7 +1098,8 @@ function UsersAccessSection() {
         warehouseId: selectedWarehouse?.id ?? null,
         warehouseSlug: selectedWarehouse?.slug ?? null,
       });
-      const url = `${window.location.origin}/invite/${token}`;
+      const base = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
+      const url = `${window.location.origin}${base}/invite/${token}`;
       setGeneratedInviteUrl(url);
       setGeneratedInviteName(name);
       setGeneratedInviteEmail(email);
