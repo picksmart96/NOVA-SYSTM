@@ -41,20 +41,8 @@ export default function InvitePage() {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
 
-  if (!invite) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
-        <div className="rounded-3xl border border-red-500/30 bg-slate-900 p-10 max-w-md w-full text-center">
-          <AlertTriangle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-          <h1 className="text-2xl font-black text-white mb-2">Invalid invite</h1>
-          <p className="text-slate-400">This invite link has already been used or does not exist.</p>
-        </div>
-      </div>
-    );
-  }
-
   if (done) {
-    const home = ROLE_HOME[invite.role];
+    const home = ROLE_HOME[invite?.role ?? "selector"];
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
         <div className="rounded-3xl border border-green-500/30 bg-slate-900 p-10 max-w-md w-full text-center">
@@ -69,6 +57,18 @@ export default function InvitePage() {
           >
             Go to Sign in
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!invite) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
+        <div className="rounded-3xl border border-red-500/30 bg-slate-900 p-10 max-w-md w-full text-center">
+          <AlertTriangle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+          <h1 className="text-2xl font-black text-white mb-2">Invalid invite</h1>
+          <p className="text-slate-400">This invite link has already been used or does not exist.</p>
         </div>
       </div>
     );
