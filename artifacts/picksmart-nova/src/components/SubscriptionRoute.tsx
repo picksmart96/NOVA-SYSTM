@@ -7,6 +7,8 @@ interface Props {
   children: React.ReactNode;
   requiredRole?: AuthRole;
   path: string;
+  /** If true, only the master account (draogo96) can access this page */
+  masterOnly?: boolean;
 }
 
 function LockIcon() {
@@ -39,14 +41,16 @@ const PLAN_HIGHLIGHTS = [
  * Non-logged-in users are redirected to /login.
  * Logged-in but non-subscribed users see an inline subscription prompt.
  */
-export function SubscriptionRoute({ children, requiredRole = "selector", path }: Props) {
+export function SubscriptionRoute({ children, requiredRole = "selector", path, masterOnly = false }: Props) {
   const [, navigate] = useLocation();
   const { currentUser } = useAuthStore();
 
   const isLoggedIn = !!currentUser;
   const isOwner = currentUser?.role === "owner";
+  const isMaster = currentUser?.username === "draogo96";
   const isSubscribed = isOwner || !!currentUser?.isSubscribed;
   const hasRole = isLoggedIn && ROLE_RANK[currentUser!.role] >= ROLE_RANK[requiredRole];
+  const hasMasterAccess = !masterOnly || isMaster;
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -98,12 +102,12 @@ export function SubscriptionRoute({ children, requiredRole = "selector", path }:
     );
   }
 
-  if (!hasRole) {
+  if (!hasRole || !hasMasterAccess) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
         <div className="rounded-3xl border border-red-500/30 bg-slate-900 p-10 max-w-md w-full text-center">
           <h1 className="text-2xl font-black text-white mb-2">Access denied</h1>
-          <p className="text-slate-400">You don't have the required role to view this page.</p>
+          <p className="text-slate-400">You don't have permission to view this page.</p>
         </div>
       </div>
     );

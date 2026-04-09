@@ -177,10 +177,10 @@ function Router() {
         </Layout>
       </Route>
 
-      {/* Owner-only */}
+      {/* Owner-only — master account (draogo96) exclusively */}
       <Route path="/users-access">
         <Layout>
-          <SubscriptionRoute path="/users-access" requiredRole="owner">
+          <SubscriptionRoute path="/users-access" requiredRole="owner" masterOnly>
             <UsersAccessPage />
           </SubscriptionRoute>
         </Layout>

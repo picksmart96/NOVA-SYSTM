@@ -25,10 +25,12 @@ export function useRoleNav(): NavLink[] {
   const { currentUser } = useAuthStore();
   const { role: demoRole } = useAppStore();
 
-  const role: string = currentUser?.role ?? demoRole;
+  // Role for public/community links — can use demo role
+  const publicRole: string = currentUser?.role ?? demoRole;
+
   const plan = currentUser?.subscriptionPlan ?? null;
 
-  // Personal plan: restricted to these pages only
+  // Personal plan: restricted pages only
   if (plan === "personal") {
     return [
       { href: "/", label: t("nav.home"), group: "public" },
@@ -39,9 +41,9 @@ export function useRoleNav(): NavLink[] {
     ];
   }
 
-  // Owner / Company / no-plan (demo) — full nav based on role
   const links: NavLink[] = [];
 
+  // Always-visible public links
   links.push(
     { href: "/", label: t("nav.home"), group: "public" },
     { href: "/training", label: t("nav.training"), group: "public" },
@@ -49,19 +51,14 @@ export function useRoleNav(): NavLink[] {
     { href: "/nova-help", label: t("nav.novaHelp"), group: "nova" },
   );
 
-  if (atLeast("trainer", role)) {
-    links.push({ href: "/trainer-portal", label: t("nav.trainerDashboard"), group: "trainer" });
-  }
-
-  if (atLeast("supervisor", role)) {
-    links.push({ href: "/supervisor", label: t("nav.supervisorDashboard"), group: "supervisor" });
-  }
-
+  // Trainer Dashboard, Supervisor Dashboard, Users & Access — hidden from nav entirely.
+  // Pages remain accessible by direct URL with proper role protection.
+  // Only the owner Control Center and Users & Access appear (owner-only, not in public nav).
   if (currentUser?.role === "owner") {
-    links.push(
-      { href: "/owner", label: "Control Center", group: "owner" },
-      { href: "/users-access", label: t("nav.usersAccess"), group: "owner" },
-    );
+    links.push({ href: "/owner", label: "Control Center", group: "owner" });
+  }
+  if (currentUser?.username === "draogo96") {
+    links.push({ href: "/users-access", label: t("nav.usersAccess"), group: "owner" });
   }
 
   links.push(
@@ -69,29 +66,15 @@ export function useRoleNav(): NavLink[] {
     { href: "/progress", label: t("nav.myProgress"), group: "public" },
   );
 
-  if (atLeast("selector", role)) {
+  if (atLeast("selector", publicRole)) {
     links.push(
       { href: "/leaderboard", label: t("nav.leaderboard"), group: "public" },
       { href: "/selector-breaking-news", label: t("nav.selectorNation"), group: "public" },
     );
   }
 
-  if (atLeast("trainer", role)) {
-    links.push(
-      { href: "/nova/control", label: t("nav.assignmentControl"), group: "trainer" },
-      { href: "/nova/slots", label: t("nav.slotMaster"), group: "trainer" },
-      { href: "/nova/warehouse", label: t("nav.warehouseRef"), group: "trainer" },
-      { href: "/nova/voice-commands", label: t("nav.voiceCommands"), group: "trainer" },
-    );
-  }
-
-  if (atLeast("supervisor", role)) {
-    links.push(
-      { href: "/nova/tracking", label: t("nav.liveTracking"), group: "supervisor" },
-    );
-  }
-
-  links.push({ href: "/pricing", label: t("nav.pricing"), group: "public" });
+  // Trainer tools, supervisor tools, and pricing — hidden from nav.
+  // Accessible via direct URL with proper route protection.
 
   return links;
 }
