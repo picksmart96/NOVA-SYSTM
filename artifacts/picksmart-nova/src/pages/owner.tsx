@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Copy, ExternalLink, Globe, Key } from "lucide-react";
+import { Copy, ExternalLink, Globe, Key, Link, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity } from "lucide-react";
 import { OWNER_TOKEN } from "./owner-access";
 import { useAuthStore, AuthAccount, AuthRole } from "@/lib/authStore";
 
@@ -756,8 +756,147 @@ function HandbookSection() {
   );
 }
 
+// ── Link Library ──────────────────────────────────────────────────────────────
+function useCopy() {
+  const [copied, setCopied] = useState<string | null>(null);
+  function copy(key: string, text: string) {
+    navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 2000);
+  }
+  return { copied, copy };
+}
+
+function LinkRow({
+  label,
+  description,
+  url,
+  icon: Icon,
+  accent = "yellow",
+  linkKey,
+  copied,
+  onCopy,
+}: {
+  label: string;
+  description: string;
+  url: string;
+  icon: React.ElementType;
+  accent?: "yellow" | "red" | "blue" | "green" | "purple";
+  linkKey: string;
+  copied: string | null;
+  onCopy: (key: string, url: string) => void;
+}) {
+  const colors: Record<string, { border: string; bg: string; icon: string; btn: string; hover: string; text: string }> = {
+    yellow: { border: "border-yellow-400/30", bg: "bg-yellow-400/5", icon: "bg-yellow-400/20 text-yellow-400", btn: "bg-yellow-400 text-slate-950 hover:bg-yellow-300", hover: "hover:border-yellow-400 hover:text-yellow-400", text: "text-yellow-300" },
+    red:    { border: "border-red-500/30",    bg: "bg-red-500/5",    icon: "bg-red-500/20 text-red-400",    btn: "bg-red-500 text-white hover:bg-red-400",           hover: "hover:border-red-400 hover:text-red-400",     text: "text-red-300" },
+    blue:   { border: "border-blue-500/30",   bg: "bg-blue-500/5",   icon: "bg-blue-500/20 text-blue-400",  btn: "bg-blue-500 text-white hover:bg-blue-400",         hover: "hover:border-blue-400 hover:text-blue-400",   text: "text-blue-300" },
+    green:  { border: "border-green-500/30",  bg: "bg-green-500/5",  icon: "bg-green-500/20 text-green-400",btn: "bg-green-600 text-white hover:bg-green-500",       hover: "hover:border-green-400 hover:text-green-400", text: "text-green-300" },
+    purple: { border: "border-purple-500/30", bg: "bg-purple-500/5", icon: "bg-purple-500/20 text-purple-400",btn:"bg-purple-600 text-white hover:bg-purple-500",    hover: "hover:border-purple-400 hover:text-purple-400",text: "text-purple-300" },
+  };
+  const c = colors[accent];
+  const isCopied = copied === linkKey;
+
+  return (
+    <div className={`rounded-3xl border ${c.border} ${c.bg} p-5`}>
+      <div className="flex items-center gap-3 mb-3">
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${c.icon}`}>
+          <Icon className="w-4 h-4" />
+        </div>
+        <div>
+          <p className="font-black text-white text-sm">{label}</p>
+          <p className="text-xs text-slate-400">{description}</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3">
+        <p className={`flex-1 font-mono text-xs truncate ${c.text}`}>{url}</p>
+        <button
+          onClick={() => onCopy(linkKey, url)}
+          className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black transition shrink-0 ${c.btn}`}
+        >
+          <Copy className="w-3.5 h-3.5" />
+          {isCopied ? "Copied!" : "Copy"}
+        </button>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`flex items-center gap-1.5 rounded-xl border border-slate-700 px-3 py-1.5 text-xs font-bold text-slate-300 transition shrink-0 ${c.hover}`}
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          Open
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function LinkLibrary() {
+  const { copied, copy } = useCopy();
+  const base = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
+  const origin = window.location.origin;
+
+  const url = (path: string) => `${origin}${base}${path}`;
+
+  const sections = [
+    {
+      title: "Owner Private",
+      links: [
+        { key: "magic",  label: "Owner Magic Link",  description: "Instantly log in as owner — keep this secret", url: url(`/owner-access?token=${OWNER_TOKEN}`), icon: Key,           accent: "red"    as const },
+        { key: "owner",  label: "Owner Control Center", description: "Main owner dashboard — requires login",      url: url("/owner"),                               icon: LayoutDashboard, accent: "yellow" as const },
+        { key: "users",  label: "Users & Access",    description: "Manage all accounts and invites",              url: url("/users-access"),                        icon: Users,         accent: "yellow" as const },
+      ],
+    },
+    {
+      title: "Public Pages",
+      links: [
+        { key: "home",    label: "Home Page",     description: "Public-facing landing page",         url: url("/"),          icon: Globe,   accent: "green"  as const },
+        { key: "pricing", label: "Pricing Page",  description: "Pricing plans for new subscribers",  url: url("/pricing"),   icon: ShieldCheck, accent: "green" as const },
+      ],
+    },
+    {
+      title: "Staff & Training",
+      links: [
+        { key: "training",  label: "Training Modules",       description: "All training content",            url: url("/training"),        icon: BookOpen, accent: "blue" as const },
+        { key: "trainer",   label: "Trainer Dashboard",      description: "Trainer portal (trainer+ role)",  url: url("/trainer-portal"),  icon: Activity, accent: "blue" as const },
+        { key: "nova",      label: "NOVA Trainer",           description: "Voice picking simulator",         url: url("/nova-trainer"),    icon: Mic,      accent: "blue" as const },
+        { key: "supervisor",label: "Supervisor Dashboard",   description: "Supervisor tools",                url: url("/supervisor"),      icon: ShieldCheck, accent: "purple" as const },
+      ],
+    },
+  ];
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-xl font-black text-white">Link Library</h2>
+        <p className="text-sm text-slate-400 mt-1">All important URLs for the platform — copy or open in one click.</p>
+      </div>
+
+      {sections.map((section) => (
+        <div key={section.title}>
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">{section.title}</p>
+          <div className="flex flex-col gap-3">
+            {section.links.map((link) => (
+              <LinkRow
+                key={link.key}
+                linkKey={link.key}
+                label={link.label}
+                description={link.description}
+                url={link.url}
+                icon={link.icon}
+                accent={link.accent}
+                copied={copied}
+                onCopy={copy}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
-const TABS = ["Dashboard", "Handbook"] as const;
+const TABS = ["Dashboard", "Links", "Handbook"] as const;
 type Tab = typeof TABS[number];
 
 export default function OwnerPage() {
@@ -789,7 +928,7 @@ export default function OwnerPage() {
                   : "border-transparent text-slate-500 hover:text-white"
               }`}
             >
-              {tab === "Dashboard" ? "📊 Dashboard" : "📖 Handbook"}
+              {tab === "Dashboard" ? "📊 Dashboard" : tab === "Links" ? "🔗 Links" : "📖 Handbook"}
             </button>
           ))}
         </div>
@@ -823,6 +962,9 @@ export default function OwnerPage() {
             <ActivityLog />
           </>
         )}
+
+        {/* Links tab */}
+        {activeTab === "Links" && <LinkLibrary />}
 
         {/* Handbook tab */}
         {activeTab === "Handbook" && <HandbookSection />}
