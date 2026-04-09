@@ -56,6 +56,7 @@ export default function NovaTrainerPage() {
           name: matchedSelector.name,
           fullName: matchedSelector.name,
         }}
+        selectorId={matchedSelector.id}
         onExit={() => { setActiveNovaId(""); lock(); }}
         autoStart
       />

@@ -192,6 +192,10 @@ export interface TrainerSnapshot {
   selector: Selector;
   phase: Phase;
   prompt: string;
+  /** Monotonically-increasing counter — incremented on every state change.
+   *  The frontend compares `seq` instead of `prompt` text so NOVA always
+   *  speaks even when the same prompt text is repeated (e.g. invalid input). */
+  seq: number;
   equipmentId: string;
   maxPalletCount: string;
   failedSafetyItem: string;
@@ -227,6 +231,7 @@ export function createNovaTrainerSession({
     selector,
     phase: PHASES.WAIT_WAKE as Phase,
     prompt: P.waitWake,
+    seq: 0,
     equipmentId: "",
     maxPalletCount: "2",
     safetyIndex: 0,
@@ -269,6 +274,7 @@ export function createNovaTrainerSession({
 
   function setPrompt(text: string): TrainerSnapshot {
     state.prompt = text;
+    state.seq += 1;
     log("NOVA", text);
     return snapshot();
   }
@@ -278,6 +284,7 @@ export function createNovaTrainerSession({
       selector: state.selector,
       phase: state.phase,
       prompt: state.prompt,
+      seq: state.seq,
       equipmentId: state.equipmentId,
       maxPalletCount: state.maxPalletCount,
       failedSafetyItem: state.failedSafetyItem,

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVoiceEngine } from "@/hooks/useVoiceEngine";
 import { matchCommand } from "@/lib/novaCommandMatcher";
+import { useTrainerStore } from "@/lib/trainerStore";
 
 // Mobile / iOS browsers require a user gesture before AudioContext + speech APIs
 // are unlocked. Detect here so we can show a tap-to-start gate.
@@ -42,6 +43,10 @@ interface ServerAssignment {
 interface TrainerState {
   phase: string;
   prompt: string;
+  /** Server-side sequence counter — incremented on every state change.
+   *  We compare this instead of prompt text so NOVA always speaks even
+   *  when the prompt text repeats (e.g. "Invalid" or repeated safety item). */
+  seq?: number;
   equipmentId: string;
   maxPalletCount: string;
   failedSafetyItem: string;
@@ -77,17 +82,22 @@ const DEFAULT_STATE: TrainerState = {
 
 export default function NovaTrainerSession({
   selector,
+  selectorId,
   onExit,
   autoStart = false,
 }: {
   selector: Selector;
+  /** Numeric store ID of the selector — used to auto-log the session on exit. */
+  selectorId?: number;
   onExit?: () => void;
   autoStart?: boolean;
 }) {
+  const { logSession } = useTrainerStore();
+
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initializedRef = useRef(false);
-  const lastSpokenPromptRef = useRef("");
+  const lastSpokenSeqRef = useRef(-1);
   const startedRef = useRef(false);
   const autoWokeRef = useRef(false);
 
@@ -221,9 +231,15 @@ export default function NovaTrainerSession({
             const newPrompt = msg.state.prompt ?? "";
             const autoAdvance = msg.state.autoAdvance ?? false;
             const autoAdvanceDelayMs = msg.state.autoAdvanceDelayMs ?? 500;
+            // Use seq to detect every new server response, even if prompt text is identical.
+            // Falls back to prompt-text comparison for old servers without seq.
+            const incomingSeq = msg.state.seq ?? -1;
+            const isNewState = incomingSeq >= 0
+              ? incomingSeq !== lastSpokenSeqRef.current
+              : newPrompt !== "";
 
-            if (startedRef.current && newPrompt && newPrompt !== lastSpokenPromptRef.current) {
-              lastSpokenPromptRef.current = newPrompt;
+            if (startedRef.current && newPrompt && isNewState) {
+              lastSpokenSeqRef.current = incomingSeq;
               // Prime auto-advance before speaking so onEnd can fire it
               if (autoAdvance) {
                 autoAdvancePendingRef.current = { delayMs: autoAdvanceDelayMs };
@@ -286,6 +302,7 @@ export default function NovaTrainerSession({
     // Reset queues on fresh start
     pendingPromptRef.current = "";
     isSpeakingRef.current = false;
+    lastSpokenSeqRef.current = -1;
 
     if (!initializedRef.current) {
       initializedRef.current = true;
@@ -428,7 +445,26 @@ export default function NovaTrainerSession({
           )}
           {onExit && (
             <button
-              onClick={() => { resetSession(); onExit(); }}
+              onClick={() => {
+                // Auto-save the session before exiting if a real session started
+                if (selectorId && trainerState.equipmentId) {
+                  const asgnNum = trainerState.activeAssignment?.assignmentNumber ?? "";
+                  const novaActions = trainerState.commandLog.filter((e) => e.type === "NOVA").length;
+                  logSession({
+                    selectorId,
+                    selectorName: selector.fullName ?? selector.name ?? selector.novaId,
+                    sessionType: "NOVA Trainer Session",
+                    notes: [
+                      `Equipment: ${trainerState.equipmentId}`,
+                      asgnNum ? `Assignment: ${asgnNum}` : "",
+                      `NOVA interactions: ${novaActions}`,
+                      `Phase on exit: ${trainerState.phase}`,
+                    ].filter(Boolean).join(" | "),
+                  });
+                }
+                resetSession();
+                onExit();
+              }}
               className="text-xs text-slate-500 hover:text-slate-300 transition"
             >
               {lang === "es" ? "Salir" : "Exit"}
