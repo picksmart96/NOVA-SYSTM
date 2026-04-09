@@ -203,7 +203,7 @@ export default function NovaTrainerSession({
 
             const newPrompt = msg.state.prompt ?? "";
             const autoAdvance = msg.state.autoAdvance ?? false;
-            const autoAdvanceDelayMs = msg.state.autoAdvanceDelayMs ?? 900;
+            const autoAdvanceDelayMs = msg.state.autoAdvanceDelayMs ?? 500;
 
             if (startedRef.current && newPrompt && newPrompt !== lastSpokenPromptRef.current) {
               lastSpokenPromptRef.current = newPrompt;

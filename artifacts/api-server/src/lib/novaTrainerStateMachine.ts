@@ -383,13 +383,17 @@ export function createNovaTrainerSession({
         state.invalidCount += 1;
         return setPrompt(`You said ${digits}. Invalid.`);
       }
-      // Correct check code — speak grab prompt then auto-advance to next slot
+      // Correct check code — speak grab + next-stop call, then auto-advance
       state.phase = PHASES.PICK_READY;
-      const side = state.currentStopIndex % 2 === 0 ? "Alpha" : "Bravo";
-      const prompt = `Grab ${stop.qty} ${side}`;
+      const nextIndex = state.currentStopIndex + 1;
+      const upNext = currentStops()[nextIndex] ?? null;
+      const nextCall = upNext
+        ? ` Aisle ${upNext.aisle} slot ${upNext.slot}`
+        : " Last stop complete";
+      const prompt = `Grab ${stop.qty}.${nextCall}`;
       state.prompt = prompt;
       log("NOVA", prompt);
-      return { ...snapshot(), autoAdvance: true, autoAdvanceDelayMs: 900 };
+      return { ...snapshot(), autoAdvance: true, autoAdvanceDelayMs: 700 };
     }
 
     if (state.phase === PHASES.PICK_READY) {
