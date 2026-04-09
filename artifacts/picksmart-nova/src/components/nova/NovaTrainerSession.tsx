@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVoiceEngine } from "@/hooks/useVoiceEngine";
+import { matchCommand } from "@/lib/novaCommandMatcher";
 
 interface Selector {
   userId: string;
@@ -102,8 +103,10 @@ export default function NovaTrainerSession({
   const voice = useVoiceEngine({
     onHeard: async (_heard: string, raw: string) => {
       const text = raw || _heard;
+      const command = matchCommand(text);
+      const normalized = command ?? text;
       setHeardResponse(text);
-      sendInputRef.current(text);
+      sendInputRef.current(normalized);
     },
   });
 

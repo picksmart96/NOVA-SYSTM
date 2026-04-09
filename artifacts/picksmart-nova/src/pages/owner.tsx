@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Copy, ExternalLink, Globe } from "lucide-react";
 import { useAuthStore, AuthAccount, AuthRole } from "@/lib/authStore";
 
 // ── Mock data for demo sections ───────────────────────────────────────────────
@@ -37,6 +38,53 @@ const PLANS = [
     visible: true,
   },
 ];
+
+// ── Public Page Link ──────────────────────────────────────────────────────────
+function PublicPageLink() {
+  const [copied, setCopied] = useState(false);
+  const base = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
+  const publicUrl = `${window.location.origin}${base}/`;
+
+  function copy() {
+    navigator.clipboard.writeText(publicUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="rounded-3xl border border-yellow-400/40 bg-yellow-400/5 p-6">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-9 h-9 rounded-xl bg-yellow-400/20 flex items-center justify-center">
+          <Globe className="w-4 h-4 text-yellow-400" />
+        </div>
+        <div>
+          <p className="font-black text-white text-sm">Public Page Link</p>
+          <p className="text-xs text-slate-400">Share this link to send people to the public home page</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3">
+        <p className="flex-1 font-mono text-sm text-yellow-300 truncate">{publicUrl}</p>
+        <button
+          onClick={copy}
+          className="flex items-center gap-1.5 rounded-xl bg-yellow-400 px-3 py-1.5 text-xs font-black text-slate-950 hover:bg-yellow-300 transition shrink-0"
+        >
+          <Copy className="w-3.5 h-3.5" />
+          {copied ? "Copied!" : "Copy"}
+        </button>
+        <a
+          href={publicUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 rounded-xl border border-slate-700 px-3 py-1.5 text-xs font-bold text-slate-300 hover:border-yellow-400 hover:text-yellow-400 transition shrink-0"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          Open
+        </a>
+      </div>
+    </div>
+  );
+}
 
 // ── Subcomponents ─────────────────────────────────────────────────────────────
 function StatCard({ label, value, tone = "default" }: { label: string; value: number; tone?: "danger" | "default" }) {
@@ -705,6 +753,9 @@ export default function OwnerPage() {
         {/* Dashboard tab */}
         {activeTab === "Dashboard" && (
           <>
+            {/* Public page link */}
+            <PublicPageLink />
+
             {/* Top stat cards */}
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
               <StatCard label="Total Subscribers" value={stats.totalSubscribers} />
