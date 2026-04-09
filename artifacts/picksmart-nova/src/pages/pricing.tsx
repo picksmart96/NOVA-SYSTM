@@ -13,10 +13,10 @@ export default function PricingPage() {
 
   const companyPrice =
     companyBilling === "weekly"
-      ? { price: "$1,660", billing: "per week" }
+      ? { price: "$400", billing: "per week" }
       : companyBilling === "monthly"
-      ? { price: "$6,400", billing: "per month" }
-      : { price: "$69,000", billing: "per year" };
+      ? { price: "$1,600", billing: "per month" }
+      : { price: "$1,600", billing: "per year" };
 
   return (
     <div className="min-h-screen bg-slate-950 px-6 py-12 text-white">

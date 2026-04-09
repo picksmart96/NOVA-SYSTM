@@ -23,7 +23,7 @@ export default function PricingSection() {
           subtitle={t("home.pricing.subtitle")}
         />
 
-        <div className="mt-12 grid lg:grid-cols-3 gap-6">
+        <div className="mt-12 grid lg:grid-cols-2 gap-6 max-w-4xl mx-auto">
           {plans.map((plan) => (
             <div
               key={plan.title}

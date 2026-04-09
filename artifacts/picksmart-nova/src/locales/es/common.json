@@ -552,12 +552,11 @@
     "pricing": {
       "eyebrow": "Precios Simples",
       "title": "Invierte en Tu Carrera",
-      "subtitle": "Comienza gratis o desbloquea todo con Pro. La mayoría de los selectores recuperan el costo en su primera semana de mejores tasas.",
+      "subtitle": "Dos planes. Uno para selectores individuales, uno para operaciones completas de empresa. Sin cargos ocultos.",
       "mostPopular": "Más Popular",
       "plans": [
-        { "title": "Selector", "subtitle": "Capacita selectores individuales", "price": "$10", "suffix": "/por selector", "cta": "Comenzar Capacitación", "features": ["Acceso para 1 selector", "Los 6 módulos de capacitación", "Seguimiento de progreso", "Informes de rendimiento", "Soporte de entrenador"] },
-        { "title": "Pro Mensual", "subtitle": "Acceso completo a toda la capacitación", "price": "$29.99", "suffix": "/mes", "cta": "Ir Pro", "featured": true, "features": ["Los 6 módulos de capacitación", "Lecciones y demostraciones en video", "Técnicas avanzadas de velocidad", "Clase magistral de construcción de tarimas", "Estrategias de mejora de tasa", "Contenido nuevo mensual"] },
-        { "title": "Pro Anual", "subtitle": "Ahorra más del 40% al año", "price": "$199.99", "suffix": "/año", "cta": "Ir Anual", "features": ["Todo en Pro Mensual", "Ahorra $81 por año", "Soporte prioritario", "Acceso anticipado a nuevos módulos", "Insignia de certificación"] }
+        { "title": "Professional Single", "subtitle": "Para selectores individuales", "price": "$25", "suffix": "/mes", "cta": "Comenzar", "features": ["Acceso completo a capacitación", "Entrenador de IA NOVA Help", "Sesiones NOVA Trainer", "Biblioteca de Errores Comunes", "Tabla de Clasificación", "Selector Breaking News"] },
+        { "title": "Company Unlimited", "subtitle": "Para equipos y operaciones de almacén", "price": "$1,600", "suffix": "/año", "cta": "Acceso Empresa", "featured": true, "features": ["Todo en Professional Single", "Usuarios ilimitados del equipo", "Panel del Entrenador", "Panel del Supervisor", "Acceso ilimitado a capacitación y flujo", "Soporte prioritario"] }
       ]
     },
     "finalCta": {

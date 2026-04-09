@@ -552,12 +552,11 @@
     "pricing": {
       "eyebrow": "Simple Pricing",
       "title": "Invest in Your Career",
-      "subtitle": "Start free or unlock everything with Pro. Most selectors make back the cost in their first week of better rates.",
+      "subtitle": "Two plans. One for individual selectors, one for full company operations. No hidden fees.",
       "mostPopular": "Most Popular",
       "plans": [
-        { "title": "Selector", "subtitle": "Train individual warehouse selectors", "price": "$10", "suffix": "/per selector", "cta": "Start Training", "features": ["Access for 1 selector", "All 6 training modules", "Progress tracking", "Performance reports", "Trainer support"] },
-        { "title": "Pro Monthly", "subtitle": "Full access to all training", "price": "$29.99", "suffix": "/month", "cta": "Go Pro", "featured": true, "features": ["All 6 training modules", "Video lessons & demonstrations", "Advanced speed techniques", "Pallet building masterclass", "Rate improvement strategies", "New content added monthly"] },
-        { "title": "Pro Annual", "subtitle": "Save over 40% annually", "price": "$199.99", "suffix": "/year", "cta": "Go Annual", "features": ["Everything in Pro Monthly", "Save $81 per year", "Priority support", "Early access to new modules", "Certification badge"] }
+        { "title": "Professional Single", "subtitle": "For individual selectors", "price": "$25", "suffix": "/month", "cta": "Get Started", "features": ["Full training access", "NOVA Help AI coach", "NOVA Trainer sessions", "Common Mistakes library", "Leaderboard", "Selector Breaking News"] },
+        { "title": "Company Unlimited", "subtitle": "For teams and warehouse operations", "price": "$1,600", "suffix": "/year", "cta": "Get Company Access", "featured": true, "features": ["Everything in Professional Single", "Unlimited team users", "Trainer Dashboard", "Supervisor Dashboard", "Unlimited training & workflow access", "Priority support"] }
       ]
     },
     "finalCta": {

@@ -47,9 +47,7 @@ export default function ChoosePlanPage() {
             <p className="mt-3 text-slate-300">Weekly, monthly, or yearly unlimited company access.</p>
 
             <div className="mt-6 space-y-2 text-slate-300">
-              <p>• $1,660 weekly</p>
-              <p>• $6,400 monthly</p>
-              <p>• $69,000 yearly</p>
+              <p>• $1,600/year</p>
               <p>• Unlimited users</p>
               <p>• Trainer Dashboard</p>
               <p>• Supervisor Dashboard</p>
