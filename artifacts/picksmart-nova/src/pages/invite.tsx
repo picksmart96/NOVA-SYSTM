@@ -67,8 +67,8 @@ export default function InvitePage() {
       <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
         <div className="rounded-3xl border border-red-500/30 bg-slate-900 p-10 max-w-md w-full text-center">
           <AlertTriangle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-          <h1 className="text-2xl font-black text-white mb-2">Invalid invite</h1>
-          <p className="text-slate-400">This invite link has already been used or does not exist.</p>
+          <h1 className="text-2xl font-black text-white mb-2">Invalid invite link</h1>
+          <p className="text-slate-400">This invite link appears to be broken or incomplete. Ask your admin to resend it.</p>
         </div>
       </div>
     );

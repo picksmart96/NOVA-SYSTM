@@ -245,16 +245,17 @@ export const useAuthStore = create<AuthState>()(
       },
 
       getInvite: (token) => {
-        // First check if already used
-        if (get().usedTokens.includes(token)) return undefined;
-        // Decode from token itself (works on any device)
+        // Decode invite data from the token itself — works on any device.
+        // No expiry or single-use restriction: invite links stay valid forever
+        // so the owner can forward the same link as many times as needed.
         return decodeInviteToken(token) ?? undefined;
       },
 
       acceptInvite: (token, username, password) => {
-        if (get().usedTokens.includes(token)) return false;
         const invite = decodeInviteToken(token);
         if (!invite) return false;
+        // Only enforce unique usernames — prevents duplicate accounts while
+        // keeping the link itself permanently reusable.
         const taken = get().accounts.find((a) => a.username === username);
         if (taken) return false;
 
@@ -275,9 +276,7 @@ export const useAuthStore = create<AuthState>()(
               warehouseSlug: invite.warehouseSlug ?? null,
             },
           ],
-          // Mark token as used so it can't be reused
-          usedTokens: [...state.usedTokens, token],
-          // Remove from pending list if present
+          // Remove from pending list if present (cosmetic — link stays valid)
           pendingInvites: state.pendingInvites.filter((i) => i.token !== token),
         }));
         return true;
@@ -288,7 +287,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         accounts: state.accounts,
         pendingInvites: state.pendingInvites,
-        usedTokens: state.usedTokens,
+        // usedTokens intentionally excluded — invite links are now permanent.
         // Persist currentUser so sessions survive page refresh and direct link visits.
         // locked is excluded so the screen never auto-locks on load.
         currentUser: state.currentUser,
