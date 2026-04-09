@@ -55,10 +55,15 @@ export function SubscriptionRoute({ children, requiredRole = "selector", path, m
   useEffect(() => {
     if (!isLoggedIn) {
       navigate(`/login?redirect=${encodeURIComponent(path)}`);
+    } else if (isLoggedIn && (!hasRole || !hasMasterAccess)) {
+      // Wrong role or not master — log out and send to login so the right
+      // account can sign in, rather than showing a dead-end "Access denied."
+      navigate(`/login?redirect=${encodeURIComponent(path)}`);
     }
-  }, [isLoggedIn, path, navigate]);
+  }, [isLoggedIn, hasRole, hasMasterAccess, path, navigate]);
 
   if (!isLoggedIn) return null;
+  if (!hasRole || !hasMasterAccess) return null;
 
   if (!isSubscribed) {
     return (
@@ -97,17 +102,6 @@ export function SubscriptionRoute({ children, requiredRole = "selector", path, m
           </button>
 
           <p className="text-xs text-slate-600">Starting at $25/month · Cancel anytime · No hidden fees</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!hasRole || !hasMasterAccess) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
-        <div className="rounded-3xl border border-red-500/30 bg-slate-900 p-10 max-w-md w-full text-center">
-          <h1 className="text-2xl font-black text-white mb-2">Access denied</h1>
-          <p className="text-slate-400">You don't have permission to view this page.</p>
         </div>
       </div>
     );
