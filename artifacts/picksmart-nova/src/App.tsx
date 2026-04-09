@@ -1,4 +1,5 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
+import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -31,7 +32,6 @@ import NovaTrainerPage from "@/pages/nova/NovaTrainerPage";
 import NovaHelpPage from "@/pages/nova-help";
 import TrainerPortalPage from "@/pages/trainer-portal";
 import SupervisorPage from "@/pages/supervisor";
-import UsersAccessPage from "@/pages/users-access";
 import ChoosePlanPage from "@/pages/choose-plan";
 import PersonalCheckoutPage from "@/pages/checkout-personal";
 import CompanyCheckoutPage from "@/pages/checkout-company";
@@ -43,6 +43,12 @@ import LoginPage from "@/pages/login";
 import InvitePage from "@/pages/invite";
 import LockScreen from "@/components/LockScreen";
 import { useAuthStore } from "@/lib/authStore";
+
+function RedirectToOwner() {
+  const [, navigate] = useLocation();
+  useEffect(() => { navigate("/owner", { replace: true }); }, [navigate]);
+  return null;
+}
 
 const queryClient = new QueryClient();
 
@@ -177,13 +183,9 @@ function Router() {
         </Layout>
       </Route>
 
-      {/* Owner-only — master account (draogo96) exclusively */}
+      {/* /users-access redirects to Control Center (Users & Access is now a tab there) */}
       <Route path="/users-access">
-        <Layout>
-          <SubscriptionRoute path="/users-access" requiredRole="owner" masterOnly>
-            <UsersAccessPage />
-          </SubscriptionRoute>
-        </Layout>
+        <RedirectToOwner />
       </Route>
       <Route path="/owner">
         <Layout>

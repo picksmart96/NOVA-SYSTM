@@ -57,9 +57,6 @@ export function useRoleNav(): NavLink[] {
   if (currentUser?.role === "owner") {
     links.push({ href: "/owner", label: "Control Center", group: "owner" });
   }
-  if (currentUser?.username === "draogo96") {
-    links.push({ href: "/users-access", label: t("nav.usersAccess"), group: "owner" });
-  }
 
   links.push(
     { href: "/mistakes", label: t("nav.commonMistakes"), group: "public" },
