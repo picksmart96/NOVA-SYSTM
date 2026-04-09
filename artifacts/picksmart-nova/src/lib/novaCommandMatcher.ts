@@ -43,12 +43,13 @@ export function matchCommand(input = "") {
   const text = normalizeText(input);
 
   const commands = [
-    { key: "confirm", phrases: ["confirm", "yes", "affirmative", "comfirm", "confarm", "consirm"] },
-    { key: "deny",    phrases: ["no", "negative", "cancel"] },
-    { key: "ready",   phrases: ["ready"] },
+    { key: "confirm",  phrases: ["confirm", "yes", "affirmative", "comfirm", "confarm", "consirm"] },
+    { key: "deny",     phrases: ["no", "negative", "cancel"] },
+    { key: "ready",    phrases: ["ready"] },
     { key: "load_picks", phrases: ["load picks", "load pick"] },
-    { key: "stop",    phrases: ["stop"] },
-    { key: "wake",    phrases: ["hey nova"] },
+    { key: "stop",     phrases: ["stop"] },
+    { key: "wake",     phrases: ["hey nova"] },
+    { key: "repeat",   phrases: ["nova repeat", "repeat", "say again", "say it again", "again"] },
   ];
 
   for (const command of commands) {

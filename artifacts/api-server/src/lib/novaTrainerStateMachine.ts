@@ -374,6 +374,12 @@ export function createNovaTrainerSession({
     if (state.phase === PHASES.PICK_CHECK) {
       const stop = currentStop();
       if (!stop) return snapshot();
+
+      // "nova repeat" / "repeat" → re-announce current aisle and slot
+      if (input === "repeat") {
+        return setPrompt(`Aisle ${stop.aisle} slot ${stop.slot}`);
+      }
+
       const digits = digitsOnly(input);
       if (!digits) {
         state.invalidCount += 1;
@@ -400,6 +406,11 @@ export function createNovaTrainerSession({
       // Fallback: selector manually says "ready" (e.g. if auto-advance signal was lost)
       if (isReady(input) || isConfirm(input)) {
         return moveToNextStop();
+      }
+      // Repeat → re-announce current aisle and slot even in ready window
+      if (input === "repeat") {
+        const stop = currentStop();
+        if (stop) return setPrompt(`Aisle ${stop.aisle} slot ${stop.slot}`);
       }
       return snapshot();
     }
