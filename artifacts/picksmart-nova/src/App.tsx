@@ -43,6 +43,7 @@ import SelectorPortalPage from "@/pages/selector-portal";
 import LoginPage from "@/pages/login";
 import InvitePage from "@/pages/invite";
 import LockScreen from "@/components/LockScreen";
+import OwnerGate from "@/components/OwnerGate";
 import { useAuthStore } from "@/lib/authStore";
 import PrivacyPage from "@/pages/privacy";
 import TermsPage from "@/pages/terms";
@@ -252,15 +253,19 @@ function Router() {
         </Layout>
       </Route>
 
-      {/* /users-access redirects to Control Center (Users & Access is now a tab there) */}
+      {/* /users-access goes to the same Owner Control Center gate */}
       <Route path="/users-access">
-        <RedirectToOwner />
+        <Layout>
+          <OwnerGate>
+            <OwnerPage />
+          </OwnerGate>
+        </Layout>
       </Route>
       <Route path="/owner">
         <Layout>
-          <SubscriptionRoute path="/owner" requiredRole="owner" masterOnly>
+          <OwnerGate>
             <OwnerPage />
-          </SubscriptionRoute>
+          </OwnerGate>
         </Layout>
       </Route>
 
