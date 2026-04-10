@@ -202,17 +202,25 @@ export function useVoiceEngine({
       silenceStartVADRef.current = null;
       chunksRef.current = [];
 
-      // Open microphone
+      // ── Mic stream — reuse existing one to avoid repeated permission prompts ─
+      // We keep the mic stream alive between VAD clips. getUserMedia() is only
+      // called if there's no active stream (first start or after iOS TTS stop).
       let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      } catch (err) {
-        console.error("[NOVA VAD] mic error:", err);
-        setError("Microphone unavailable.");
-        setStatus(STATUS.ERROR);
-        return;
+      if (micStreamRef.current?.active) {
+        stream = micStreamRef.current;
+        console.log("[NOVA VAD] reusing existing mic stream");
+      } else {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          micStreamRef.current = stream;
+          console.log("[NOVA VAD] acquired new mic stream");
+        } catch (err) {
+          console.error("[NOVA VAD] mic error:", err);
+          setError("Microphone unavailable.");
+          setStatus(STATUS.ERROR);
+          return;
+        }
       }
-      micStreamRef.current = stream;
 
       // Pick best format
       const mimeType = MediaRecorder.isTypeSupported("audio/webm")
@@ -240,12 +248,13 @@ export function useVoiceEngine({
           recorder.onstop = () => res();
           try { recorder.stop(); } catch { res(); }
         });
-        stream.getTracks().forEach((t) => t.stop());
-        micStreamRef.current = null;
+        // Keep the mic stream alive so the browser doesn't ask for permission
+        // again on the next clip. Only iOS stops the stream (in speak()) because
+        // iOS AudioSession can't record and play back simultaneously.
+        mediaRecorderRef.current = null;
 
         const blob = new Blob(chunksRef.current, { type: mimeType });
         chunksRef.current = [];
-        mediaRecorderRef.current = null;
         console.log("[NOVA VAD] clip ready, size:", blob.size, "speech:", speechDetectedRef.current);
 
         if (speechDetectedRef.current && blob.size >= 300) {
@@ -284,15 +293,17 @@ export function useVoiceEngine({
         const tick = () => {
           if (!vadActiveRef.current) return;
 
-          // NOVA started speaking — abort current clip
+          // NOVA started speaking — abort current clip but keep the mic stream
+          // alive so the browser doesn't need to re-ask for permission.
           if (vadSpeakingRef.current) {
             vadActiveRef.current = false;
             try { recorder.stop(); } catch { /* ignore */ }
             mediaRecorderRef.current = null;
             chunksRef.current = [];
             try { ctx.close(); } catch { /* ignore */ }
-            stream.getTracks().forEach((t) => t.stop());
-            micStreamRef.current = null;
+            // On iOS the speak() function already stops the mic stream so that
+            // the AudioSession can switch from record→playback mode. On other
+            // platforms we leave the stream open to avoid the permission popup.
             setVolume(0);
             return;
           }
@@ -329,8 +340,7 @@ export function useVoiceEngine({
             mediaRecorderRef.current = null;
             chunksRef.current = [];
             try { ctx.close(); } catch { /* ignore */ }
-            stream.getTracks().forEach((t) => t.stop());
-            micStreamRef.current = null;
+            // Keep stream alive — no permission prompt on restart
             setVolume(0);
             if (vadModeRef.current && !vadSpeakingRef.current) {
               setTimeout(() => { startVADRef.current(); }, 250);

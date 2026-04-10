@@ -19,6 +19,19 @@ const DIGIT_MAP: Record<string, string> = {
   cinco: "5", seis: "6", siete: "7", ocho: "8", nueve: "9",
 };
 
+// Set used for fast O(1) lookup in isPureDigitWords()
+const DIGIT_WORD_SET = new Set(Object.keys(DIGIT_MAP));
+
+/**
+ * Returns true when every token in the input is a digit word (English or Spanish).
+ * Used to short-circuit command matching — "one", "dos", "oh" etc. should never
+ * be fuzzy-matched against "no" and sent as "deny" to the server.
+ */
+function isPureDigitWords(text: string): boolean {
+  const words = text.toLowerCase().trim().split(/\s+/);
+  return words.length > 0 && words.every((w) => DIGIT_WORD_SET.has(w));
+}
+
 function wordsToDigits(text: string): string {
   const lower = text.toLowerCase().trim();
   const words = lower.split(/\s+/);
@@ -159,10 +172,23 @@ export default function NovaTrainerSession({
   const voice = useVoiceEngine({
     onHeard: async (_heard: string, raw: string) => {
       const text = raw || _heard;
+      const heard = _heard || text;
+
+      // If every spoken word is a digit word ("one", "zero", "dos", "tres" …)
+      // send the digits directly — NEVER run command matching on these.
+      // "one" has Levenshtein distance 2 from "no" and would falsely trigger
+      // deny; same problem with "oh", "dos", "uno", etc.
+      if (isPureDigitWords(heard)) {
+        const digits = wordsToDigits(heard);
+        setHeardResponse(digits);
+        sendInputRef.current(digits);
+        return;
+      }
+
       const command = matchCommand(text);
       // If no named command matched, convert digit words to digits so NOVA's state
       // machine can parse equipment IDs like "00001" from "zero zero zero zero one"
-      const normalized = command ?? wordsToDigits(_heard || text);
+      const normalized = command ?? wordsToDigits(heard);
       setHeardResponse(normalized);
       sendInputRef.current(normalized);
     },

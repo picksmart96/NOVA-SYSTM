@@ -36,20 +36,70 @@ function closeEnough(input: string, target: string, maxDistance = 2) {
   if (a === b) return true;
   if (a.includes(b) || b.includes(a)) return true;
 
-  return levenshtein(a, b) <= maxDistance;
+  // Short targets (≤ 2 chars) must be exact — a distance of 2 on "no" would
+  // match digit words like "one", "oh", "ok", "dos", "un" causing false denies.
+  const effectiveMax = b.length <= 2 ? 0 : maxDistance;
+  return levenshtein(a, b) <= effectiveMax;
 }
 
 export function matchCommand(input = "") {
   const text = normalizeText(input);
 
   const commands = [
-    { key: "confirm",  phrases: ["confirm", "yes", "affirmative", "comfirm", "confarm", "consirm"] },
-    { key: "deny",     phrases: ["no", "negative", "cancel"] },
-    { key: "ready",    phrases: ["ready"] },
-    { key: "load_picks", phrases: ["load picks", "load pick"] },
-    { key: "stop",     phrases: ["stop"] },
-    { key: "wake",     phrases: ["hey nova"] },
-    { key: "repeat",   phrases: ["nova repeat", "repeat", "say again", "say it again", "again"] },
+    {
+      key: "confirm",
+      phrases: [
+        "confirm", "yes", "affirmative", "comfirm", "confarm", "consirm",
+        // Spanish
+        "si", "sí", "correcto", "confirmado", "afirmativo",
+      ],
+    },
+    {
+      key: "deny",
+      phrases: [
+        "no", "negative", "cancel", "nope",
+        // Spanish
+        "negativo", "incorrecto", "cancelar",
+      ],
+    },
+    {
+      key: "ready",
+      phrases: [
+        "ready", "redy", "reddy",
+        // Spanish
+        "listo", "lista", "listos",
+      ],
+    },
+    {
+      key: "load_picks",
+      phrases: [
+        "load picks", "load pick",
+        // Spanish
+        "cargar picks", "cargar pix", "cargar",
+      ],
+    },
+    {
+      key: "stop",
+      phrases: [
+        "stop",
+        // Spanish
+        "parar", "detener", "terminar",
+      ],
+    },
+    {
+      key: "wake",
+      phrases: [
+        "hey nova", "hola nova",
+      ],
+    },
+    {
+      key: "repeat",
+      phrases: [
+        "nova repeat", "repeat", "say again", "say it again", "again",
+        // Spanish
+        "repetir", "repite", "otra vez",
+      ],
+    },
   ];
 
   for (const command of commands) {
