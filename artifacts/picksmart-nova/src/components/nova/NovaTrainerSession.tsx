@@ -4,6 +4,33 @@ import { useVoiceEngine } from "@/hooks/useVoiceEngine";
 import { matchCommand } from "@/lib/novaCommandMatcher";
 import { useTrainerStore } from "@/lib/trainerStore";
 
+/**
+ * Convert spoken digit words to numeric digits.
+ * "zero zero zero zero one" → "00001"
+ * "two"                     → "2"
+ * "bay three"               → "bay 3"
+ */
+const DIGIT_MAP: Record<string, string> = {
+  zero: "0", oh: "0", o: "0",
+  one: "1", two: "2", three: "3", four: "4", five: "5",
+  six: "6", seven: "7", eight: "8", nine: "9",
+  // Spanish
+  cero: "0", uno: "1", dos: "2", tres: "3", cuatro: "4",
+  cinco: "5", seis: "6", siete: "7", ocho: "8", nueve: "9",
+};
+
+function wordsToDigits(text: string): string {
+  const lower = text.toLowerCase().trim();
+  const words = lower.split(/\s+/);
+  // If every word is a digit word, concatenate them (e.g. equipment ID)
+  if (words.length > 0 && words.every((w) => DIGIT_MAP[w] !== undefined)) {
+    return words.map((w) => DIGIT_MAP[w]).join("");
+  }
+  // Otherwise replace individual digit words in context (e.g. "bay three" → "bay 3")
+  return lower.replace(/\b(zero|oh|one|two|three|four|five|six|seven|eight|nine|cero|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve)\b/g,
+    (w) => DIGIT_MAP[w] ?? w);
+}
+
 // Mobile / iOS browsers require a user gesture before AudioContext + speech APIs
 // are unlocked. Detect here so we can show a tap-to-start gate.
 const IS_MOBILE =
@@ -133,8 +160,10 @@ export default function NovaTrainerSession({
     onHeard: async (_heard: string, raw: string) => {
       const text = raw || _heard;
       const command = matchCommand(text);
-      const normalized = command ?? text;
-      setHeardResponse(text);
+      // If no named command matched, convert digit words to digits so NOVA's state
+      // machine can parse equipment IDs like "00001" from "zero zero zero zero one"
+      const normalized = command ?? wordsToDigits(_heard || text);
+      setHeardResponse(normalized);
       sendInputRef.current(normalized);
     },
     lang: ttsLang,

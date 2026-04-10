@@ -1,5 +1,5 @@
 import express, { Router } from "express";
-import { speechToText } from "@workspace/integrations-openai-ai-server/audio";
+import { openai, detectAudioFormat, toFile } from "@workspace/integrations-openai-ai-server/audio";
 
 const router = Router();
 
@@ -8,8 +8,9 @@ const router = Router();
  * Body: raw audio bytes (Content-Type: audio/webm | audio/ogg | audio/mp4 | audio/wav)
  * Returns: { transcript: string }
  *
- * Passes audio directly to OpenAI Whisper without ffmpeg conversion.
- * Whisper natively supports webm, ogg, mp3, mp4, and wav — no format conversion needed.
+ * Uses whisper-1 with magic-byte format detection. No ffmpeg required — whisper
+ * natively handles webm/ogg/mp4/mp3/wav. Format is detected from buffer magic bytes
+ * rather than Content-Type so the correct filename extension is always sent to OpenAI.
  */
 router.post(
   "/transcribe",
@@ -21,21 +22,29 @@ router.post(
       return res.status(400).json({ error: "No audio data received." });
     }
 
-    console.log(`[transcribe] received ${audioBuffer.length} bytes`);
+    const lang = (req.query.lang as string | undefined) || "en";
+    console.log(`[transcribe] received ${audioBuffer.length} bytes, lang: ${lang}`);
 
     try {
-      // Detect format directly from Content-Type — no ffmpeg needed.
-      // Whisper supports webm, ogg, mp3, mp4, wav natively.
-      const ct: string = (req.headers["content-type"] ?? "audio/webm").toLowerCase();
-      let format: "wav" | "mp3" | "webm" = "webm";
-      if (ct.includes("mp3") || ct.includes("mpeg")) format = "mp3";
-      else if (ct.includes("wav"))                   format = "wav";
-      else                                           format = "webm"; // webm/ogg both work
+      // Detect real format from buffer magic bytes (more reliable than Content-Type)
+      const detected = detectAudioFormat(audioBuffer);
+      // Map to supported file extensions; ogg is accepted as webm by Whisper
+      const ext = detected === "unknown" ? "webm"
+                : detected === "ogg"     ? "ogg"
+                :                          detected;
+      console.log(`[transcribe] detected format: ${detected} → file ext: .${ext}`);
 
-      console.log(`[transcribe] format: ${format}`);
+      // Wrap in a File object so OpenAI SDK sends proper multipart/form-data
+      const file = await toFile(audioBuffer, `audio.${ext}`);
 
-      const transcript = await speechToText(audioBuffer, format);
-      const cleaned = transcript?.trim() ?? "";
+      // whisper-1 is the most permissive and battle-tested model for audio formats
+      const response = await openai.audio.transcriptions.create({
+        file,
+        model: "whisper-1",
+        language: lang.startsWith("es") ? "es" : "en",
+      });
+
+      const cleaned = response.text?.trim() ?? "";
       console.log(`[transcribe] result: "${cleaned}"`);
       return res.json({ transcript: cleaned });
     } catch (err) {

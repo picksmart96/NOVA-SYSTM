@@ -11,3 +11,5 @@ export {
   speechToText,
   speechToTextStream,
 } from "./client";
+
+export { toFile } from "openai";

@@ -620,18 +620,31 @@ export function useVoiceEngine({
     setSupported(!!getRecognitionClass());
     setError("");
 
-    // ── iOS / Mobile: skip the eager getUserMedia here ────────────────────
-    // On iOS, opening the microphone activates the AudioSession in "record"
-    // mode, which prevents speechSynthesis from being audible. We skip the
-    // permission probe and let the VAD loop request the mic only AFTER the
-    // first TTS prompt has finished speaking.
+    // ── Mobile: prefer SpeechRecognition; fall back to VAD ───────────────
+    // On non-iOS mobile (Android Chrome), SpeechRecognition works well and
+    // avoids needing server-side transcription. On iOS, SpeechRecognition can
+    // also work but we guard with the same approach. We no longer force VAD
+    // on all mobile devices — that required a working OpenAI transcription
+    // path which is fragile. SpeechRecognition is self-contained in the browser.
     if (IS_MOBILE) {
-      setMicPermission("granted"); // optimistic — VAD will handle real prompt
+      const RecClass = getRecognitionClass();
+      if (RecClass) {
+        // SpeechRecognition is available — use it. No getUserMedia needed here;
+        // the browser manages its own audio session for SpeechRecognition.
+        setMicPermission("granted");
+        setInitialized(true);
+        serviceRetryRef.current = 0;
+        shouldRunRef.current = true;
+        console.log("[NOVA voice] mobile: SpeechRecognition available, ios:", IS_IOS);
+        return true;
+      }
+      // No SpeechRecognition (rare) — fall back to VAD
+      setMicPermission("granted");
       setInitialized(true);
       serviceRetryRef.current = 0;
-      console.log("[NOVA voice] initialized (mobile fast-path), ios:", IS_IOS);
       vadModeRef.current = true;
       setVadMode(true);
+      console.log("[NOVA voice] mobile: no SpeechRecognition, using VAD, ios:", IS_IOS);
       return true;
     }
 
