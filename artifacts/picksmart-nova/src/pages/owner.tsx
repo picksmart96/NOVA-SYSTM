@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon } from "lucide-react";
+import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon, FlaskConical } from "lucide-react";
 import { Link } from "wouter";
 import { OWNER_TOKEN } from "./owner-access";
 import { useAuthStore, AuthAccount, AuthRole } from "@/lib/authStore";
@@ -47,16 +47,24 @@ const PLANS = [
 // ── Public Page Link + Owner Magic Link ───────────────────────────────────────
 function PublicPageLink() {
   const [copiedPublic, setCopiedPublic] = useState(false);
+  const [copiedDemo,   setCopiedDemo]   = useState(false);
   const [copiedMagic,  setCopiedMagic]  = useState(false);
 
   const base      = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
   const publicUrl = `${window.location.origin}${base}/`;
+  const demoUrl   = `${window.location.origin}${base}/demo`;
   const magicUrl  = `${window.location.origin}${base}/owner-access?token=${OWNER_TOKEN}`;
 
   function copyPublic() {
     navigator.clipboard.writeText(publicUrl);
     setCopiedPublic(true);
     setTimeout(() => setCopiedPublic(false), 2000);
+  }
+
+  function copyDemo() {
+    navigator.clipboard.writeText(demoUrl);
+    setCopiedDemo(true);
+    setTimeout(() => setCopiedDemo(false), 2000);
   }
 
   function copyMagic() {
@@ -95,6 +103,38 @@ function PublicPageLink() {
           >
             <ExternalLink className="w-3.5 h-3.5" />
             Open
+          </a>
+        </div>
+      </div>
+
+      {/* Demo link */}
+      <div className="rounded-3xl border border-blue-500/30 bg-blue-500/5 p-6">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-9 h-9 rounded-xl bg-blue-500/20 flex items-center justify-center">
+            <FlaskConical className="w-4 h-4 text-blue-400" />
+          </div>
+          <div>
+            <p className="font-black text-white text-sm">Public Demo Link</p>
+            <p className="text-xs text-slate-400">Share this to let anyone explore the platform without signing up</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3">
+          <p className="flex-1 font-mono text-sm text-blue-300 truncate">{demoUrl}</p>
+          <button
+            onClick={copyDemo}
+            className="flex items-center gap-1.5 rounded-xl bg-blue-500 px-3 py-1.5 text-xs font-black text-white hover:bg-blue-400 transition shrink-0"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            {copiedDemo ? "Copied!" : "Copy"}
+          </button>
+          <a
+            href={demoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 rounded-xl border border-slate-700 px-3 py-1.5 text-xs font-bold text-slate-300 hover:border-blue-400 hover:text-blue-400 transition shrink-0"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            Preview
           </a>
         </div>
       </div>
