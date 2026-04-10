@@ -110,6 +110,10 @@ export function useVoiceEngine({
   const langRef              = useRef(lang);
   const onHeardRef           = useRef(onHeard);
   const startRecognitionRef  = useRef<((mode: "wake" | "active") => void) | null>(null);
+  // When we intentionally stop recognition (e.g. before TTS), the browser fires
+  // an "aborted" error. This flag lets onerror ignore that expected event so it
+  // doesn't count toward the VAD fallback retry threshold.
+  const intentionalStopRef   = useRef(false);
 
   // ── VAD refs ──────────────────────────────────────────────────────────────
   const vadModeRef       = useRef(false);  // permanently switched to VAD
@@ -354,15 +358,18 @@ export function useVoiceEngine({
     vadModeRef.current = true;
     setVadMode(true);
     shouldRunRef.current = false;
-    speakingRef.current = false;
-    vadSpeakingRef.current = false;
+    // DO NOT reset speakingRef / vadSpeakingRef here — TTS may still be active.
+    // handleTTSDone will call startVADRef once TTS finishes in vadMode.
     killCurrentRecognition();
-    console.log("[NOVA VAD] switching to automatic voice detection mode");
-    // startVADRef is always current (set in unconditional useEffect above)
-    setTimeout(() => {
-      console.log("[NOVA VAD] timer fired — calling startVADRef");
-      startVADRef.current();
-    }, 400);
+    console.log("[NOVA VAD] switching to automatic voice detection mode, speaking:", speakingRef.current);
+    // Only kick off VAD immediately when NOVA is not speaking.
+    // If TTS is playing, handleTTSDone will start VAD automatically when it ends.
+    if (!speakingRef.current) {
+      setTimeout(() => {
+        console.log("[NOVA VAD] timer fired — calling startVADRef");
+        startVADRef.current();
+      }, 400);
+    }
   }, [killCurrentRecognition]);
 
   // ── SpeechRecognition core ────────────────────────────────────────────────
@@ -426,10 +433,18 @@ export function useVoiceEngine({
         }
 
         if (code === "network" || code === "aborted") {
+          // "aborted" fires whenever we call recognition.stop() intentionally
+          // (e.g. before TTS). Don't count that as a real failure.
+          if (intentionalStopRef.current) {
+            intentionalStopRef.current = false;
+            console.log("[NOVA voice] intentional stop — ignoring aborted error");
+            return;
+          }
           serviceRetryRef.current++;
-          // Mobile browsers (especially iOS) have unreliable SpeechRecognition
-          // — fall back to VAD after just 1 network failure on mobile.
-          const retryThreshold = IS_MOBILE ? 1 : 3;
+          // Raise threshold: 3 transient failures on mobile before falling back to VAD.
+          // The old threshold of 1 was too low — a single timing hiccup after TTS
+          // would permanently switch the session into VAD mode.
+          const retryThreshold = IS_MOBILE ? 3 : 5;
           if (serviceRetryRef.current >= retryThreshold) { activateVAD(); return; }
           return;
         }
@@ -473,7 +488,11 @@ export function useVoiceEngine({
 
   const stopRecognition = useCallback(() => {
     clearSilenceTimer();
-    try { recognitionRef.current?.stop(); } catch { /* ignore */ }
+    if (recognitionRef.current) {
+      // Mark as intentional so the resulting "aborted" onerror is ignored.
+      intentionalStopRef.current = true;
+      try { recognitionRef.current.stop(); } catch { intentionalStopRef.current = false; }
+    }
   }, [clearSilenceTimer]);
 
   // ── Speak ─────────────────────────────────────────────────────────────────
@@ -548,10 +567,14 @@ export function useVoiceEngine({
 
         if (vadModeRef.current) {
           setStatus(STATUS.VAD_RECORDING);
-          setTimeout(() => { startVADRef.current(); }, 300);
+          // On iOS the AudioSession takes longer to release after TTS.
+          setTimeout(() => { startVADRef.current(); }, IS_IOS ? 600 : 300);
         } else if (shouldRunRef.current) {
           serviceRetryRef.current = 0;
-          setTimeout(() => startRecognition(after), 80);
+          // iOS needs extra time after TTS ends before SpeechRecognition can
+          // acquire the audio input session — 80 ms is too tight and causes
+          // "aborted" errors that used to permanently break the mic.
+          setTimeout(() => startRecognition(after), IS_MOBILE ? 550 : 80);
         } else {
           setStatus(STATUS.STOPPED);
         }
@@ -567,9 +590,9 @@ export function useVoiceEngine({
         onEnd?.();
         if (vadModeRef.current) {
           setStatus(STATUS.VAD_RECORDING);
-          setTimeout(() => startVADRef.current(), 300);
+          setTimeout(() => startVADRef.current(), IS_IOS ? 600 : 300);
         } else if (shouldRunRef.current) {
-          setTimeout(() => startRecognition(after), 80);
+          setTimeout(() => startRecognition(after), IS_MOBILE ? 550 : 80);
         } else {
           setError("Speech playback failed.");
           setStatus(STATUS.ERROR);
