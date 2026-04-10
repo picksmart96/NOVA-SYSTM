@@ -11,7 +11,7 @@ import {
 import {
   Users, Zap, TrendingUp, BookOpen, Mic, Activity,
   BarChart3, ShieldCheck, ChevronRight, FlaskConical,
-  ArrowRight,
+  ArrowRight, Home, Lock, Shield,
 } from "lucide-react";
 
 // ── Spiral NOVA logo ─────────────────────────────────────────────────────────
@@ -60,11 +60,17 @@ function MetricCard({
 export default function DemoLandingPage() {
   const [, navigate] = useLocation();
   const loginAsDemo = useAuthStore((s) => s.loginAsDemo);
+  const logout = useAuthStore((s) => s.logout);
 
   const enter = (role: "selector" | "trainer" | "supervisor", path: string) => {
     loginAsDemo(role);
     navigate(path);
   };
+
+  function goLogin(redirect: string) {
+    logout();
+    navigate(`/login?redirect=${encodeURIComponent(redirect)}`);
+  }
 
   const activityIcon = (type: string) => {
     if (type === "session")    return <Zap className="h-4 w-4 text-yellow-400" />;
@@ -77,10 +83,20 @@ export default function DemoLandingPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-white">
 
-      {/* ── Demo banner ── */}
-      <div className="bg-yellow-400 px-4 py-2 text-center text-sm font-bold text-slate-950 flex items-center justify-center gap-2">
-        <FlaskConical className="h-4 w-4" />
-        Demo Warehouse Preview — sample data for evaluation only
+      {/* ── Top nav: back to home + demo badge ── */}
+      <div className="bg-yellow-400 px-4 py-2 text-sm font-bold text-slate-950 flex items-center justify-between gap-2">
+        <button
+          onClick={() => navigate("/")}
+          className="flex items-center gap-1.5 hover:opacity-70 transition"
+        >
+          <Home className="h-4 w-4" />
+          Back to Home
+        </button>
+        <span className="flex items-center gap-1.5">
+          <FlaskConical className="h-4 w-4" />
+          Demo Warehouse Preview — sample data only
+        </span>
+        <div className="w-28" />
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 space-y-14">
@@ -328,6 +344,62 @@ export default function DemoLandingPage() {
           </button>
         </div>
 
+        {/* ── Staff / Admin login section ── */}
+        <div className="rounded-2xl border border-slate-700 bg-slate-900 p-8 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-1">Staff &amp; Admin</p>
+              <h2 className="text-2xl font-black text-white">Already have an account?</h2>
+              <p className="text-slate-400 text-sm mt-1">
+                Every session requires a fresh login — your account is locked when you exit.
+              </p>
+            </div>
+            <button
+              onClick={() => navigate("/")}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-5 py-2.5 text-sm font-semibold text-slate-300 hover:border-yellow-400 hover:text-white transition self-start sm:self-auto"
+            >
+              <Home className="h-4 w-4" />
+              Back to Public Page
+            </button>
+          </div>
+
+          <div className="grid sm:grid-cols-3 gap-3">
+            <button
+              onClick={() => goLogin("/owner")}
+              className="flex flex-col items-center gap-2 rounded-2xl border border-yellow-400/30 bg-yellow-400/5 p-5 hover:bg-yellow-400/10 transition text-center"
+            >
+              <Shield className="h-7 w-7 text-yellow-400" />
+              <span className="font-bold text-white text-base">Owner Access</span>
+              <span className="text-xs text-slate-500">Full admin &amp; control center</span>
+              <span className="mt-1 text-xs text-yellow-400 font-semibold flex items-center gap-1">
+                <Lock className="h-3 w-3" /> Requires login every time
+              </span>
+            </button>
+            <button
+              onClick={() => goLogin("/users-access")}
+              className="flex flex-col items-center gap-2 rounded-2xl border border-slate-700 bg-slate-800 p-5 hover:border-slate-500 transition text-center"
+            >
+              <Users className="h-7 w-7 text-blue-400" />
+              <span className="font-bold text-white text-base">User &amp; Access</span>
+              <span className="text-xs text-slate-500">Manage team accounts</span>
+              <span className="mt-1 text-xs text-blue-400 font-semibold flex items-center gap-1">
+                <Lock className="h-3 w-3" /> Requires login every time
+              </span>
+            </button>
+            <button
+              onClick={() => goLogin("/")}
+              className="flex flex-col items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900 p-5 hover:border-slate-500 transition text-center"
+            >
+              <Activity className="h-7 w-7 text-slate-400" />
+              <span className="font-bold text-white text-base">Staff Login</span>
+              <span className="text-xs text-slate-500">Selectors, trainers, supervisors</span>
+              <span className="mt-1 text-xs text-slate-500 font-semibold flex items-center gap-1">
+                <Lock className="h-3 w-3" /> Requires login every time
+              </span>
+            </button>
+          </div>
+        </div>
+
         {/* ── Request access CTA ── */}
         <div className="rounded-2xl border border-slate-700 bg-slate-900 p-8 text-center space-y-4">
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Ready to Start?</p>
@@ -342,12 +414,13 @@ export default function DemoLandingPage() {
             >
               Request Company Access <ArrowRight className="h-4 w-4" />
             </button>
-            <a
-              href="/"
+            <button
+              onClick={() => navigate("/")}
               className="inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-950 px-6 py-3 font-semibold text-white hover:border-yellow-400 transition"
             >
+              <Home className="h-4 w-4 mr-2" />
               Back to Home
-            </a>
+            </button>
           </div>
         </div>
 

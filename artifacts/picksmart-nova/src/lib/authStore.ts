@@ -308,11 +308,9 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         accounts: state.accounts,
         pendingInvites: state.pendingInvites,
-        // usedTokens intentionally excluded — invite links are now permanent.
-        // Persist currentUser so sessions survive page refresh and direct link visits.
-        // Demo sessions are NOT persisted — they must re-enter via /demo.
-        // locked is excluded so the screen never auto-locks on load.
-        currentUser: state.currentUser?.isDemoUser ? null : state.currentUser,
+        // currentUser is intentionally NOT persisted — sessions are cleared on
+        // browser close so every visit to Owner Access / User & Access requires
+        // a fresh login. Demo sessions are never persisted.
       }),
     }
   )
