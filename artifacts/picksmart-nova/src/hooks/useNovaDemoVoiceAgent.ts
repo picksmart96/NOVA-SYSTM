@@ -30,6 +30,7 @@ export interface NovaDemoVoiceAgent {
   initialize: () => Promise<boolean>;
   destroy: () => void;
   stopSpeaking: () => void;
+  sendText: (text: string) => Promise<void>;
   stateLabel: string;
   isListening: boolean;
   isSpeaking: boolean;
@@ -39,6 +40,7 @@ export interface NovaDemoVoiceAgent {
   transcript: TranscriptEntry[];
   error: string;
   micPermission: "unknown" | "granted" | "denied";
+  voiceSupported: boolean;
   language: "en" | "es";
   setLanguage: (lang: "en" | "es") => void;
   showLeadPrompt: boolean;
@@ -49,6 +51,7 @@ export default function useNovaDemoVoiceAgent(): NovaDemoVoiceAgent {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const interruptRef = useRef(false);
   const sessionIdRef = useRef(`demo-agent-${Math.random().toString(36).slice(2)}-${Date.now()}`);
+  const voiceSupported = !!getRecognitionCtor();
 
   const [language, setLanguage] = useState<"en" | "es">("en");
   const [isListening, setIsListening] = useState(false);
@@ -131,6 +134,15 @@ export default function useNovaDemoVoiceAgent(): NovaDemoVoiceAgent {
       setIsThinking(false);
       setError(language === "es" ? "No se pudo conectar con NOVA." : "Could not reach NOVA.");
     }
+  };
+
+  // Public method: send a typed message to NOVA
+  const sendText = async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setLastHeard(trimmed);
+    pushTranscript("user", trimmed);
+    await sendToAgent(trimmed);
   };
 
   const startRecognition = () => {
@@ -275,9 +287,10 @@ export default function useNovaDemoVoiceAgent(): NovaDemoVoiceAgent {
   }, []);
 
   return {
-    initialize, destroy, stopSpeaking,
+    initialize, destroy, stopSpeaking, sendText,
     stateLabel, isListening, isSpeaking, isThinking,
     lastHeard, lastReply, transcript, error, micPermission,
+    voiceSupported,
     language, setLanguage, showLeadPrompt, setShowLeadPrompt,
   };
 }
