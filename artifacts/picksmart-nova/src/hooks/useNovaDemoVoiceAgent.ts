@@ -31,6 +31,7 @@ export interface NovaDemoVoiceAgent {
   destroy: () => void;
   stopSpeaking: () => void;
   sendText: (text: string) => Promise<void>;
+  speakMessage: (text: string) => void;
   stateLabel: string;
   isListening: boolean;
   isSpeaking: boolean;
@@ -286,8 +287,14 @@ export default function useNovaDemoVoiceAgent(): NovaDemoVoiceAgent {
     };
   }, []);
 
+  // Public TTS-only method — no mic required
+  const speakMessage = (text: string) => {
+    interruptRef.current = false;
+    speak(text);
+  };
+
   return {
-    initialize, destroy, stopSpeaking, sendText,
+    initialize, destroy, stopSpeaking, sendText, speakMessage,
     stateLabel, isListening, isSpeaking, isThinking,
     lastHeard, lastReply, transcript, error, micPermission,
     voiceSupported,
