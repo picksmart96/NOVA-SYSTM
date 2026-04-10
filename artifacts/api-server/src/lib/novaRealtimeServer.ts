@@ -19,6 +19,9 @@ export function attachNovaRealtimeServer(httpServer: Server) {
       try {
         const msg = JSON.parse(String(raw)) as { type: string; selector?: { userId: string; novaId: string; fullName?: string }; lang?: Lang; text?: string };
 
+        // Keepalive ping — silently ignore, no response needed
+        if (msg.type === "ping") return;
+
         if (msg.type === "init") {
           const { selector } = msg;
           if (!selector?.userId || !selector?.novaId) {

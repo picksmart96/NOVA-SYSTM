@@ -189,7 +189,14 @@ export default function NovaTrainerSession({
       const ws = new WebSocket(buildWsUrl());
       wsRef.current = ws;
 
+      // Keepalive ping — prevents Replit/nginx proxy from dropping idle WebSocket connections
+      let pingInterval: ReturnType<typeof setInterval> | null = null;
+
       ws.onopen = () => {
+        // ── Reset per-connection state so a reconnect starts fresh ──────────────
+        autoWokeRef.current = false;
+        lastSpokenSeqRef.current = -1;
+
         setConnected(true);
         setServerError("");
         ws.send(
@@ -203,6 +210,13 @@ export default function NovaTrainerSession({
             },
           })
         );
+
+        // Send a ping every 25 s so the proxy doesn't close the idle connection
+        pingInterval = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "ping" }));
+          }
+        }, 25_000);
       };
 
       ws.onmessage = (event) => {
@@ -263,6 +277,7 @@ export default function NovaTrainerSession({
       };
 
       ws.onclose = () => {
+        if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
         setConnected(false);
         if (startedRef.current) {
           reconnectTimerRef.current = setTimeout(() => {
@@ -338,7 +353,7 @@ export default function NovaTrainerSession({
     startedRef.current = false;
     setStarted(false);
     setHeardResponse("");
-    lastSpokenPromptRef.current = "";
+    lastSpokenSeqRef.current = -1;
     pendingPromptRef.current = "";
     isSpeakingRef.current = false;
     setTrainerState(DEFAULT_STATE);
