@@ -49,6 +49,7 @@ import PrivacyPage from "@/pages/privacy";
 import TermsPage from "@/pages/terms";
 import WarehouseEntryPage from "@/pages/warehouse-entry";
 
+import CompanyOnboardPage from "@/pages/company-onboard";
 import DemoLandingPage from "@/pages/demo/DemoLandingPage";
 import DemoTrainingPage from "@/pages/demo/DemoTrainingPage";
 import DemoLeaderboardPage from "@/pages/demo/DemoLeaderboardPage";
@@ -149,6 +150,9 @@ function Router() {
       </Route>
       <Route path="/checkout/company">
         <Layout><CompanyCheckoutPage /></Layout>
+      </Route>
+      <Route path="/checkout/company/onboard">
+        <CompanyOnboardPage />
       </Route>
 
       {/* ── Gated — requires active subscription to view any content ── */}

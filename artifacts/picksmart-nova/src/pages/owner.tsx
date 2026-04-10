@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
-import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon, FlaskConical, DollarSign, Building2, CreditCard, Plus, Send, AlertCircle } from "lucide-react";
+import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon, FlaskConical, DollarSign, Building2, CreditCard, Plus, Send, AlertCircle, Phone, FileText, X, ChevronDown, ChevronUp } from "lucide-react";
 import { Link } from "wouter";
 import { OWNER_TOKEN } from "./owner-access";
 import { useAuthStore, AuthAccount, AuthRole } from "@/lib/authStore";
 import { useAccessStore } from "@/lib/accessStore";
 import { useWarehouseStore } from "@/lib/warehouseStore";
 import { DEFAULT_WAREHOUSES, SYSTEM_TYPE_LABEL } from "@/data/warehouses";
+import { useCompanyRequestStore, CompanyRequest } from "@/lib/companyRequestStore";
 
 // ── Mock data for demo sections ───────────────────────────────────────────────
 const ADMIN_STATS = {
@@ -1698,13 +1699,217 @@ function RevenueTab() {
   );
 }
 
+// ── Subscriptions Tab ─────────────────────────────────────────────────────────
+function SubscriptionsTab() {
+  const { requests, approveRequest, rejectRequest } = useCompanyRequestStore();
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [noteMap, setNoteMap] = useState<Record<string, string>>({});
+
+  const pending = requests.filter((r) => r.status === "pending_approval" || r.status === "pending_onboarding");
+  const resolved = requests.filter((r) => r.status === "approved" || r.status === "rejected");
+
+  function statusBadge(status: CompanyRequest["status"]) {
+    if (status === "pending_approval")  return <span className="rounded-full bg-yellow-400/15 px-2.5 py-1 text-xs font-bold text-yellow-400">Pending Approval</span>;
+    if (status === "pending_onboarding") return <span className="rounded-full bg-blue-400/15 px-2.5 py-1 text-xs font-bold text-blue-400">Awaiting Onboarding</span>;
+    if (status === "approved")          return <span className="rounded-full bg-green-500/15 px-2.5 py-1 text-xs font-bold text-green-400">Approved</span>;
+    if (status === "rejected")          return <span className="rounded-full bg-red-500/15 px-2.5 py-1 text-xs font-bold text-red-400">Rejected</span>;
+    return null;
+  }
+
+  function RequestCard({ req }: { req: CompanyRequest }) {
+    const open = expanded === req.id;
+    const note = noteMap[req.id] ?? "";
+    const isPending = req.status === "pending_approval";
+    const submitted = new Date(req.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+    return (
+      <div className={`rounded-2xl border bg-slate-900 overflow-hidden transition ${
+        isPending ? "border-yellow-400/30" : "border-slate-700"
+      }`}>
+        {/* Card header */}
+        <div
+          className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer"
+          onClick={() => setExpanded(open ? null : req.id)}
+        >
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center shrink-0">
+              <Building2 className="h-5 w-5 text-yellow-400" />
+            </div>
+            <div>
+              <p className="font-black text-white text-base">{req.companyName}</p>
+              <p className="text-xs text-slate-500 mt-0.5">{req.contactName} · {req.contactEmail}</p>
+              <p className="text-xs text-slate-600 mt-0.5">Submitted {submitted}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            {statusBadge(req.status)}
+            <div className="text-right">
+              <p className="font-black text-white">{req.totalLabel}</p>
+              <p className="text-xs text-slate-500">{req.contractLabel} contract</p>
+            </div>
+            {open ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
+          </div>
+        </div>
+
+        {/* Expanded details */}
+        {open && (
+          <div className="border-t border-slate-800 p-5 space-y-5">
+            <div className="grid sm:grid-cols-3 gap-4 text-sm">
+              <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label="Phone" value={req.contactPhone || "—"} />
+              <InfoRow icon={<Building2 className="h-3.5 w-3.5" />} label="Contract" value={`${req.contractLabel} — ${req.totalLabel}`} />
+              <InfoRow icon={<Users className="h-3.5 w-3.5" />} label="Requested Users" value={req.userCount ? `${req.userCount} users` : "Not set yet"} />
+            </div>
+
+            {req.trainers && req.trainers.length > 0 && (
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Trainers</p>
+                <div className="space-y-2">
+                  {req.trainers.map((t, i) => (
+                    <div key={i} className="flex flex-wrap gap-3 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm">
+                      <span className="font-semibold text-white">{t.name}</span>
+                      <span className="text-slate-400">{t.email}</span>
+                      <span className="text-slate-500">{t.profession}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {req.supervisors && req.supervisors.length > 0 && (
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Supervisors & Managers</p>
+                <div className="space-y-2">
+                  {req.supervisors.map((s, i) => (
+                    <div key={i} className="flex flex-wrap gap-3 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm">
+                      <span className="font-semibold text-white">{s.name}</span>
+                      <span className="text-slate-400">{s.email}</span>
+                      <span className="text-slate-500">{s.profession}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {req.additionalNotes && (
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Notes from Company</p>
+                <p className="text-sm text-slate-300 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">{req.additionalNotes}</p>
+              </div>
+            )}
+
+            {isPending && (
+              <div className="space-y-3 border-t border-slate-800 pt-4">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-2">Your note to the company (optional)</label>
+                  <textarea
+                    rows={2}
+                    value={note}
+                    onChange={(e) => setNoteMap((m) => ({ ...m, [req.id]: e.target.value }))}
+                    placeholder="e.g. Payment confirmed via wire transfer. Access being set up…"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white outline-none focus:border-yellow-400 resize-none placeholder:text-slate-600"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => approveRequest(req.id, note)}
+                    className="flex-1 rounded-xl bg-green-500 py-2.5 font-bold text-white hover:bg-green-400 transition flex items-center justify-center gap-2"
+                  >
+                    <Check className="h-4 w-4" /> Approve & Grant Access
+                  </button>
+                  <button
+                    onClick={() => rejectRequest(req.id, note)}
+                    className="flex-1 rounded-xl border border-red-500/40 bg-red-500/10 py-2.5 font-bold text-red-400 hover:bg-red-500/20 transition flex items-center justify-center gap-2"
+                  >
+                    <X className="h-4 w-4" /> Reject
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {(req.status === "approved" || req.status === "rejected") && req.ownerNote && (
+              <div className="border-t border-slate-800 pt-4">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Your Note</p>
+                <p className="text-sm text-slate-300 italic">{req.ownerNote}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-black">Company Subscription Requests</h2>
+          <p className="text-slate-400 text-sm mt-1">
+            Incoming requests from companies wanting access. Review, then approve or reject each one.
+          </p>
+        </div>
+        {pending.length > 0 && (
+          <span className="rounded-full bg-yellow-400 px-3 py-1 text-sm font-black text-slate-950">
+            {pending.length} pending
+          </span>
+        )}
+      </div>
+
+      {requests.length === 0 && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-12 text-center text-slate-500">
+          <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
+          <p className="font-semibold">No subscription requests yet</p>
+          <p className="text-sm mt-1">Requests will appear here when companies submit from the checkout page.</p>
+        </div>
+      )}
+
+      {pending.length > 0 && (
+        <div className="space-y-4">
+          <p className="text-xs font-bold uppercase tracking-widest text-yellow-400">Action Required</p>
+          {pending.map((r) => <RequestCard key={r.id} req={r} />)}
+        </div>
+      )}
+
+      {resolved.length > 0 && (
+        <div className="space-y-4">
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Resolved</p>
+          {resolved.map((r) => <RequestCard key={r.id} req={r} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="text-slate-500 mt-0.5">{icon}</span>
+      <div>
+        <p className="text-xs text-slate-500">{label}</p>
+        <p className="font-semibold text-white text-sm">{value}</p>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
-const TABS = ["Dashboard", "Revenue", "Links", "Handbook", "Users & Access"] as const;
+const TABS = ["Dashboard", "Revenue", "Links", "Handbook", "Users & Access", "Subscriptions"] as const;
 type Tab = typeof TABS[number];
 
 export default function OwnerPage() {
   const stats = ADMIN_STATS;
   const [activeTab, setActiveTab] = useState<Tab>("Users & Access");
+  const pendingCount = useCompanyRequestStore((s) =>
+    s.requests.filter((r) => r.status === "pending_approval" || r.status === "pending_onboarding").length
+  );
+
+  function tabLabel(tab: Tab) {
+    if (tab === "Dashboard")     return "📊 Dashboard";
+    if (tab === "Revenue")       return "💰 Revenue";
+    if (tab === "Links")         return "🔗 Links";
+    if (tab === "Handbook")      return "📖 Handbook";
+    if (tab === "Users & Access") return "👥 Users & Access";
+    return "🏢 Subscriptions";
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-white px-4 sm:px-6 py-10">
@@ -1720,22 +1925,23 @@ export default function OwnerPage() {
         </div>
 
         {/* Tab bar */}
-        <div className="flex gap-2 border-b border-slate-800 pb-0">
+        <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-0">
           {TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-5 py-2.5 text-sm font-bold rounded-t-xl transition -mb-px border-b-2 ${
+              className={`relative px-5 py-2.5 text-sm font-bold rounded-t-xl transition -mb-px border-b-2 ${
                 activeTab === tab
                   ? "border-yellow-400 text-yellow-400 bg-slate-900"
                   : "border-transparent text-slate-500 hover:text-white"
               }`}
             >
-              {tab === "Dashboard"     ? "📊 Dashboard"
-                : tab === "Revenue"   ? "💰 Revenue"
-                : tab === "Links"     ? "🔗 Links"
-                : tab === "Handbook"  ? "📖 Handbook"
-                : "👥 Users & Access"}
+              {tabLabel(tab)}
+              {tab === "Subscriptions" && pendingCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-yellow-400 text-slate-950 text-xs font-black flex items-center justify-center">
+                  {pendingCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -1743,10 +1949,7 @@ export default function OwnerPage() {
         {/* Dashboard tab */}
         {activeTab === "Dashboard" && (
           <>
-            {/* Public page link */}
             <PublicPageLink />
-
-            {/* Top stat cards */}
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
               <StatCard label="Total Subscribers" value={stats.totalSubscribers} />
               <StatCard label="Personal" value={stats.personalSubscribers} />
@@ -1755,32 +1958,20 @@ export default function OwnerPage() {
               <StatCard label="Total Sessions" value={stats.totalSessions} />
               <StatCard label="Banned Users" value={stats.bannedUsers} tone="danger" />
             </div>
-
-            {/* User Management (full width) */}
             <UserManagement />
-
-            {/* Side-by-side: Invite + Plan Control */}
             <div className="grid xl:grid-cols-2 gap-6">
               <InviteManagement />
               <PlanControl />
             </div>
-
-            {/* Activity Log */}
             <ActivityLog />
           </>
         )}
 
-        {/* Revenue tab */}
         {activeTab === "Revenue" && <RevenueTab />}
-
-        {/* Links tab */}
         {activeTab === "Links" && <LinkLibrary />}
-
-        {/* Handbook tab */}
         {activeTab === "Handbook" && <HandbookSection />}
-
-        {/* Users & Access tab */}
         {activeTab === "Users & Access" && <UsersAccessSection />}
+        {activeTab === "Subscriptions" && <SubscriptionsTab />}
 
       </div>
     </div>

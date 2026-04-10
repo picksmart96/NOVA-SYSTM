@@ -1,0 +1,961 @@
+src/lib/accessControl.js
+
+Replace with this:
+
+export function canAccessPage(user, pageKey) {
+  const publicPages = [
+    "home",
+    "pricing",
+    "choose-plan",
+    "checkout-personal",
+    "checkout-company",
+    "owner-access",
+    "privacy",
+    "terms",
+    "demo",
+    "demo-training",
+    "demo-leaderboard",
+    "demo-nova-help",
+    "demo-nova-agent",
+    "demo-trainer-dashboard",
+    "demo-supervisor-dashboard",
+    "request-access",
+    "contract",
+    "onboarding",
+    "jobs",
+    "job-detail",
+    "apply",
+  ];
+
+  if (publicPages.includes(pageKey)) return true;
+
+  if (!user) return false;
+
+  if (user.role === "owner") return true;
+
+  if (user.isDemoUser) {
+    return [
+      "training",
+      "nova-help",
+      "common-mistakes",
+      "leaderboard",
+      "selector-breaking-news",
+      "trainer-dashboard",
+      "supervisor-dashboard",
+    ].includes(pageKey);
+  }
+
+  if (!user.isSubscribed) return false;
+
+  if (pageKey === "users-access" || pageKey === "owner") return false;
+
+  if (user.subscriptionPlan === "personal") {
+    return [
+      "training",
+      "nova-help",
+      "nova-trainer",
+      "common-mistakes",
+      "leaderboard",
+      "selector-breaking-news",
+    ].includes(pageKey);
+  }
+
+  if (user.subscriptionPlan === "company") {
+    if (user.role === "selector") {
+      return [
+        "training",
+        "nova-help",
+        "nova-trainer",
+        "common-mistakes",
+        "leaderboard",
+        "selector-breaking-news",
+      ].includes(pageKey);
+    }
+
+    if (user.role === "trainer") {
+      return [
+        "training",
+        "nova-help",
+        "nova-trainer",
+        "common-mistakes",
+        "leaderboard",
+        "selector-breaking-news",
+        "trainer-dashboard",
+      ].includes(pageKey);
+    }
+
+    if (user.role === "supervisor") {
+      return [
+        "training",
+        "nova-help",
+        "nova-trainer",
+        "common-mistakes",
+        "leaderboard",
+        "selector-breaking-news",
+        "trainer-dashboard",
+        "supervisor-dashboard",
+      ].includes(pageKey);
+    }
+  }
+
+  return false;
+}
+2) Hard gate demo lesson starts and NOVA Trainer entry
+src/components/paywall/RequestAccessModal.jsx
+import { useNavigate } from "react-router-dom";
+
+export default function RequestAccessModal({ open, onClose, title = "Request Access" }) {
+  const navigate = useNavigate();
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-4">
+      <div className="w-full max-w-lg rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl">
+        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-yellow-400">
+          Demo Access Limit
+        </p>
+
+        <h2 className="mt-3 text-3xl font-black text-white">{title}</h2>
+
+        <p className="mt-4 text-slate-300">
+          This part of PickSmart NOVA is reserved for full company accounts.
+          You can keep exploring the demo, but training lessons and NOVA Trainer
+          require company access.
+        </p>
+
+        <div className="mt-6 space-y-3 text-slate-300">
+          <p>• Full training system</p>
+          <p>• NOVA Trainer workflow</p>
+          <p>• Guided lessons and tests</p>
+          <p>• Team activation and onboarding</p>
+        </div>
+
+        <div className="mt-8 flex flex-wrap gap-3">
+          <button
+            onClick={() => navigate("/request-access")}
+            className="rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300"
+          >
+            Request Company Access
+          </button>
+
+          <button
+            onClick={onClose}
+            className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold text-slate-300 hover:border-slate-500"
+          >
+            Continue Browsing
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+src/components/paywall/DemoLockedAction.jsx
+import { useState } from "react";
+import { useAuthStore } from "../../store/authStore";
+import RequestAccessModal from "./RequestAccessModal";
+
+export default function DemoLockedAction({
+  children,
+  onAllowedClick,
+  className = "",
+  title,
+}) {
+  const { user } = useAuthStore();
+  const [open, setOpen] = useState(false);
+
+  const blocked = !!user?.isDemoUser;
+
+  const handleClick = () => {
+    if (blocked) {
+      setOpen(true);
+      return;
+    }
+
+    onAllowedClick?.();
+  };
+
+  return (
+    <>
+      <div className={className} onClick={handleClick}>
+        {children}
+      </div>
+
+      <RequestAccessModal
+        open={open}
+        onClose={() => setOpen(false)}
+        title={title || "Request Access to Unlock This Feature"}
+      />
+    </>
+  );
+}
+3) Lock the training modules in demo
+src/pages/public/TrainingPage.jsx
+
+Replace your lesson action buttons with this pattern:
+
+import { useNavigate } from "react-router-dom";
+import { useAuthStore } from "../../store/authStore";
+import DemoLockedAction from "../../components/paywall/DemoLockedAction";
+
+const modules = [
+  { id: 1, title: "Beginner Basics", level: "Beginner", duration: "25 min", steps: 5, free: true },
+  { id: 2, title: "Warehouse Safety Fundamentals", level: "Beginner", duration: "35 min", steps: 5 },
+  { id: 3, title: "Pallet Building Standards", level: "Intermediate", duration: "40 min", steps: 6 },
+  { id: 4, title: "Pick Path Optimization", level: "Intermediate", duration: "38 min", steps: 5 },
+  { id: 5, title: "Performance and Pace Tracking", level: "Advanced", duration: "52 min", steps: 6 },
+  { id: 6, title: "Real Shift Simulation", level: "Advanced", duration: "45 min", steps: 6 },
+];
+
+export default function TrainingPage() {
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const isDemo = !!user?.isDemoUser;
+
+  return (
+    <div className="min-h-screen bg-slate-950 p-6 text-white">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <div>
+          <h1 className="text-4xl font-black">Training Academy</h1>
+          <p className="mt-3 text-slate-300">
+            Six NOVA-guided lessons built for warehouse order selectors.
+          </p>
+        </div>
+
+        {isDemo ? (
+          <div className="rounded-3xl border border-yellow-400 bg-yellow-500/10 p-5 text-yellow-200">
+            Demo preview only — managers can explore the training layout, but full lessons require company access.
+          </div>
+        ) : null}
+
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+          {modules.map((module) => (
+            <div
+              key={module.id}
+              className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg"
+            >
+              <p className="text-sm text-yellow-400">{module.level}</p>
+              <h2 className="mt-2 text-2xl font-bold">{module.title}</h2>
+              <p className="mt-3 text-slate-400">
+                {module.duration} · {module.steps} steps
+              </p>
+
+              <div className="mt-5 flex items-center gap-2">
+                {module.free ? (
+                  <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs font-bold text-green-300">
+                    FREE
+                  </span>
+                ) : null}
+                <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-bold text-yellow-300">
+                  NOVA
+                </span>
+              </div>
+
+              <DemoLockedAction
+                title={`Request Access to Unlock ${module.title}`}
+                onAllowedClick={() => navigate(`/modules/${module.id}`)}
+              >
+                <button className="mt-6 w-full rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300">
+                  {isDemo ? "Request Access to Start" : "Start NOVA Lesson"}
+                </button>
+              </DemoLockedAction>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+4) Lock NOVA Trainer for demo users
+src/pages/nova/NovaTrainerPage.jsx
+
+Wrap the entry button:
+
+import DemoLockedAction from "../../components/paywall/DemoLockedAction";
+import { useAuthStore } from "../../store/authStore";
+
+// inside component
+const { user } = useAuthStore();
+const isDemo = !!user?.isDemoUser;
+
+Then replace the Enter NOVA button with:
+
+<DemoLockedAction
+  title="Request Access to Unlock NOVA Trainer"
+  onAllowedClick={handleEnterNova}
+>
+  <button className="mt-8 w-full rounded-2xl bg-yellow-400 px-6 py-4 text-lg font-bold text-slate-950 hover:bg-yellow-300 transition">
+    {isDemo ? "Request Access to Use NOVA Trainer" : "Enter NOVA"}
+  </button>
+</DemoLockedAction>
+
+And add this banner above the input if demo:
+
+{isDemo ? (
+  <div className="mt-6 rounded-2xl border border-yellow-400 bg-yellow-500/10 p-4 text-yellow-200">
+    NOVA Trainer is protected in the public demo. Request company access to unlock the live voice workflow.
+  </div>
+) : null}
+5) Smarter demo NOVA agent with memory, interrupt, Spanish, transcript, and lead handoff
+server/realtime/novaDemoAgentPrompt.js
+
+Replace with this version:
+
+export function getNovaDemoAgentPrompt(memorySummary = "", language = "en") {
+  const languageRule =
+    language === "es"
+      ? "Respond in Spanish."
+      : "Respond in English.";
+
+  return `
+You are NOVA, a warm, intelligent, professional public demo voice agent for PickSmart Academy.
+
+${languageRule}
+
+You are separate from:
+- NOVA Help
+- NOVA Trainer
+
+Your purpose:
+- answer questions about PickSmart Academy
+- explain training, safety, pallet building, coaching, pace, onboarding, mentoring, and performance
+- speak naturally like a real person
+- help warehouse managers understand the value of the platform
+
+You understand:
+- selector struggles
+- hesitation
+- slow pace
+- bad stacking
+- weak pallet building
+- safety mistakes
+- short picks
+- over picks
+- mispicks
+- low confidence
+- motivation problems
+- onboarding struggles
+
+You explain how PickSmart helps:
+- train faster
+- pick safer
+- improve pallet building
+- improve rate
+- coach struggling selectors
+- mentor teams
+- motivate progress
+- show clear improvement
+
+Current memory:
+${memorySummary || "No prior memory yet."}
+
+Rules:
+- be concise, human, helpful
+- do not sound robotic
+- after each answer, ask a natural follow-up
+- when the user sounds interested in buying, suggest:
+  "I can help you request company access whenever you're ready."
+- never provide full locked lesson content
+- never provide full NOVA Trainer workflow details from the protected product
+`;
+}
+server/routes/novaDemoAgentApi.js
+
+Replace with this upgraded version:
+
+import express from "express";
+import OpenAI from "openai";
+import { getNovaDemoAgentPrompt } from "../realtime/novaDemoAgentPrompt.js";
+import {
+  getDemoSession,
+  addDemoTurn,
+  clearDemoSession,
+} from "../realtime/novaDemoMemoryStore.js";
+
+const router = express.Router();
+
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+router.post("/", async (req, res) => {
+  try {
+    const { message, sessionId, reset, language = "en" } = req.body || {};
+
+    if (!sessionId || typeof sessionId !== "string") {
+      return res.status(400).json({ error: "Missing sessionId." });
+    }
+
+    if (reset) {
+      clearDemoSession(sessionId);
+      const reply =
+        language === "es"
+          ? "Conversación reiniciada. Hola, soy NOVA. Puedo responder cualquier pregunta sobre PickSmart Academy y cómo ayuda a los equipos de almacén."
+          : "Conversation reset. Hi, I'm NOVA. I can answer any questions you have about PickSmart Academy and how it helps warehouse teams.";
+      return res.json({ reply, handoff: false });
+    }
+
+    if (!message || typeof message !== "string") {
+      return res.status(400).json({ error: "Missing message." });
+    }
+
+    addDemoTurn(sessionId, "user", message);
+    const session = getDemoSession(sessionId);
+
+    const response = await client.responses.create({
+      model: "gpt-5.4",
+      instructions: getNovaDemoAgentPrompt(session.summary, language),
+      input: message,
+      max_output_tokens: 260,
+    });
+
+    const reply =
+      response.output_text ||
+      (language === "es"
+        ? "PickSmart Academy ayuda a entrenar selectores, mejorar seguridad y elevar el rendimiento. ¿Quieres que te explique más?"
+        : "PickSmart Academy helps train selectors, improve safety, and raise performance. Would you like me to explain more?");
+
+    addDemoTurn(sessionId, "assistant", reply);
+
+    const lower = message.toLowerCase();
+    const handoff =
+      lower.includes("price") ||
+      lower.includes("pricing") ||
+      lower.includes("contract") ||
+      lower.includes("subscribe") ||
+      lower.includes("access") ||
+      lower.includes("demo for my team") ||
+      lower.includes("how do i start") ||
+      lower.includes("company");
+
+    return res.json({ reply, handoff });
+  } catch (error) {
+    console.error("nova demo agent error:", error);
+    return res.status(500).json({
+      reply:
+        "I hit a problem answering that. Ask me again about training, safety, pallet building, coaching, or selector improvement.",
+      handoff: false,
+    });
+  }
+});
+
+export default router;
+src/hooks/useNovaDemoVoiceAgent.js
+
+Replace with this v2:
+
+import { useEffect, useMemo, useRef, useState } from "react";
+
+function getRecognitionCtor() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
+function getVoicesSafe() {
+  return window.speechSynthesis?.getVoices?.() || [];
+}
+
+function pickVoice(lang = "en-US") {
+  const voices = getVoicesSafe();
+
+  const exact = voices.find((v) => v.lang === lang);
+  if (exact) return exact;
+
+  const partial = voices.find((v) =>
+    v.lang?.toLowerCase().startsWith(lang.slice(0, 2).toLowerCase())
+  );
+  if (partial) return partial;
+
+  return voices[0] || null;
+}
+
+export default function useNovaDemoVoiceAgent() {
+  const recognitionRef = useRef(null);
+  const interruptRef = useRef(false);
+  const sessionIdRef = useRef(
+    `demo-agent-${Math.random().toString(36).slice(2)}-${Date.now()}`
+  );
+
+  const [language, setLanguage] = useState("en");
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
+  const [lastHeard, setLastHeard] = useState("");
+  const [lastReply, setLastReply] = useState("");
+  const [error, setError] = useState("");
+  const [micPermission, setMicPermission] = useState("unknown");
+  const [transcript, setTranscript] = useState([]);
+  const [showLeadPrompt, setShowLeadPrompt] = useState(false);
+
+  const stateLabel = useMemo(() => {
+    if (error) return "Error";
+    if (isThinking) return "Thinking";
+    if (isSpeaking) return "Speaking";
+    if (isListening) return "Listening";
+    return "Idle";
+  }, [error, isThinking, isSpeaking, isListening]);
+
+  const currentLangCode = language === "es" ? "es-ES" : "en-US";
+
+  const pushTranscript = (role, text) => {
+    setTranscript((prev) => [
+      ...prev.slice(-19),
+      { id: `${Date.now()}-${Math.random()}`, role, text },
+    ]);
+  };
+
+  const stopSpeaking = () => {
+    interruptRef.current = true;
+    window.speechSynthesis.cancel();
+    setIsSpeaking(false);
+  };
+
+  const speak = (text, { onEnd } = {}) => {
+    stopSpeaking();
+    interruptRef.current = false;
+
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = currentLangCode;
+    utter.rate = 1;
+    utter.pitch = 1;
+    utter.volume = 1;
+
+    const voice = pickVoice(currentLangCode);
+    if (voice) utter.voice = voice;
+
+    utter.onstart = () => setIsSpeaking(true);
+
+    utter.onend = () => {
+      setIsSpeaking(false);
+      if (!interruptRef.current) onEnd?.();
+    };
+
+    utter.onerror = () => {
+      setIsSpeaking(false);
+      onEnd?.();
+    };
+
+    window.speechSynthesis.speak(utter);
+  };
+
+  const sendToAgent = async (text) => {
+    setIsThinking(true);
+
+    try {
+      const res = await fetch("/api/demo/nova-agent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sessionId: sessionIdRef.current,
+          message: text,
+          language,
+        }),
+      });
+
+      const data = await res.json();
+      const reply =
+        data.reply ||
+        (language === "es"
+          ? "¿Quieres que te explique más?"
+          : "Would you like me to explain more?");
+
+      setLastReply(reply);
+      pushTranscript("assistant", reply);
+      setShowLeadPrompt(!!data.handoff);
+      setIsThinking(false);
+
+      speak(reply);
+    } catch {
+      setIsThinking(false);
+      setError("Could not reach NOVA.");
+    }
+  };
+
+  const startRecognition = () => {
+    const Recognition = getRecognitionCtor();
+
+    if (!Recognition) {
+      setError("Speech recognition is not supported on this browser.");
+      return false;
+    }
+
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+    }
+
+    const rec = new Recognition();
+    rec.lang = currentLangCode;
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+
+    rec.onstart = () => {
+      setIsListening(true);
+      setError("");
+    };
+
+    rec.onend = () => {
+      setIsListening(false);
+      if (!interruptRef.current) {
+        try {
+          rec.start();
+        } catch {}
+      }
+    };
+
+    rec.onerror = (event) => {
+      setError(event?.error || "Voice recognition error.");
+      setIsListening(false);
+    };
+
+    rec.onresult = async (event) => {
+      const text =
+        event.results?.[event.results.length - 1]?.[0]?.transcript?.trim() || "";
+
+      if (!text) return;
+
+      setLastHeard(text);
+      pushTranscript("user", text);
+
+      const lower = text.toLowerCase();
+
+      if (
+        lower.includes("stop nova") ||
+        lower === "stop" ||
+        lower.includes("be quiet") ||
+        lower.includes("parar")
+      ) {
+        stopSpeaking();
+        const msg =
+          language === "es"
+            ? "Está bien. Me quedaré en silencio hasta que me hagas otra pregunta."
+            : "Okay. I'll stay quiet until you ask another question.";
+        setLastReply(msg);
+        pushTranscript("assistant", msg);
+        speak(msg);
+        return;
+      }
+
+      if (
+        lower.includes("reset conversation") ||
+        lower.includes("start over") ||
+        lower.includes("reiniciar conversación")
+      ) {
+        stopSpeaking();
+        setIsThinking(true);
+
+        try {
+          const res = await fetch("/api/demo/nova-agent", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              sessionId: sessionIdRef.current,
+              reset: true,
+              language,
+            }),
+          });
+
+          const data = await res.json();
+          const reply = data.reply || "Conversation reset.";
+
+          setTranscript([]);
+          setLastReply(reply);
+          pushTranscript("assistant", reply);
+          setShowLeadPrompt(false);
+          setIsThinking(false);
+
+          speak(reply);
+        } catch {
+          setIsThinking(false);
+          setError("Could not reset conversation.");
+        }
+
+        return;
+      }
+
+      if (lower.includes("speak spanish") || lower.includes("habla español")) {
+        setLanguage("es");
+        const msg = "Claro. Ahora hablaré en español. ¿Qué te gustaría saber?";
+        setLastReply(msg);
+        pushTranscript("assistant", msg);
+        speak(msg);
+        return;
+      }
+
+      if (lower.includes("speak english") || lower.includes("english please")) {
+        setLanguage("en");
+        const msg = "Sure. I'll continue in English. What would you like to know?";
+        setLastReply(msg);
+        pushTranscript("assistant", msg);
+        speak(msg);
+        return;
+      }
+
+      await sendToAgent(text);
+    };
+
+    recognitionRef.current = rec;
+
+    try {
+      rec.start();
+      return true;
+    } catch {
+      setError("Could not start voice recognition.");
+      return false;
+    }
+  };
+
+  const initialize = async () => {
+    try {
+      if (navigator.mediaDevices?.getUserMedia) {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        setMicPermission("granted");
+      }
+    } catch {
+      setMicPermission("denied");
+      setError("Microphone permission denied.");
+      return false;
+    }
+
+    const started = startRecognition();
+    if (!started) return false;
+
+    const welcome =
+      language === "es"
+        ? "Hola, soy NOVA. Estoy aquí para ayudarte con cualquier pregunta sobre PickSmart Academy. Solo pregunta."
+        : "Hi there, I'm NOVA. I'm here to assist you with any questions you have about PickSmart Academy. Just ask.";
+
+    setLastReply(welcome);
+    pushTranscript("assistant", welcome);
+    speak(welcome);
+
+    return true;
+  };
+
+  const destroy = () => {
+    interruptRef.current = true;
+    try {
+      recognitionRef.current?.stop();
+    } catch {}
+    stopSpeaking();
+  };
+
+  useEffect(() => {
+    const loadVoices = () => getVoicesSafe();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices();
+
+    return () => {
+      destroy();
+      window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, []);
+
+  return {
+    initialize,
+    destroy,
+    stopSpeaking,
+    stateLabel,
+    isListening,
+    isSpeaking,
+    isThinking,
+    lastHeard,
+    lastReply,
+    transcript,
+    error,
+    micPermission,
+    language,
+    setLanguage,
+    showLeadPrompt,
+    setShowLeadPrompt,
+  };
+}
+src/pages/demo/NovaDemoAgentPage.jsx
+
+Replace with this upgraded page:
+
+import { useNavigate } from "react-router-dom";
+import useNovaDemoVoiceAgent from "../../hooks/useNovaDemoVoiceAgent";
+
+export default function NovaDemoAgentPage() {
+  const navigate = useNavigate();
+  const agent = useNovaDemoVoiceAgent();
+
+  return (
+    <div className="min-h-screen bg-slate-950 px-6 py-12 text-white">
+      <div className="mx-auto max-w-6xl space-y-8">
+        <div className="rounded-3xl border border-yellow-400 bg-yellow-500/10 p-4 text-center text-yellow-200">
+          Public Demo Agent — separate from NOVA Help and NOVA Trainer
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-10 text-center shadow-2xl">
+          <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-full border-4 border-yellow-400 text-3xl font-black text-yellow-300">
+            NOVA
+          </div>
+
+          <h1 className="mt-6 text-5xl font-black">NOVA Demo Agent</h1>
+          <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-300">
+            Ask anything about PickSmart Academy, selector training, safety,
+            pallet building, coaching, motivation, or performance improvement.
+          </p>
+
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <button
+              onClick={agent.initialize}
+              className="rounded-2xl bg-yellow-400 px-6 py-4 font-bold text-slate-950 hover:bg-yellow-300"
+            >
+              Start NOVA
+            </button>
+
+            <button
+              onClick={agent.stopSpeaking}
+              className="rounded-2xl border border-slate-700 px-6 py-4 font-semibold hover:border-yellow-400"
+            >
+              Stop NOVA
+            </button>
+
+            <button
+              onClick={() => agent.setLanguage(agent.language === "en" ? "es" : "en")}
+              className="rounded-2xl border border-slate-700 px-6 py-4 font-semibold hover:border-yellow-400"
+            >
+              {agent.language === "en" ? "Español" : "English"}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-5">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">State</p>
+            <p className="mt-3 text-2xl font-black text-yellow-300">
+              {agent.stateLabel}
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Mic</p>
+            <p className="mt-3 text-2xl font-black">{agent.micPermission}</p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Listening</p>
+            <p className="mt-3 text-2xl font-black">
+              {agent.isListening ? "Yes" : "No"}
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Thinking</p>
+            <p className="mt-3 text-2xl font-black">
+              {agent.isThinking ? "Yes" : "No"}
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Language</p>
+            <p className="mt-3 text-2xl font-black">
+              {agent.language === "en" ? "English" : "Español"}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+            <h2 className="text-2xl font-bold">Last Heard</h2>
+            <p className="mt-4 min-h-[120px] rounded-2xl border border-slate-800 bg-slate-950 p-4 text-slate-300">
+              {agent.lastHeard || "Waiting for your question."}
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+            <h2 className="text-2xl font-bold">Last Reply</h2>
+            <p className="mt-4 min-h-[120px] rounded-2xl border border-slate-800 bg-slate-950 p-4 text-slate-300">
+              {agent.lastReply || "NOVA will reply here."}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+          <h2 className="text-2xl font-bold">Conversation Transcript</h2>
+          <div className="mt-5 max-h-[420px] space-y-3 overflow-auto">
+            {agent.transcript.length === 0 ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-slate-400">
+                The conversation transcript will appear here.
+              </div>
+            ) : (
+              agent.transcript.map((item) => (
+                <div
+                  key={item.id}
+                  className={`rounded-2xl border p-4 ${
+                    item.role === "assistant"
+                      ? "border-yellow-400/30 bg-yellow-500/10 text-yellow-100"
+                      : "border-slate-800 bg-slate-950 text-slate-300"
+                  }`}
+                >
+                  <p className="text-xs font-bold uppercase tracking-wide opacity-70">
+                    {item.role === "assistant" ? "NOVA" : "You"}
+                  </p>
+                  <p className="mt-2">{item.text}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {agent.showLeadPrompt ? (
+          <div className="rounded-3xl border border-yellow-400 bg-yellow-500/10 p-6 text-center">
+            <h3 className="text-2xl font-bold text-yellow-200">
+              Want to see how this works for your team?
+            </h3>
+            <p className="mx-auto mt-3 max-w-2xl text-slate-200">
+              Request company access and we’ll show you how PickSmart Academy can train, coach, and improve performance for your warehouse team.
+            </p>
+
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <button
+                onClick={() => navigate("/request-access")}
+                className="rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300"
+              >
+                Request Company Access
+              </button>
+
+              <button
+                onClick={() => agent.setShowLeadPrompt(false)}
+                className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold hover:border-yellow-400"
+              >
+                Keep Exploring
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {agent.error ? (
+          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-5 text-red-200">
+            {agent.error}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+6) Demo page links
+
+Update your demo home page CTA to point to the new agent:
+
+<button
+  onClick={() => navigate("/demo/nova-agent")}
+  className="mt-8 rounded-2xl bg-yellow-400 px-8 py-4 text-lg font-bold text-slate-950 hover:bg-yellow-300"
+>
+  Click Here to Ask Everything You Wanna Know About PickSmart Academy
+</button>
+7) Route additions
+
+In src/App.jsx:
+
+import NovaDemoAgentPage from "./pages/demo/NovaDemoAgentPage";
+
+<Route path="/demo/nova-agent" element={<NovaDemoAgentPage />} />
