@@ -5,6 +5,7 @@ import warehouseRouter from "./warehouse";
 import trainingRouter from "./training";
 import novaHelpRouter from "./novaHelp";
 import transcribeRouter from "./transcribe";
+import requestAccessRouter from "./requestAccess";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(warehouseRouter);
 router.use(trainingRouter);
 router.use(novaHelpRouter);
 router.use(transcribeRouter);
+router.use(requestAccessRouter);
 
 export default router;

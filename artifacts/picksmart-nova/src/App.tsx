@@ -54,6 +54,7 @@ import DemoLeaderboardPage from "@/pages/demo/DemoLeaderboardPage";
 import DemoTrainerDashboard from "@/pages/demo/DemoTrainerDashboard";
 import DemoSupervisorDashboard from "@/pages/demo/DemoSupervisorDashboard";
 import DemoNovaTrainerPage from "@/pages/demo/DemoNovaTrainerPage";
+import RequestAccessPage from "@/pages/RequestAccessPage";
 
 function RedirectToOwner() {
   const [, navigate] = useLocation();
@@ -240,6 +241,11 @@ function Router() {
       {/* ── Warehouse deep-link entry ── */}
       <Route path="/w/:slug">
         <WarehouseEntryPage />
+      </Route>
+
+      {/* ── Public pages — no login required ── */}
+      <Route path="/request-access">
+        <Layout><RequestAccessPage /></Layout>
       </Route>
 
       {/* ── Public demo — no login or subscription required ── */}

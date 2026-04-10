@@ -1,11 +1,62 @@
 import { useLocation } from "wouter";
 import { useAuthStore } from "@/lib/authStore";
-import { DEMO_STATS, DEMO_ACTIVITY, DEMO_SELECTORS_ONLY } from "@/data/demoWarehouseData";
+import {
+  DEMO_STATS,
+  DEMO_ACTIVITY,
+  DEMO_SELECTORS_ONLY,
+  DEMO_IMPROVEMENT_METRICS,
+  DEMO_SUCCESS_STORIES,
+  DEMO_MENTORING_BADGES,
+} from "@/data/demoWarehouseData";
 import {
   Users, Zap, TrendingUp, BookOpen, Mic, Activity,
   BarChart3, ShieldCheck, ChevronRight, FlaskConical,
+  ArrowRight,
 } from "lucide-react";
 
+// ── Spiral NOVA logo ─────────────────────────────────────────────────────────
+function SpiralLogo() {
+  return (
+    <div className="flex items-center justify-center">
+      <div className="relative h-28 w-28">
+        {/* Outer rings fade inward */}
+        <div className="absolute inset-0      rounded-full border-[3px] border-yellow-400/90" />
+        <div className="absolute inset-[10px] rounded-full border-[3px] border-yellow-400/70" />
+        <div className="absolute inset-[20px] rounded-full border-[3px] border-yellow-400/50" />
+        <div className="absolute inset-[30px] rounded-full border-[3px] border-yellow-400/30" />
+        {/* Core dot */}
+        <div className="absolute inset-[41px] rounded-full bg-yellow-400" />
+        {/* Subtle glow */}
+        <div className="absolute inset-0 rounded-full bg-yellow-400/5 blur-xl" />
+      </div>
+    </div>
+  );
+}
+
+// ── Before → After metric card ────────────────────────────────────────────────
+function MetricCard({
+  label, before, after, detail,
+}: {
+  label: string; before: number; after: number; detail: string;
+}) {
+  const pct = Math.round(((after - before) / before) * 100);
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-lg flex flex-col gap-3">
+      <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">{label}</p>
+      <p className="text-3xl font-black text-white">
+        {before}%{" "}
+        <span className="text-slate-600">→</span>{" "}
+        <span className="text-yellow-300">{after}%</span>
+      </p>
+      <span className="self-start rounded-full bg-green-500/15 px-2.5 py-0.5 text-xs font-bold text-green-400">
+        +{pct}% improvement
+      </span>
+      <p className="text-sm text-slate-400 leading-relaxed">{detail}</p>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function DemoLandingPage() {
   const [, navigate] = useLocation();
   const loginAsDemo = useAuthStore((s) => s.loginAsDemo);
@@ -25,32 +76,56 @@ export default function DemoLandingPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
-      {/* Top demo notice */}
+
+      {/* ── Demo banner ── */}
       <div className="bg-yellow-400 px-4 py-2 text-center text-sm font-bold text-slate-950 flex items-center justify-center gap-2">
         <FlaskConical className="h-4 w-4" />
         Demo Warehouse Preview — sample data for evaluation only
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 space-y-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 space-y-14">
 
-        {/* Header */}
+        {/* ── Hero ── */}
         <div className="text-center space-y-3">
           <p className="text-sm font-semibold uppercase tracking-[0.22em] text-yellow-400">Live Demo</p>
           <h1 className="text-4xl sm:text-5xl font-black">Demo Distribution Center</h1>
-          <p className="mx-auto max-w-2xl text-slate-300 text-lg">
-            Explore a realistic ES3 warehouse account — selectors, dashboards, assignments, NOVA tools, and performance data.
+          <p className="mx-auto max-w-3xl text-slate-300 text-lg">
+            Explore how PickSmart NOVA helps warehouses train selectors, improve performance, and build safer, faster teams.
           </p>
         </div>
 
-        {/* Stats */}
+        {/* ── NOVA hero section ── */}
+        <div className="relative overflow-hidden rounded-3xl border border-yellow-400/30 bg-gradient-to-b from-slate-900 to-slate-950 p-10 text-center shadow-2xl">
+          {/* Background glow */}
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div className="h-64 w-64 rounded-full bg-yellow-400/5 blur-3xl" />
+          </div>
+
+          <SpiralLogo />
+
+          <h2 className="mt-6 text-4xl sm:text-5xl font-black">Meet NOVA</h2>
+          <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-300">
+            Ask NOVA anything about training, mentoring, selector struggles, safety, pallet building, pace, and performance improvement.
+          </p>
+          <button
+            onClick={() => enter("selector", "/nova-help")}
+            className="mt-8 inline-flex items-center gap-2 rounded-2xl bg-yellow-400 px-8 py-4 text-base font-bold text-slate-950 hover:bg-yellow-300 transition"
+          >
+            Click Here to Ask Everything You Want to Know About PickSmart Academy
+            <ArrowRight className="h-5 w-5" />
+          </button>
+          <p className="mt-4 text-xs text-slate-600">Powered by NOVA AI — no login required for demo</p>
+        </div>
+
+        {/* ── Stats bar ── */}
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
           {[
-            { label: "Total Users",        value: DEMO_STATS.totalUsers },
-            { label: "Active Selectors",   value: DEMO_STATS.activeSelectors },
-            { label: "NOVA Active",        value: DEMO_STATS.activeNOVA },
-            { label: "Sessions Today",     value: DEMO_STATS.sessionsToday },
-            { label: "Pass Rate",          value: `${DEMO_STATS.passRate}%` },
-            { label: "Avg Rate",           value: `${DEMO_STATS.avgRate}%` },
+            { label: "Total Users",      value: DEMO_STATS.totalUsers },
+            { label: "Active Selectors", value: DEMO_STATS.activeSelectors },
+            { label: "NOVA Active",      value: DEMO_STATS.activeNOVA },
+            { label: "Sessions Today",   value: DEMO_STATS.sessionsToday },
+            { label: "Pass Rate",        value: `${DEMO_STATS.passRate}%` },
+            { label: "Avg Rate",         value: `${DEMO_STATS.avgRate}%` },
           ].map(({ label, value }) => (
             <div key={label} className="rounded-2xl border border-slate-800 bg-slate-900 p-4 text-center">
               <p className="text-xs text-slate-500 mb-1">{label}</p>
@@ -59,9 +134,28 @@ export default function DemoLandingPage() {
           ))}
         </div>
 
-        {/* Demo cards */}
+        {/* ── Improvement outcomes ── */}
         <div>
-          <h2 className="text-xl font-bold mb-4 text-white">Explore Demo Views</h2>
+          <div className="mb-6">
+            <p className="text-xs font-semibold uppercase tracking-widest text-yellow-400 mb-1">Real Results</p>
+            <h2 className="text-3xl font-black">Improvement Outcomes</h2>
+            <p className="mt-2 text-slate-400 text-sm max-w-2xl">
+              Average selector improvement across PickSmart-trained warehouses — tracked from first session to certification.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {DEMO_IMPROVEMENT_METRICS.map((item) => (
+              <MetricCard key={item.label} {...item} />
+            ))}
+          </div>
+        </div>
+
+        {/* ── Explore demo views ── */}
+        <div>
+          <div className="mb-6">
+            <p className="text-xs font-semibold uppercase tracking-widest text-yellow-400 mb-1">Explore</p>
+            <h2 className="text-3xl font-black">Explore Demo Views</h2>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 
             <DemoCard
@@ -123,11 +217,33 @@ export default function DemoLandingPage() {
               buttonLabel="View Supervisor Dashboard"
               onClick={() => enter("supervisor", "/demo/supervisor-dashboard")}
             />
+
           </div>
         </div>
 
-        {/* Bottom grid: selectors preview + activity */}
+        {/* ── Success stories ── */}
+        <div>
+          <div className="mb-6">
+            <p className="text-xs font-semibold uppercase tracking-widest text-yellow-400 mb-1">Selector Stories</p>
+            <h2 className="text-3xl font-black">How PickSmart Helps Real Struggles</h2>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {DEMO_SUCCESS_STORIES.map((item) => (
+              <div
+                key={item.name}
+                className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-lg flex flex-col gap-2"
+              >
+                <span className="text-xs font-bold uppercase tracking-widest text-yellow-400">{item.name}</span>
+                <h3 className="text-xl font-bold text-white">{item.title}</h3>
+                <p className="text-slate-300 text-sm leading-relaxed">{item.story}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Selectors + Activity side by side ── */}
         <div className="grid gap-6 lg:grid-cols-2">
+
           {/* Selector preview */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
             <h3 className="text-base font-bold mb-4">Demo Selectors ({DEMO_SELECTORS_ONLY.length})</h3>
@@ -176,17 +292,56 @@ export default function DemoLandingPage() {
           </div>
         </div>
 
-        {/* CTA footer */}
-        <div className="rounded-2xl border border-yellow-400/30 bg-yellow-400/5 p-6 text-center space-y-3">
-          <p className="text-lg font-bold text-white">Ready to bring PickSmart NOVA to your warehouse?</p>
-          <p className="text-slate-400 text-sm">Company plans include all NOVA tools, trainer dashboards, and supervisor reporting.</p>
+        {/* ── Mentoring & Incentives ── */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <div className="mb-5">
+            <p className="text-xs font-semibold uppercase tracking-widest text-yellow-400 mb-1">Recognition</p>
+            <h2 className="text-2xl font-black">Mentoring & Incentives</h2>
+            <p className="mt-2 text-sm text-slate-400">PickSmart tracks achievements and rewards progress to keep selectors motivated.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {DEMO_MENTORING_BADGES.map((item) => (
+              <div
+                key={item.label}
+                className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950 px-4 py-3"
+              >
+                <span className="text-2xl">{item.icon}</span>
+                <p className="text-sm text-slate-200 font-medium">{item.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Ask NOVA CTA ── */}
+        <div className="rounded-2xl border border-yellow-400/30 bg-yellow-400/5 p-8 text-center space-y-4">
+          <SpiralLogo />
+          <h2 className="text-2xl font-black mt-4">Still have questions?</h2>
+          <p className="text-slate-400 max-w-xl mx-auto text-sm">
+            NOVA can answer any question about training, safety, pallet building, pace, and how PickSmart works — like talking to a real coach.
+          </p>
+          <button
+            onClick={() => enter("selector", "/nova-help")}
+            className="inline-flex items-center gap-2 rounded-xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
+          >
+            <Mic className="h-4 w-4" />
+            Ask NOVA About Training
+          </button>
+        </div>
+
+        {/* ── Request access CTA ── */}
+        <div className="rounded-2xl border border-slate-700 bg-slate-900 p-8 text-center space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Ready to Start?</p>
+          <h2 className="text-3xl font-black">Bring PickSmart NOVA to Your Warehouse</h2>
+          <p className="text-slate-400 max-w-2xl mx-auto text-sm">
+            Company plans include all NOVA tools, trainer dashboards, supervisor reporting, and full onboarding support.
+          </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center pt-1">
-            <a
-              href="/pricing"
-              className="inline-flex items-center justify-center rounded-xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
+            <button
+              onClick={() => navigate("/request-access")}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
             >
-              View Pricing
-            </a>
+              Request Company Access <ArrowRight className="h-4 w-4" />
+            </button>
             <a
               href="/"
               className="inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-950 px-6 py-3 font-semibold text-white hover:border-yellow-400 transition"
@@ -201,6 +356,7 @@ export default function DemoLandingPage() {
   );
 }
 
+// ── Demo explore card ─────────────────────────────────────────────────────────
 function DemoCard({
   icon, iconBg, title, subtitle, description, buttonLabel, onClick,
 }: {

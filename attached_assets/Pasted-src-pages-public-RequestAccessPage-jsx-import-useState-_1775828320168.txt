@@ -1,0 +1,170 @@
+src/pages/public/RequestAccessPage.jsx
+import { useState } from "react";
+
+export default function RequestAccessPage() {
+  const [form, setForm] = useState({
+    name: "",
+    company: "",
+    email: "",
+    phone: "",
+    warehouseSize: "",
+    selectors: "",
+    message: "",
+  });
+
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    await fetch("/api/request-access", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(form),
+    });
+
+    setSubmitted(true);
+  };
+
+  if (submitted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white">
+        <div className="text-center max-w-lg">
+          <h1 className="text-3xl font-bold text-yellow-400">
+            Request Received
+          </h1>
+          <p className="mt-4 text-slate-300">
+            We’ll contact you shortly to set up your PickSmart NOVA system and
+            walk you through onboarding your team.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white flex justify-center items-center p-6">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-slate-900 p-8 rounded-2xl w-full max-w-xl space-y-4"
+      >
+        <h1 className="text-2xl font-bold text-yellow-400">
+          Request Company Access
+        </h1>
+
+        <input
+          name="name"
+          placeholder="Your Name"
+          onChange={handleChange}
+          required
+          className="w-full p-3 rounded bg-slate-800"
+        />
+
+        <input
+          name="company"
+          placeholder="Company Name"
+          onChange={handleChange}
+          required
+          className="w-full p-3 rounded bg-slate-800"
+        />
+
+        <input
+          name="email"
+          placeholder="Email"
+          onChange={handleChange}
+          required
+          className="w-full p-3 rounded bg-slate-800"
+        />
+
+        <input
+          name="phone"
+          placeholder="Phone Number"
+          onChange={handleChange}
+          className="w-full p-3 rounded bg-slate-800"
+        />
+
+        <input
+          name="selectors"
+          placeholder="Number of Selectors"
+          onChange={handleChange}
+          className="w-full p-3 rounded bg-slate-800"
+        />
+
+        <textarea
+          name="message"
+          placeholder="What are your biggest training challenges?"
+          onChange={handleChange}
+          className="w-full p-3 rounded bg-slate-800"
+        />
+
+        <button className="w-full bg-yellow-400 text-black py-3 rounded-xl font-bold">
+          Submit Request
+        </button>
+      </form>
+    </div>
+  );
+}
+2️⃣ BACKEND API
+server/routes/requestAccess.js
+import express from "express";
+
+const router = express.Router();
+
+router.post("/", async (req, res) => {
+  const data = req.body;
+
+  console.log("NEW COMPANY LEAD:", data);
+
+  // 👉 OPTIONAL: store in database later
+
+  // 👉 OPTIONAL: send email (see below)
+
+  res.json({ success: true });
+});
+
+export default router;
+3️⃣ CONNECT ROUTE
+server/index.js
+import requestAccessRoute from "./routes/requestAccess.js";
+
+app.use("/api/request-access", requestAccessRoute);
+4️⃣ ADD ROUTE IN FRONTEND
+App.jsx
+import RequestAccessPage from "./pages/public/RequestAccessPage";
+
+<Route path="/request-access" element={<RequestAccessPage />} />
+5️⃣ CONNECT BUTTON FROM DEMO
+
+Replace your demo button:
+
+<button
+  onClick={() => navigate("/request-access")}
+  className="bg-yellow-400 text-black px-6 py-3 rounded-xl font-bold"
+>
+  Request Company Access
+</button>
+💥 OPTIONAL (HIGHLY RECOMMENDED)
+Send yourself email when someone submits
+
+Use:
+
+👉 Resend (easy)
+👉 or Nodemailer
+
+Example (Resend)
+import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+await resend.emails.send({
+  from: "noreply@yourapp.com",
+  to: "your@email.com",
+  subject: "New PickSmart Lead",
+  html: `<p>${JSON.stringify(data)}</p>`,
+});

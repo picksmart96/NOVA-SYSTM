@@ -1,0 +1,431 @@
+Pasted-AGE-CHANGES-1-Replace-demo-hero-text-Old-Explore-a-real_1775825745621.txt
+AGE CHANGES
+1. Replace demo hero text
+Old:
+- Explore a realistic ES3 warehouse account
+New:
+- Explore how PickSmart NOVA helps warehouses train selectors, improve performance, and build safer, faster teams.
+
+2. Add center NOVA hero section
+Show:
+- a NOVA spiral-style logo in the center
+- title: Meet NOVA
+- subtitle: Click here to ask everything you want to know about PickSmart Academy
+- large CTA button:
+  Ask NOVA About Training
+
+3. Add demo AI agent card on homepage
+This is a manager-facing AI agent that answers questions about:
+- training process
+- selector struggles
+- common mistakes
+- safety issues
+- pallet building problems
+- performance improvement
+- coaching and mentoring
+- motivation and retention
+- onboarding new selectors
+
+4. Add fake improvement success cards
+Show realistic demo outcomes like:
+- Pallet Building Rate: 64% → 100%
+- Cases Count Rate: 72% → 98%
+- Safety Score: 81% → 97%
+- Accuracy: 93% → 99%
+- Rate Pace: 68% → 96%
+
+5. Add fake selector stories
+Examples:
+- Marcus Hill improved pallet building from 64% to 100% in 3 weeks
+- Tasha Green improved safety score from 81% to 97% after coaching
+- Andre Lewis improved cases rate from 72% to 98% with NOVA mentoring
+- Jasmine Cole improved confidence and reduced hesitation in aisle movement
+
+6. Add fake incentive and mentoring section
+Show examples like:
+- 5-day clean pick streak
+- safety milestone reached
+- pallet building certification earned
+- trainer coaching completed
+- weekly improvement badge
+
+DEMO AI AGENT
+Build demo NOVA Help content so it sounds like a real person and answers managers naturally.
+
+The demo agent should know:
+- how PickSmart Academy training works
+- how selectors struggle early
+- why new selectors miss picks
+- why pallets collapse
+- how pace gets destroyed
+- how safety habits slip
+- how NOVA helps fix those issues
+- how the system mentors and motivates selectors
+- how dashboards help trainers and supervisors
+
+The demo agent should answer like a real human coach / consultant:
+- warm
+- professional
+- helpful
+- confident
+- practical
+
+It should explain how PickSmart helps:
+- train faster
+- pick safer
+- build stronger pallets
+- improve rate
+- mentor struggling selectors
+- motivate people with visible progress
+
+DEMO HOME PAGE UI
+Use sections:
+- Demo banner
+- Center NOVA hero with spiral logo
+- Improvement metrics
+- Explore demo views
+- Fake selector success stories
+- Recent activity
+- Ask NOVA CTA
+
+LOGO
+Create a simple spiral-style NOVA logo look in UI using CSS or SVG.
+Use safety yellow + dark navy theme.
+Do not make it too complex.
+Make it feel modern, intelligent, and premium.
+
+FILES TO UPDATE
+- src/pages/public/DemoAccessPage.jsx
+- src/pages/public/NovaHelpPage.jsx or demo NOVA help wrapper
+- src/data/demoWarehouseData.js
+- add demo improvement metrics
+- add demo success stories
+- add demo mentoring/incentive data
+Paste-ready demo data update
+src/data/demoWarehouseData.js
+
+Replace or add this:
+
+export const demoImprovementMetrics = [
+  {
+    label: "Pallet Building Rate",
+    before: 64,
+    after: 100,
+    detail: "Selectors learned stronger base building, better interlocking, and cleaner top-layer control.",
+  },
+  {
+    label: "Cases Count Rate",
+    before: 72,
+    after: 98,
+    detail: "NOVA coaching helped selectors improve pace, aisle flow, and quantity accuracy.",
+  },
+  {
+    label: "Safety Score",
+    before: 81,
+    after: 97,
+    detail: "Hands-on reminders and safety coaching improved lift habits, movement, and consistency.",
+  },
+  {
+    label: "Accuracy",
+    before: 93,
+    after: 99,
+    detail: "Focused correction on short picks, over picks, and mispicks raised clean performance.",
+  },
+  {
+    label: "Rate Pace",
+    before: 68,
+    after: 96,
+    detail: "Selectors improved movement between picks and reduced hesitation in the aisle.",
+  },
+];
+
+export const demoSuccessStories = [
+  {
+    name: "Marcus Hill",
+    title: "Pallet Building Improvement",
+    story:
+      "Marcus improved pallet building from 64% to 100% in 3 weeks after working through stacking lessons, pallet structure coaching, and live NOVA prompts.",
+  },
+  {
+    name: "Tasha Green",
+    title: "Safety Growth",
+    story:
+      "Tasha improved her safety score from 81% to 97% after using safety modules, better lifting technique, and trainer review sessions.",
+  },
+  {
+    name: "Andre Lewis",
+    title: "Rate Improvement",
+    story:
+      "Andre improved his cases rate from 72% to 98% after NOVA helped him reduce hesitation, prepare the next move earlier, and stay in flow.",
+  },
+  {
+    name: "Jasmine Cole",
+    title: "Confidence & Consistency",
+    story:
+      "Jasmine improved her confidence during live picking by learning how to trust the process, build stronger pallets, and recover faster from mistakes.",
+  },
+];
+
+export const demoMentoringStats = [
+  "5-day clean pick streak earned",
+  "Safety milestone reached",
+  "Pallet Building Certification earned",
+  "Trainer coaching cycle completed",
+  "Weekly improvement badge unlocked",
+];
+
+export const demoRecentActivity = [
+  "Marcus Hill improved pallet building from 64% to 100%.",
+  "Tasha Green increased safety score from 81% to 97%.",
+  "Andre Lewis improved cases rate from 72% to 98%.",
+  "Jasmine Cole completed confidence and pace coaching.",
+  "Weekly improvement incentive awarded to 3 selectors.",
+];
+Paste-ready demo homepage
+src/pages/public/DemoAccessPage.jsx
+import { useNavigate } from "react-router-dom";
+import {
+  demoStats,
+  demoImprovementMetrics,
+  demoSuccessStories,
+  demoMentoringStats,
+  demoRecentActivity,
+} from "../../data/demoWarehouseData";
+
+function SpiralLogo() {
+  return (
+    <div className="flex items-center justify-center">
+      <div className="relative h-28 w-28">
+        <div className="absolute inset-0 rounded-full border-4 border-yellow-400/90"></div>
+        <div className="absolute inset-[10px] rounded-full border-4 border-yellow-400/70"></div>
+        <div className="absolute inset-[20px] rounded-full border-4 border-yellow-400/50"></div>
+        <div className="absolute inset-[30px] rounded-full border-4 border-yellow-400/30"></div>
+        <div className="absolute inset-[42px] rounded-full bg-yellow-400"></div>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ label, before, after, detail }) {
+  return (
+    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-lg">
+      <p className="text-sm text-slate-400">{label}</p>
+      <p className="mt-3 text-2xl font-black text-white">
+        {before}% <span className="text-slate-500">→</span>{" "}
+        <span className="text-yellow-300">{after}%</span>
+      </p>
+      <p className="mt-3 text-sm text-slate-300">{detail}</p>
+    </div>
+  );
+}
+
+export default function DemoAccessPage() {
+  const navigate = useNavigate();
+
+  return (
+    <div className="min-h-screen bg-slate-950 px-6 py-12 text-white">
+      <div className="mx-auto max-w-7xl space-y-8">
+        <div className="rounded-3xl border border-yellow-400 bg-yellow-500/10 p-4 text-center text-yellow-200">
+          Demo Warehouse Preview — sample data for evaluation only
+        </div>
+
+        <div className="text-center">
+          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-yellow-400">
+            Live Demo
+          </p>
+          <h1 className="mt-3 text-5xl font-black">Demo Distribution Center</h1>
+          <p className="mx-auto mt-4 max-w-3xl text-lg text-slate-300">
+            Explore how PickSmart NOVA helps warehouses train selectors,
+            improve performance, and build safer, faster teams.
+          </p>
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-10 text-center shadow-2xl">
+          <SpiralLogo />
+          <h2 className="mt-6 text-4xl font-black">Meet NOVA</h2>
+          <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-300">
+            Ask NOVA anything about training, mentoring, selector struggles,
+            safety, pallet building, pace, and performance improvement.
+          </p>
+          <button
+            onClick={() => navigate("/demo/nova-help")}
+            className="mt-8 rounded-2xl bg-yellow-400 px-8 py-4 text-lg font-bold text-slate-950 hover:bg-yellow-300"
+          >
+            Click Here to Ask Everything You Wanna Know About PickSmart Academy
+          </button>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Total Users</p>
+            <p className="mt-3 text-2xl font-black">{demoStats.totalUsers}</p>
+          </div>
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Active Selectors</p>
+            <p className="mt-3 text-2xl font-black">{demoStats.activeSelectors}</p>
+          </div>
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">NOVA Active</p>
+            <p className="mt-3 text-2xl font-black">{demoStats.activeNOVA}</p>
+          </div>
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Sessions Today</p>
+            <p className="mt-3 text-2xl font-black">{demoStats.sessionsToday}</p>
+          </div>
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Pass Rate</p>
+            <p className="mt-3 text-2xl font-black">{demoStats.passRate}%</p>
+          </div>
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Avg Rate</p>
+            <p className="mt-3 text-2xl font-black">{demoStats.avgRate}%</p>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-3xl font-black">Improvement Outcomes</h3>
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {demoImprovementMetrics.map((item) => (
+              <MetricCard key={item.label} {...item} />
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-3xl font-black">How PickSmart Helps Real Struggles</h3>
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            {demoSuccessStories.map((item) => (
+              <div
+                key={item.name}
+                className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg"
+              >
+                <p className="text-yellow-400 font-semibold">{item.name}</p>
+                <h4 className="mt-2 text-2xl font-bold">{item.title}</h4>
+                <p className="mt-3 text-slate-300">{item.story}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+            <h3 className="text-2xl font-bold">Mentoring & Incentives</h3>
+            <div className="mt-5 space-y-3 text-slate-300">
+              {demoMentoringStats.map((item) => (
+                <div
+                  key={item}
+                  className="rounded-2xl border border-slate-800 bg-slate-950 p-4"
+                >
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+            <h3 className="text-2xl font-bold">Recent Activity</h3>
+            <div className="mt-5 space-y-3 text-slate-300">
+              {demoRecentActivity.map((item) => (
+                <div
+                  key={item}
+                  className="rounded-2xl border border-slate-800 bg-slate-950 p-4"
+                >
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 text-center">
+          <h3 className="text-3xl font-black">Explore the Demo System</h3>
+          <p className="mx-auto mt-4 max-w-3xl text-slate-300">
+            Show managers how selectors train, improve, get coached, and build
+            safer, stronger performance through one connected system.
+          </p>
+
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <button
+              onClick={() => navigate("/demo/training")}
+              className="rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300"
+            >
+              View Training
+            </button>
+            <button
+              onClick={() => navigate("/demo/leaderboard")}
+              className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold hover:border-yellow-400"
+            >
+              View Leaderboard
+            </button>
+            <button
+              onClick={() => navigate("/demo/trainer-dashboard")}
+              className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold hover:border-yellow-400"
+            >
+              View Trainer Dashboard
+            </button>
+            <button
+              onClick={() => navigate("/demo/supervisor-dashboard")}
+              className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold hover:border-yellow-400"
+            >
+              View Supervisor Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+Demo AI agent prompt
+
+Use this as your demo NOVA system prompt for manager questions:
+
+server/realtime/demoNovaManagerPrompt.js
+export function getDemoNovaManagerPrompt() {
+  return `
+You are NOVA, a real human-like warehouse training consultant for PickSmart Academy.
+
+You help warehouse managers, trainers, and supervisors understand:
+- how PickSmart trains selectors
+- how selectors improve over time
+- why selectors struggle
+- how training fixes those struggles
+- how NOVA coaches pallet building, safety, pace, and accuracy
+- how managers can mentor and motivate selectors
+- how fake demo results show what improvement can look like
+
+Important training struggles you understand deeply:
+- weak pallet base building
+- bad stacking structure
+- hesitation between picks
+- poor aisle pacing
+- short picks
+- over picks
+- mispicks
+- weak safety habits
+- lifting mistakes
+- low confidence
+- frustration in first weeks
+- lack of motivation
+
+You explain how PickSmart helps:
+- train faster
+- pick safer
+- build stronger pallets
+- improve case rate
+- improve pace
+- improve safety
+- mentor struggling selectors
+- motivate performance with visible progress and coaching
+
+Style:
+- warm
+- professional
+- confident
+- practical
+- sounds like a real person talking to a manager
+
+Keep answers clear and natural.
+Do not sound robotic.
+`;
+}
+What this changes

@@ -98,3 +98,71 @@ export const DEMO_STATS = {
   openAssignments: 5,
   trainers: 3,
 };
+
+export const DEMO_IMPROVEMENT_METRICS = [
+  {
+    label: "Pallet Building Rate",
+    before: 64,
+    after: 100,
+    detail: "Selectors learned stronger base building, better interlocking, and cleaner top-layer control.",
+  },
+  {
+    label: "Cases Count Rate",
+    before: 72,
+    after: 98,
+    detail: "NOVA coaching helped selectors improve pace, aisle flow, and quantity accuracy.",
+  },
+  {
+    label: "Safety Score",
+    before: 81,
+    after: 97,
+    detail: "Hands-on reminders and safety coaching improved lift habits, movement, and consistency.",
+  },
+  {
+    label: "Accuracy",
+    before: 93,
+    after: 99,
+    detail: "Focused correction on short picks, over picks, and mispicks raised clean performance.",
+  },
+  {
+    label: "Rate Pace",
+    before: 68,
+    after: 96,
+    detail: "Selectors improved movement between picks and reduced hesitation in the aisle.",
+  },
+];
+
+export const DEMO_SUCCESS_STORIES = [
+  {
+    name: "Marcus Hill",
+    title: "Pallet Building Improvement",
+    story:
+      "Marcus improved pallet building from 64% to 100% in 3 weeks after working through stacking lessons, pallet structure coaching, and live NOVA prompts.",
+  },
+  {
+    name: "Tasha Green",
+    title: "Safety Growth",
+    story:
+      "Tasha improved her safety score from 81% to 97% after using safety modules, better lifting technique, and trainer review sessions.",
+  },
+  {
+    name: "Andre Lewis",
+    title: "Rate Improvement",
+    story:
+      "Andre improved his cases rate from 72% to 98% after NOVA helped him reduce hesitation, prepare the next move earlier, and stay in flow.",
+  },
+  {
+    name: "Jasmine Cole",
+    title: "Confidence & Consistency",
+    story:
+      "Jasmine improved her confidence during live picking by learning how to trust the process, build stronger pallets, and recover faster from mistakes.",
+  },
+];
+
+export const DEMO_MENTORING_BADGES = [
+  { icon: "🔥", label: "5-Day Clean Pick Streak Earned" },
+  { icon: "🛡️", label: "Safety Milestone Reached" },
+  { icon: "📦", label: "Pallet Building Certification Earned" },
+  { icon: "🎓", label: "Trainer Coaching Cycle Completed" },
+  { icon: "⭐", label: "Weekly Improvement Badge Unlocked" },
+];
