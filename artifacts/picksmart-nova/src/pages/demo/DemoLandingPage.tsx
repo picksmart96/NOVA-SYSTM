@@ -108,7 +108,7 @@ export default function DemoLandingPage() {
             Ask NOVA anything about training, mentoring, selector struggles, safety, pallet building, pace, and performance improvement.
           </p>
           <button
-            onClick={() => enter("selector", "/nova-help")}
+            onClick={() => enter("selector", "/demo/nova-help")}
             className="mt-8 inline-flex items-center gap-2 rounded-2xl bg-yellow-400 px-8 py-4 text-base font-bold text-slate-950 hover:bg-yellow-300 transition"
           >
             Click Here to Ask Everything You Want to Know About PickSmart Academy
@@ -183,9 +183,9 @@ export default function DemoLandingPage() {
               iconBg="bg-yellow-400/10 border-yellow-400/20"
               title="NOVA Help AI"
               subtitle="All roles"
-              description="Ask NOVA anything about picking, pallets, safety, or ES3. Fully functional voice AI coach."
+              description="Ask NOVA anything about training, rate, safety, or NOVA. Alexa-style voice AI demo — no login needed."
               buttonLabel="Try NOVA Help"
-              onClick={() => enter("selector", "/nova-help")}
+              onClick={() => enter("selector", "/demo/nova-help")}
             />
 
             <DemoCard
@@ -320,7 +320,7 @@ export default function DemoLandingPage() {
             NOVA can answer any question about training, safety, pallet building, pace, and how PickSmart works — like talking to a real coach.
           </p>
           <button
-            onClick={() => enter("selector", "/nova-help")}
+            onClick={() => enter("selector", "/demo/nova-help")}
             className="inline-flex items-center gap-2 rounded-xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
           >
             <Mic className="h-4 w-4" />

@@ -55,6 +55,7 @@ import DemoTrainerDashboard from "@/pages/demo/DemoTrainerDashboard";
 import DemoSupervisorDashboard from "@/pages/demo/DemoSupervisorDashboard";
 import DemoNovaTrainerPage from "@/pages/demo/DemoNovaTrainerPage";
 import DemoNovaGatePage from "@/pages/demo/DemoNovaGatePage";
+import DemoNovaHelpPage from "@/pages/demo/DemoNovaHelpPage";
 import RequestAccessPage from "@/pages/RequestAccessPage";
 
 function RedirectToOwner() {
@@ -293,6 +294,9 @@ function Router() {
       </Route>
       <Route path="/demo/nova-trainer">
         <DemoNovaTrainerPage />
+      </Route>
+      <Route path="/demo/nova-help">
+        <DemoNovaHelpPage />
       </Route>
       <Route path="/demo/trainer-dashboard">
         <Layout><DemoTrainerDashboard /></Layout>
