@@ -1,0 +1,173 @@
+server/realtime/novaDemoBrain.js
+export function getNovaDemoBrain() {
+  return `
+You are NOVA, a smart, friendly, and professional warehouse AI assistant for PickSmart Academy.
+
+You speak like a real human trainer and consultant.
+
+You help managers understand:
+- how training works
+- how selectors improve
+- how NOVA helps
+- how safety improves
+- how pallet building improves
+- how rate improves
+- how mistakes are fixed
+
+You deeply understand selector struggles:
+- slow pace
+- bad stacking
+- safety mistakes
+- hesitation
+- wrong picks
+- low confidence
+
+You explain how PickSmart solves those problems.
+
+IMPORTANT:
+- Always sound natural and confident
+- Keep answers clear and not too long
+- After EVERY answer, ask:
+
+"Do you want me to go deeper into that or show how it works for your team?"
+
+You are NOT a robot.
+You are a helpful expert.
+`;
+}
+🎤 2️⃣ NOVA HELP PAGE (ALEXA STYLE)
+src/pages/demo/NovaVoiceAgent.jsx
+import { useEffect, useRef, useState } from "react";
+
+export default function NovaVoiceAgent() {
+  const recognitionRef = useRef(null);
+  const [listening, setListening] = useState(false);
+
+  const speak = (text) => {
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 1;
+    utter.pitch = 1;
+
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utter);
+  };
+
+  const startListening = () => {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = "en-US";
+
+    recognition.onstart = () => setListening(true);
+
+    recognition.onresult = async (event) => {
+      const text =
+        event.results[event.results.length - 1][0].transcript;
+
+      console.log("User:", text);
+
+      // WAKE WORD CHECK
+      if (
+        text.toLowerCase().includes("hey nova") ||
+        text.toLowerCase().includes("nova")
+      ) {
+        speak("Yes, how can I help?");
+        return;
+      }
+
+      // SEND TO AI
+      const res = await fetch("/api/nova-help", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: text }),
+      });
+
+      const data = await res.json();
+
+      speak(data.reply);
+    };
+
+    recognition.onend = () => {
+      recognition.start(); // 🔥 KEEP ALIVE
+    };
+
+    recognition.start();
+    recognitionRef.current = recognition;
+  };
+
+  useEffect(() => {
+    // 🔓 Unlock audio (mobile)
+    const unlock = () => {
+      speak(" ");
+      document.removeEventListener("click", unlock);
+    };
+
+    document.addEventListener("click", unlock);
+
+    // 🎤 START NOVA
+    setTimeout(() => {
+      speak(
+        "Hi, I'm NOVA. I'm here to help you understand how PickSmart improves warehouse training. Just ask me anything."
+      );
+
+      startListening();
+    }, 1000);
+  }, []);
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white">
+      <h1 className="text-4xl font-bold text-yellow-400">NOVA</h1>
+
+      <p className="mt-4 text-slate-300">
+        {listening ? "Listening..." : "Starting..."}
+      </p>
+
+      <div className="mt-6 animate-pulse text-yellow-400">
+        🎤 Voice Active
+      </div>
+    </div>
+  );
+}
+🧠 3️⃣ BACKEND AI ROUTE
+server/routes/novaHelpApi.js
+import express from "express";
+import OpenAI from "openai";
+import { getNovaDemoBrain } from "../realtime/novaDemoBrain.js";
+
+const router = express.Router();
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+router.post("/", async (req, res) => {
+  const { message } = req.body;
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "system",
+        content: getNovaDemoBrain(),
+      },
+      {
+        role: "user",
+        content: message,
+      },
+    ],
+  });
+
+  res.json({
+    reply: response.choices[0].message.content,
+  });
+});
+
+export default router;
+🔗 4️⃣ ROUTE
+App.jsx
+<Route path="/demo/nova-help" element={<NovaVoiceAgent />} />

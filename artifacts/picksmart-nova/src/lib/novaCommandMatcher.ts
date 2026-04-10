@@ -71,19 +71,37 @@ export function matchCommand(input = "") {
       ],
     },
     {
+      // "load picks" — extended with phonetic variants from mobile STT mishearings
       key: "load_picks",
       phrases: [
         "load picks", "load pick",
+        "lo picks", "lo pick",
+        "loaded picks", "loaded pick",
+        "load up picks", "load up pick",
+        "load my picks", "load my pick",
+        "lode picks", "lode pick",
+        "go picks", "go pick",
         // Spanish
-        "cargar picks", "cargar pix", "cargar",
+        "cargar picks", "cargar pix", "cargar", "carga picks",
       ],
     },
     {
       key: "stop",
       phrases: [
-        "stop",
+        "stop", "nova stop", "stop listening", "nova stop listening",
         // Spanish
-        "parar", "detener", "terminar",
+        "parar", "detener", "terminar", "para nova",
+      ],
+    },
+    {
+      // Resume from paused/stopped state
+      key: "resume",
+      phrases: [
+        "resume", "nova resume",
+        "ready to go", "nova ready to go",
+        "nova ready", "let's go", "lets go", "continue",
+        // Spanish
+        "reanudar", "continuar", "vamos",
       ],
     },
     {

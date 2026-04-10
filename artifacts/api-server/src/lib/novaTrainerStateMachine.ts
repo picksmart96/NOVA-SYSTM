@@ -96,11 +96,29 @@ function isDeny(input = "") {
 
 function isLoadPicks(input = "") {
   const v = normalize(input);
-  const hasLoadSound = has(v, "load", "lov", "lod", "lav", "lok", "lot pick", "lob", "lof", "lop");
-  const hasPickSound = has(v, "pick", "pic ", "pik", " pic", "pec", "pek", "peak", "peek");
+
+  // ── Canonical command key the client sends after matchCommand ─────────────
+  // Client's matchCommand maps "load picks" / "load pick" / phonetic variants
+  // to the key "load_picks" before sending. Catch it explicitly first.
+  if (has(v, "load_picks")) return true;
+
+  // ── English phonetic variants ─────────────────────────────────────────────
+  const hasLoadSound = has(v,
+    "load", "lov", "lod", "lav", "lok", "lot pick", "lob", "lof", "lop",
+    "lo ", "lo\t", "lode", "loded",
+  );
+  const hasPickSound = has(v,
+    "pick", "pic ", "pik", " pic", "pec", "pek", "peak", "peek",
+    "pig", "pix",
+  );
   if (hasLoadSound && hasPickSound) return true;
+
+  // ── Spanish variants ──────────────────────────────────────────────────────
   if (has(v, "cargar", "selec", "carga", "cargar picks", "cargar pix")) return true;
-  if (has(v, "lo", "la", "le") && has(v, "pic", "pik", "pec")) return true;
+
+  // ── Broad "lo/la/le" + pick sound (Spanish/phonetic overlap) ─────────────
+  if (has(v, "lo", "la", "le") && has(v, "pic", "pik", "pec", "pig")) return true;
+
   return false;
 }
 
@@ -113,14 +131,29 @@ function isReady(input = "") {
   );
 }
 
+function isResume(input = "") {
+  const v = normalize(input);
+  return has(v,
+    "resume", "continue", "let's go", "lets go",
+    "ready to go", "nova ready",
+    "reanudar", "continuar", "vamos",
+  );
+}
+
 function isWake(input = "") {
   const v = normalize(input);
-  return has(v, "hey nova", "hey no", "hola nova", "hola no", "a nova", "ay nova");
+  return has(v, "hey nova", "hey no", "hola nova", "hola no", "a nova", "ay nova",
+    // The client sends "wake" as the command key after matchCommand
+    "wake",
+  );
 }
 
 function isStop(input = "") {
   const v = normalize(input);
-  return has(v, "stop", "parar", "para", "halt", "end session", "terminar");
+  return has(v,
+    "stop", "parar", "para", "halt", "end session", "terminar",
+    "stop listening", "nova stop",
+  );
 }
 
 // ── Prompt builders (bilingual) ───────────────────────────────────────────────
@@ -152,8 +185,10 @@ function makePrompts(lang: Lang) {
     noStops:      es ? "No hay paradas encontradas."                               : "No stops found.",
     newAisle:     (stop: ServerStop) =>
                   es ? `Nuevo pasillo ${stop.aisle} posición ${stop.slot}`         : `New aisle ${stop.aisle} slot ${stop.slot}`,
+    // Repeat aisle includes "say check code" so TTS is long enough for onend to fire reliably
     repeatAisle:  (stop: ServerStop) =>
-                  es ? `Pasillo ${stop.aisle} posición ${stop.slot}`               : `Aisle ${stop.aisle} slot ${stop.slot}`,
+                  es ? `Pasillo ${stop.aisle} posición ${stop.slot}. Di código de verificación.`
+                     : `Aisle ${stop.aisle} slot ${stop.slot}. Say check code.`,
     grab:         (stop: ServerStop, next: string) =>
                   es ? `Toma ${stop.qty}.${next}`                                  : `Grab ${stop.qty}.${next}`,
     nextAisle:    (stop: ServerStop) =>
@@ -169,7 +204,9 @@ function makePrompts(lang: Lang) {
                   es ? `Entrega tarima bravo a puerta ${n}`                        : `Deliver bravo pallet to door ${n}`,
     deliverAlphaStage: (n: string | number) =>
                   es ? `Entrega tarima alfa a puerta ${n}`                         : `Deliver alpha pallet to door ${n}`,
-    stopped:      es ? 'NOVA detenido. Di "Hola NOVA" para activarme de nuevo.'    : 'NOVA stopped. Say "Hey NOVA" to wake me again.',
+    // Updated stopped prompt — tells user how to resume
+    stopped:      es ? 'NOVA pausado. Di "Hola NOVA" o "listo" para reanudar.'
+                     : 'NOVA paused. Say "Hey NOVA" or "ready to go" to resume.',
     safetyFailed: (item: string) =>
                   es ? `Fallo de seguridad. ${item} Sesión detenida.`              : `Safety failed. ${item} Session stopped.`,
   };
@@ -240,6 +277,11 @@ export function createNovaTrainerSession({
     currentStopIndex: 0,
     invalidCount: 0,
     commandLog: [] as CommandLogEntry[],
+    // ── Pause/resume ───────────────────────────────────────────────────────
+    // Saved before entering STOPPED so the user can resume exactly where
+    // they left off by saying "ready to go" or "Hey NOVA".
+    preStopPhase: "" as string,
+    preStopPrompt: "" as string,
   };
 
   function log(type: "NOVA" | "USER", text: string) {
@@ -330,13 +372,41 @@ export function createNovaTrainerSession({
     const input = normalize(rawInput);
     log("USER", rawInput || input);
 
+    // ── Global stop — saves current position so user can resume ───────────
     if (isStop(input)) {
+      // Only save a resumable position when mid-session (not already on a
+      // terminal/wake state where there's nothing meaningful to resume).
+      const resumablePhases: string[] = [
+        PHASES.SIGN_ON_EQUIPMENT, PHASES.CONFIRM_EQUIPMENT,
+        PHASES.MAX_PALLET_COUNT, PHASES.CONFIRM_MAX_PALLET_COUNT,
+        PHASES.SAFETY, PHASES.WAIT_LOAD_PICKS,
+        PHASES.LOAD_SUMMARY, PHASES.SETUP_ALPHA, PHASES.SETUP_BRAVO,
+        PHASES.PICK_CHECK, PHASES.PICK_READY,
+        PHASES.COMPLETE_DOOR, PHASES.COMPLETE_ALPHA, PHASES.COMPLETE_BRAVO,
+        PHASES.COMPLETE_STAGE_BRAVO, PHASES.COMPLETE_STAGE_ALPHA,
+      ];
+      if (resumablePhases.includes(state.phase)) {
+        state.preStopPhase = state.phase;
+        state.preStopPrompt = state.prompt;
+      }
       state.phase = PHASES.STOPPED;
       return setPrompt(P.stopped);
     }
 
+    // ── Wake / resume from STOPPED or WAIT_WAKE ──────────────────────────
     if (state.phase === PHASES.WAIT_WAKE || state.phase === PHASES.STOPPED) {
-      if (isWake(input)) {
+      const wantsResume = isWake(input) || isResume(input) || isReady(input);
+      if (wantsResume) {
+        // If we have a saved mid-session position, restore it exactly.
+        if (state.preStopPhase && state.preStopPhase !== PHASES.WAIT_WAKE && state.preStopPhase !== PHASES.STOPPED) {
+          const savedPhase = state.preStopPhase as Phase;
+          const savedPrompt = state.preStopPrompt;
+          state.preStopPhase = "";
+          state.preStopPrompt = "";
+          state.phase = savedPhase;
+          return setPrompt(savedPrompt || P.enterEquip);
+        }
+        // No saved position — start fresh from equipment sign-on.
         state.phase = PHASES.SIGN_ON_EQUIPMENT;
         return setPrompt(P.enterEquip);
       }
@@ -398,6 +468,9 @@ export function createNovaTrainerSession({
       if (isDeny(input)) {
         state.failedSafetyItem = item;
         state.phase = PHASES.STOPPED;
+        // Safety failure — do NOT save resume position (session must restart)
+        state.preStopPhase = "";
+        state.preStopPrompt = "";
         return setPrompt(P.safetyFailed(item));
       }
       return setPrompt(item);
@@ -439,6 +512,8 @@ export function createNovaTrainerSession({
       if (!stop) return snapshot();
 
       if (input === "repeat" || input === "repite" || input === "repetir") {
+        // repeatAisle now appends "Say check code." so TTS is long enough for
+        // onend to fire reliably on mobile and the user knows what to say next.
         return setPrompt(P.repeatAisle(stop));
       }
 
