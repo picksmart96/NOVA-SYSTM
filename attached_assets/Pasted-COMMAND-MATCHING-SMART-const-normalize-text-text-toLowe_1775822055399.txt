@@ -1,0 +1,102 @@
+COMMAND MATCHING (SMART)
+const normalize = (text) => text.toLowerCase().trim()
+
+const isConfirm = (text) => {
+  const t = normalize(text)
+
+  return (
+    t.includes("confirm") ||
+    t.includes("comfirm") ||
+    t.includes("consirm") ||
+    t.includes("affirmative") ||
+    t === "yes"
+  )
+}
+🔁 MAIN COMMAND PROCESSOR
+const processCommand = (text) => {
+  const input = normalize(text)
+
+  console.log("Heard:", input)
+
+  if (isConfirm(input)) {
+    handleConfirm()
+    return
+  }
+
+  if (input.includes("ready")) {
+    handleReady()
+    return
+  }
+
+  if (input.includes("load")) {
+    handleLoad()
+    return
+  }
+
+  // fallback
+  speak("Invalid command. Say confirm or ready.")
+  restartListening()
+}
+🔥 CONFIRM HANDLER (CRITICAL FIX)
+const handleConfirm = () => {
+  speak("Confirmed.")
+
+  // MOVE STATE FORWARD
+  advancePhase()
+}
+🔄 STATE FLOW (YOU NEED THIS)
+const advancePhase = () => {
+  switch (phase) {
+    case "SIGN_ON_EQUIPMENT":
+      setPhase("SAFETY_CHECK")
+      speak("Perform safety check. Say ready when complete.")
+      break
+
+    case "SAFETY_CHECK":
+      setPhase("LOAD_ASSIGNMENT")
+      speak("Say load picks to begin your assignment.")
+      break
+
+    case "LOAD_ASSIGNMENT":
+      setPhase("PICKING")
+      startAssignment()
+      break
+
+    default:
+      speak("Continuing.")
+  }
+
+  restartListening()
+}
+🎧 KEEP MIC ALIVE (VERY IMPORTANT)
+const restartListening = () => {
+  recognition.stop()
+  setTimeout(() => {
+    recognition.start()
+  }, 300)
+}
+🔊 SPEAK FUNCTION (MOBILE FIX INCLUDED)
+const speak = (text) => {
+  const utterance = new SpeechSynthesisUtterance(text)
+
+  utterance.lang = "en-US"
+  utterance.volume = 1
+  utterance.rate = 1
+  utterance.pitch = 1
+
+  speechSynthesis.cancel() // FIX FREEZE
+  speechSynthesis.speak(utterance)
+}
+📱 MOBILE ISSUE (NO SOUND)
+FIX:
+
+Add this ONCE when user taps start:
+
+const unlockAudio = () => {
+  const utter = new SpeechSynthesisUtterance(" ")
+  speechSynthesis.speak(utter)
+}
+
+👉 Call it on:
+
+<button onClick={unlockAudio}>Start NOVA</button>
