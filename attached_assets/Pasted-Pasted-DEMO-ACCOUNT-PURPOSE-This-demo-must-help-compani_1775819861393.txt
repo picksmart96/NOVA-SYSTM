@@ -1,0 +1,573 @@
+Pasted-DEMO-ACCOUNT-PURPOSE-This-demo-must-help-companies-unde_1775818919435.txt
+DEMO ACCOUNT PURPOSE
+This demo must help companies understand:
+- how selectors look in the system
+- how trainer dashboard looks
+- how supervisor dashboard looks
+- how leaderboard looks
+- how NOVA Help works
+- how NOVA Trainer works
+
+CREATE DEMO DATA
+1. demo selectors
+- 8 to 12 fake selectors
+- include nova ids
+- mixed skill levels
+- mixed progress
+- active/inactive NOVA status
+
+2. demo assignments
+- a few assigned runs
+- realistic aisle ranges
+- realistic cases
+- realistic door codes
+- include ES3 assignments
+
+3. demo leaderboard
+- top selectors
+- rates
+- accuracy
+- streaks
+
+4. demo training progress
+- completion percentages
+- modules completed
+- certifications
+
+5. demo activity feed
+- recent session logs
+- completed modules
+- improved rates
+- trainer notes
+
+6. demo supervisor stats
+- active selectors
+- pass rate
+- sessions today
+- total company users
+
+FEATURES
+- Add a “View Demo” button on public home page
+- Demo access should not require subscription
+- Demo should use fake data only
+- Demo should be clearly labeled as demo
+- Demo should not expose owner-only pages
+- Demo should allow viewing:
+  - training
+  - leaderboard
+  - nova-help
+  - nova-trainer preview
+  - trainer dashboard
+  - supervisor dashboard
+- Demo should not allow:
+  - users-access
+  - owner page
+  - real invites
+  - real billing
+
+ROUTES
+Create:
+- /demo
+- /demo/training
+- /demo/leaderboard
+- /demo/nova-help
+- /demo/nova-trainer
+- /demo/trainer-dashboard
+- /demo/supervisor-dashboard
+
+STORE / ACCESS
+Add a demo mode to auth/store:
+- isDemoUser: true
+- demoWarehouseId
+- role based on selected demo view if needed
+
+FILES
+- src/data/warehouses.js
+- src/data/demoWarehouseData.js
+- src/store/authStore.js
+- src/pages/public/DemoAccessPage.jsx
+- update navbar/homepage with View Demo button
+- update access control to allow demo routes
+- create demo-aware dashboard pages or wrappers
+
+UI
+The demo should look polished and sales-ready.
+Add a visible demo banner:
+- Demo Warehouse Preview
+- Sample data for evaluation only
+
+IMPORTANT
+Use fake realistic warehouse data that looks impressive and easy to understand.
+Make the demo feel like a live working customer account.
+Actual code you can paste
+1) src/data/warehouses.js
+export const warehouses = [
+  {
+    id: "wh-demo-001",
+    name: "Demo Distribution Center",
+    slug: "demo-distribution-center",
+    systemType: "es3",
+    subscriptionPlan: "company",
+    isSubscribed: true,
+    isActive: true,
+    isDemo: true,
+    allowedFeatures: [
+      "training",
+      "nova-help",
+      "nova-trainer",
+      "common-mistakes",
+      "leaderboard",
+      "selector-breaking-news",
+      "trainer-dashboard",
+      "supervisor-dashboard",
+    ],
+  },
+];
+2) src/data/demoWarehouseData.js
+export const demoSelectors = [
+  {
+    id: "demo-user-001",
+    warehouseId: "wh-demo-001",
+    userId: "demo-user-001",
+    fullName: "Marcus Hill",
+    novaId: "NOVA-40111",
+    role: "selector",
+    level: "Pro Selector",
+    novaActive: true,
+    rate: 108,
+    accuracy: 99,
+    modulesCompleted: 6,
+    trainingProgress: 100,
+  },
+  {
+    id: "demo-user-002",
+    warehouseId: "wh-demo-001",
+    userId: "demo-user-002",
+    fullName: "Tasha Green",
+    novaId: "NOVA-40112",
+    role: "selector",
+    level: "Intermediate",
+    novaActive: true,
+    rate: 101,
+    accuracy: 98,
+    modulesCompleted: 5,
+    trainingProgress: 86,
+  },
+  {
+    id: "demo-user-003",
+    warehouseId: "wh-demo-001",
+    userId: "demo-user-003",
+    fullName: "Andre Lewis",
+    novaId: "NOVA-40113",
+    role: "selector",
+    level: "Beginner",
+    novaActive: false,
+    rate: 84,
+    accuracy: 95,
+    modulesCompleted: 3,
+    trainingProgress: 52,
+  },
+  {
+    id: "demo-user-004",
+    warehouseId: "wh-demo-001",
+    userId: "demo-user-004",
+    fullName: "Jasmine Cole",
+    novaId: "NOVA-40114",
+    role: "selector",
+    level: "Intermediate",
+    novaActive: true,
+    rate: 97,
+    accuracy: 97,
+    modulesCompleted: 4,
+    trainingProgress: 71,
+  },
+  {
+    id: "demo-user-005",
+    warehouseId: "wh-demo-001",
+    userId: "demo-user-005",
+    fullName: "David Price",
+    novaId: "NOVA-40115",
+    role: "trainer",
+    level: "Trainer",
+    novaActive: false,
+    rate: null,
+    accuracy: null,
+    modulesCompleted: 6,
+    trainingProgress: 100,
+  },
+  {
+    id: "demo-user-006",
+    warehouseId: "wh-demo-001",
+    userId: "demo-user-006",
+    fullName: "Sonia Ramirez",
+    novaId: "NOVA-40116",
+    role: "supervisor",
+    level: "Supervisor",
+    novaActive: false,
+    rate: null,
+    accuracy: null,
+    modulesCompleted: 6,
+    trainingProgress: 100,
+  },
+];
+
+export const demoAssignments = [
+  {
+    id: "demo-251736",
+    assignmentNumber: "251736",
+    title: "Assignment 251736",
+    selectorUserId: "demo-user-001",
+    type: "TRAINING",
+    totalCases: 224,
+    startAisle: 17,
+    endAisle: 34,
+    pallets: 2,
+    goalTimeMinutes: 110,
+    stops: 24,
+    doorNumber: 355,
+    doorCode: "641",
+    status: "OPEN",
+  },
+  {
+    id: "demo-251737",
+    assignmentNumber: "251737",
+    title: "Assignment 251737",
+    selectorUserId: "demo-user-002",
+    type: "TRAINING",
+    totalCases: 259,
+    startAisle: 13,
+    endAisle: 34,
+    pallets: 2,
+    goalTimeMinutes: 110,
+    stops: 28,
+    doorNumber: 370,
+    doorCode: "714",
+    status: "OPEN",
+  },
+  {
+    id: "demo-251738",
+    assignmentNumber: "251738",
+    title: "Assignment 251738",
+    selectorUserId: "demo-user-004",
+    type: "PRODUCTION",
+    totalCases: 260,
+    startAisle: 13,
+    endAisle: 32,
+    pallets: 2,
+    goalTimeMinutes: 110,
+    stops: 28,
+    doorNumber: 340,
+    doorCode: "581",
+    status: "OPEN",
+  },
+];
+
+export const demoLeaderboard = [
+  { name: "Marcus Hill", rate: 108, accuracy: 99, streak: 12 },
+  { name: "Tasha Green", rate: 101, accuracy: 98, streak: 8 },
+  { name: "Jasmine Cole", rate: 97, accuracy: 97, streak: 5 },
+  { name: "Andre Lewis", rate: 84, accuracy: 95, streak: 2 },
+];
+
+export const demoActivity = [
+  "Marcus Hill completed a live NOVA session at 108% pace.",
+  "Tasha Green finished Module 5 and improved accuracy to 98%.",
+  "Jasmine Cole completed pallet building certification.",
+  "Supervisor reviewed morning shift leaderboard and coaching notes.",
+];
+
+export const demoStats = {
+  totalUsers: 24,
+  activeSelectors: 9,
+  activeNOVA: 4,
+  sessionsToday: 17,
+  passRate: 91,
+  avgRate: 98,
+};
+3) Update src/store/authStore.js
+import { create } from "zustand";
+
+export const useAuthStore = create((set) => ({
+  user: null,
+
+  setUser: (user) => set({ user }),
+
+  logout: () => set({ user: null }),
+
+  loginAsOwnerFromToken: () =>
+    set({
+      user: {
+        id: "owner-001",
+        name: "Soumaila Ouedraogo",
+        email: "owner@picksmartnova.com",
+        role: "owner",
+        isSubscribed: true,
+        subscriptionPlan: "owner",
+        subscriptionBilling: "owner",
+        warehouseId: null,
+        isDemoUser: false,
+      },
+    }),
+
+  loginAsDemo: (role = "selector") =>
+    set({
+      user: {
+        id: `demo-${role}`,
+        name: `Demo ${role}`,
+        email: `demo-${role}@picksmartnova.com`,
+        role,
+        isSubscribed: true,
+        subscriptionPlan: "company",
+        subscriptionBilling: "demo",
+        warehouseId: "wh-demo-001",
+        isDemoUser: true,
+      },
+    }),
+}));
+4) Update src/lib/accessControl.js
+export function canAccessPage(user, pageKey) {
+  const publicPages = [
+    "home",
+    "pricing",
+    "choose-plan",
+    "checkout-personal",
+    "checkout-company",
+    "owner-access",
+    "privacy",
+    "terms",
+    "demo",
+    "demo-training",
+    "demo-leaderboard",
+    "demo-nova-help",
+    "demo-nova-trainer",
+    "demo-trainer-dashboard",
+    "demo-supervisor-dashboard",
+  ];
+
+  if (publicPages.includes(pageKey)) return true;
+
+  if (!user) return false;
+
+  if (user.role === "owner") return true;
+
+  if (user.isDemoUser) {
+    if (user.role === "trainer") {
+      return [
+        "training",
+        "nova-help",
+        "nova-trainer",
+        "common-mistakes",
+        "leaderboard",
+        "selector-breaking-news",
+        "trainer-dashboard",
+      ].includes(pageKey);
+    }
+
+    if (user.role === "supervisor") {
+      return [
+        "training",
+        "nova-help",
+        "nova-trainer",
+        "common-mistakes",
+        "leaderboard",
+        "selector-breaking-news",
+        "trainer-dashboard",
+        "supervisor-dashboard",
+      ].includes(pageKey);
+    }
+
+    return [
+      "training",
+      "nova-help",
+      "nova-trainer",
+      "common-mistakes",
+      "leaderboard",
+      "selector-breaking-news",
+    ].includes(pageKey);
+  }
+
+  if (!user.isSubscribed) return false;
+
+  if (pageKey === "users-access" || pageKey === "owner") return false;
+
+  if (user.subscriptionPlan === "personal") {
+    return [
+      "training",
+      "nova-help",
+      "nova-trainer",
+      "common-mistakes",
+      "leaderboard",
+      "selector-breaking-news",
+    ].includes(pageKey);
+  }
+
+  if (user.subscriptionPlan === "company") {
+    if (user.role === "selector") {
+      return [
+        "training",
+        "nova-help",
+        "nova-trainer",
+        "common-mistakes",
+        "leaderboard",
+        "selector-breaking-news",
+      ].includes(pageKey);
+    }
+
+    if (user.role === "trainer") {
+      return [
+        "training",
+        "nova-help",
+        "nova-trainer",
+        "common-mistakes",
+        "leaderboard",
+        "selector-breaking-news",
+        "trainer-dashboard",
+      ].includes(pageKey);
+    }
+
+    if (user.role === "supervisor") {
+      return [
+        "training",
+        "nova-help",
+        "nova-trainer",
+        "common-mistakes",
+        "leaderboard",
+        "selector-breaking-news",
+        "trainer-dashboard",
+        "supervisor-dashboard",
+      ].includes(pageKey);
+    }
+  }
+
+  return false;
+}
+5) Create src/pages/public/DemoAccessPage.jsx
+import { useNavigate } from "react-router-dom";
+import { useAuthStore } from "../../store/authStore";
+import { demoStats, demoActivity } from "../../data/demoWarehouseData";
+
+function DemoCard({ title, text, button, onClick }) {
+  return (
+    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+      <h3 className="text-2xl font-bold text-white">{title}</h3>
+      <p className="mt-3 text-slate-300">{text}</p>
+      <button
+        onClick={onClick}
+        className="mt-6 rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300"
+      >
+        {button}
+      </button>
+    </div>
+  );
+}
+
+export default function DemoAccessPage() {
+  const navigate = useNavigate();
+  const { loginAsDemo } = useAuthStore();
+
+  const enterDemo = (role, target) => {
+    loginAsDemo(role);
+    navigate(target);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 px-6 py-12 text-white">
+      <div className="mx-auto max-w-7xl space-y-8">
+        <div className="text-center">
+          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-yellow-400">
+            Live Demo
+          </p>
+          <h1 className="mt-3 text-5xl font-black">Demo Distribution Center</h1>
+          <p className="mx-auto mt-4 max-w-3xl text-lg text-slate-300">
+            Explore a realistic warehouse account with sample selectors,
+            dashboards, assignments, performance, and NOVA tools.
+          </p>
+        </div>
+
+        <div className="rounded-3xl border border-yellow-400 bg-yellow-500/10 p-5 text-center text-yellow-200">
+          Demo Warehouse Preview — sample data for evaluation only
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Total Users</p>
+            <p className="mt-3 text-2xl font-black">{demoStats.totalUsers}</p>
+          </div>
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Active Selectors</p>
+            <p className="mt-3 text-2xl font-black">{demoStats.activeSelectors}</p>
+          </div>
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Active NOVA</p>
+            <p className="mt-3 text-2xl font-black">{demoStats.activeNOVA}</p>
+          </div>
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Sessions Today</p>
+            <p className="mt-3 text-2xl font-black">{demoStats.sessionsToday}</p>
+          </div>
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Pass Rate</p>
+            <p className="mt-3 text-2xl font-black">{demoStats.passRate}%</p>
+          </div>
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Avg Rate</p>
+            <p className="mt-3 text-2xl font-black">{demoStats.avgRate}%</p>
+          </div>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          <DemoCard
+            title="Selector View"
+            text="See training, leaderboard, NOVA Help, NOVA Trainer, and community pages from a selector perspective."
+            button="Open Selector Demo"
+            onClick={() => enterDemo("selector", "/training")}
+          />
+          <DemoCard
+            title="Trainer View"
+            text="Show managers how trainer workflow, selector progress, and assignments look in the system."
+            button="Open Trainer Demo"
+            onClick={() => enterDemo("trainer", "/trainer-dashboard")}
+          />
+          <DemoCard
+            title="Supervisor View"
+            text="Show higher-level team performance, active sessions, and operational oversight."
+            button="Open Supervisor Demo"
+            onClick={() => enterDemo("supervisor", "/supervisor-dashboard")}
+          />
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+          <h2 className="text-2xl font-bold">Recent Demo Activity</h2>
+          <div className="mt-5 space-y-3">
+            {demoActivity.map((item) => (
+              <div
+                key={item}
+                className="rounded-2xl border border-slate-800 bg-slate-950 p-4 text-slate-300"
+              >
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+6) Add a demo button on Home page
+
+Add a button like this in your public hero section:
+
+import { useNavigate } from "react-router-dom";
+
+const navigate = useNavigate();
+
+<button
+  onClick={() => navigate("/demo")}
+  className="rounded-2xl border border-slate-700 px-6 py-4 font-bold text-white hover:border-yellow-400"
+>
+  View Demo
+</button>
+7) Add route
+import DemoAccessPage from "./pages/public/DemoAccessPage";
+
+<Route path="/demo" element={<DemoAccessPage />} />
