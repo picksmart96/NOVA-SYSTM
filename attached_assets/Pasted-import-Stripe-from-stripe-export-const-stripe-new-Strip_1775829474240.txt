@@ -1,0 +1,137 @@
+import Stripe from "stripe";
+
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+2️⃣ CREATE PAYMENT LINK (INVOICE)
+server/routes/createCheckout.js
+import express from "express";
+import { stripe } from "../stripe.js";
+
+const router = express.Router();
+
+router.post("/", async (req, res) => {
+  const { companyName, email } = req.body;
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      mode: "subscription",
+
+      customer_email: email,
+
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: `PickSmart NOVA - ${companyName}`,
+            },
+            unit_amount: 166000, // $1660/week
+            recurring: {
+              interval: "week",
+            },
+          },
+          quantity: 1,
+        },
+      ],
+
+      success_url: `${process.env.APP_URL}/payment-success`,
+      cancel_url: `${process.env.APP_URL}/payment-cancel`,
+    });
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error creating checkout");
+  }
+});
+
+export default router;
+3️⃣ CONNECT ROUTE
+server/index.js
+import createCheckout from "./routes/createCheckout.js";
+
+app.use("/api/create-checkout", createCheckout);
+4️⃣ FRONTEND SEND INVOICE BUTTON
+Example button (Owner dashboard)
+const sendInvoice = async () => {
+  const res = await fetch("/api/create-checkout", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      companyName: "Demo Warehouse",
+      email: "client@email.com",
+    }),
+  });
+
+  const data = await res.json();
+
+  window.open(data.url, "_blank");
+};
+<button onClick={sendInvoice}>
+  Send Invoice
+</button>
+💰 WHAT THIS DOES
+
+👉 You click “Send Invoice”
+👉 Stripe generates payment page
+👉 You send link to client
+👉 Client pays
+
+🔔 AUTOMATIC RECEIPT
+
+Stripe automatically sends:
+
+✅ receipt email
+✅ invoice
+✅ payment confirmation
+
+👉 You don’t need to build this
+
+🔥 5️⃣ AUTO ACCOUNT ACTIVATION (IMPORTANT)
+Stripe Webhook
+server/routes/webhook.js
+import express from "express";
+import { stripe } from "../stripe.js";
+
+const router = express.Router();
+
+router.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
+  const sig = req.headers["stripe-signature"];
+
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+
+    console.log("PAYMENT SUCCESS:", session.customer_email);
+
+    // 👉 ACTIVATE COMPANY ACCOUNT HERE
+    // Example:
+    // mark warehouse as subscribed
+  }
+
+  res.json({ received: true });
+});
+
+export default router;
+6️⃣ ADD ROUTE
+import webhookRoute from "./routes/webhook.js";
+
+app.use("/api", webhookRoute);
+🔥 IMPORTANT ENV VARIABLES
+.env
+STRIPE_SECRET_KEY=your_key
+STRIPE_WEBHOOK_SECRET=your_webhook_secret
+APP_URL=https://your-replit-url.replit.app

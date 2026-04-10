@@ -6,6 +6,7 @@ import trainingRouter from "./training";
 import novaHelpRouter from "./novaHelp";
 import transcribeRouter from "./transcribe";
 import requestAccessRouter from "./requestAccess";
+import createCheckoutRouter from "./createCheckout";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(trainingRouter);
 router.use(novaHelpRouter);
 router.use(transcribeRouter);
 router.use(requestAccessRouter);
+router.use(createCheckoutRouter);
 
 export default router;

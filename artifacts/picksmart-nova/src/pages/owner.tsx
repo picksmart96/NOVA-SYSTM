@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon, FlaskConical } from "lucide-react";
+import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon, FlaskConical, DollarSign, Building2, CreditCard, Plus, Send, AlertCircle } from "lucide-react";
 import { Link } from "wouter";
 import { OWNER_TOKEN } from "./owner-access";
 import { useAuthStore, AuthAccount, AuthRole } from "@/lib/authStore";
@@ -1445,8 +1445,261 @@ function UsersAccessSection() {
   );
 }
 
+// ── Revenue Tab ───────────────────────────────────────────────────────────────
+interface CompanyClient {
+  id: string;
+  name: string;
+  email: string;
+  status: "active" | "pending" | "cancelled";
+  weeklyRate: number;
+  startDate: string;
+}
+
+const INITIAL_CLIENTS: CompanyClient[] = [
+  { id: "c1", name: "ES3 Lancaster", email: "ops@es3lancaster.com", status: "active", weeklyRate: 1660, startDate: "Jan 2025" },
+  { id: "c2", name: "Dallas Warehouse DC", email: "manager@dallaswh.com", status: "active", weeklyRate: 1660, startDate: "Feb 2025" },
+  { id: "c3", name: "Chicago Distribution", email: "admin@chicagodc.com", status: "pending", weeklyRate: 1660, startDate: "—" },
+];
+
+function RevenueTab() {
+  const [clients, setClients] = useState<CompanyClient[]>(INITIAL_CLIENTS);
+  const [form, setForm]       = useState({ name: "", email: "", weeklyRate: 1660 });
+  const [showForm, setShowForm] = useState(false);
+  const [invoiceStatus, setInvoiceStatus] = useState<Record<string, "loading" | "sent" | "error">>({});
+
+  const activeClients  = clients.filter((c) => c.status === "active");
+  const pendingClients = clients.filter((c) => c.status === "pending");
+  const weeklyRevenue  = activeClients.reduce((s, c) => s + c.weeklyRate, 0);
+
+  const statusBadge = (s: CompanyClient["status"]) => {
+    if (s === "active")    return "bg-green-500/15 text-green-300 border-green-500/30";
+    if (s === "pending")   return "bg-yellow-400/15 text-yellow-300 border-yellow-400/30";
+    return "bg-red-500/15 text-red-300 border-red-500/30";
+  };
+
+  const sendInvoice = async (client: CompanyClient) => {
+    setInvoiceStatus((p) => ({ ...p, [client.id]: "loading" }));
+    try {
+      const res = await fetch("/api/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyName: client.name, email: client.email, weeklyRate: client.weeklyRate }),
+      });
+      const data = await res.json() as { url?: string; error?: string };
+      if (!res.ok || !data.url) throw new Error(data.error ?? "No URL returned");
+      window.open(data.url, "_blank");
+      setInvoiceStatus((p) => ({ ...p, [client.id]: "sent" }));
+      setTimeout(() => setInvoiceStatus((p) => { const n = { ...p }; delete n[client.id]; return n; }), 4000);
+    } catch (err) {
+      console.error("[Revenue] sendInvoice:", err);
+      setInvoiceStatus((p) => ({ ...p, [client.id]: "error" }));
+      setTimeout(() => setInvoiceStatus((p) => { const n = { ...p }; delete n[client.id]; return n; }), 4000);
+    }
+  };
+
+  const addClient = () => {
+    if (!form.name.trim() || !form.email.trim()) return;
+    setClients((prev) => [
+      ...prev,
+      {
+        id: `c${Date.now()}`,
+        name: form.name.trim(),
+        email: form.email.trim(),
+        status: "pending",
+        weeklyRate: form.weeklyRate,
+        startDate: "—",
+      },
+    ]);
+    setForm({ name: "", email: "", weeklyRate: 1660 });
+    setShowForm(false);
+  };
+
+  return (
+    <div className="space-y-8">
+
+      {/* Stripe key notice */}
+      <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 px-5 py-4 flex items-start gap-3">
+        <AlertCircle className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-bold text-blue-300">Stripe setup required to send live invoices</p>
+          <p className="text-xs text-blue-400/70 mt-1">
+            Add <code className="bg-slate-800 px-1 rounded">STRIPE_SECRET_KEY</code>,{" "}
+            <code className="bg-slate-800 px-1 rounded">STRIPE_WEBHOOK_SECRET</code>, and{" "}
+            <code className="bg-slate-800 px-1 rounded">APP_URL</code> to your environment variables.
+            The Send Invoice button will open the Stripe checkout page for your client once configured.
+          </p>
+        </div>
+      </div>
+
+      {/* Revenue summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <DollarSign className="h-4 w-4 text-yellow-400" />
+            <p className="text-xs text-slate-500 uppercase tracking-widest">Weekly Revenue</p>
+          </div>
+          <p className="text-3xl font-black text-yellow-400">
+            ${weeklyRevenue.toLocaleString()}
+          </p>
+          <p className="text-xs text-slate-600 mt-1">{activeClients.length} active client{activeClients.length !== 1 ? "s" : ""}</p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <Building2 className="h-4 w-4 text-emerald-400" />
+            <p className="text-xs text-slate-500 uppercase tracking-widest">Active Clients</p>
+          </div>
+          <p className="text-3xl font-black text-white">{activeClients.length}</p>
+          <p className="text-xs text-slate-600 mt-1">${(weeklyRevenue * 4).toLocaleString()} / month est.</p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <CreditCard className="h-4 w-4 text-blue-400" />
+            <p className="text-xs text-slate-500 uppercase tracking-widest">Pending</p>
+          </div>
+          <p className="text-3xl font-black text-white">{pendingClients.length}</p>
+          <p className="text-xs text-slate-600 mt-1">awaiting first payment</p>
+        </div>
+      </div>
+
+      {/* Client list */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-xl font-black flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-yellow-400" />
+            Company Clients
+          </h2>
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            className="flex items-center gap-1.5 rounded-xl bg-yellow-400 px-4 py-2 text-xs font-black text-slate-950 hover:bg-yellow-300 transition"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add Client
+          </button>
+        </div>
+
+        {/* Add client form */}
+        {showForm && (
+          <div className="mb-5 rounded-2xl border border-yellow-400/20 bg-slate-950 p-5 space-y-3">
+            <p className="text-sm font-bold text-yellow-400">New Client</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <input
+                value={form.name}
+                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                placeholder="Company name"
+                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm focus:border-yellow-400 focus:outline-none"
+              />
+              <input
+                value={form.email}
+                onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                placeholder="Billing email"
+                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm focus:border-yellow-400 focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-400">Rate $</span>
+                <input
+                  type="number"
+                  value={form.weeklyRate}
+                  onChange={(e) => setForm((p) => ({ ...p, weeklyRate: Number(e.target.value) }))}
+                  className="w-24 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm focus:border-yellow-400 focus:outline-none"
+                />
+                <span className="text-sm text-slate-500">/week</span>
+              </div>
+              <button
+                onClick={addClient}
+                className="rounded-xl bg-yellow-400 px-4 py-2.5 text-sm font-black text-slate-950 hover:bg-yellow-300 transition"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => setShowForm(false)}
+                className="text-xs text-slate-500 hover:text-slate-300"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Client rows */}
+        <div className="space-y-3">
+          {clients.map((client) => {
+            const invStatus = invoiceStatus[client.id];
+            return (
+              <div
+                key={client.id}
+                className="rounded-xl border border-slate-800 bg-slate-950 px-5 py-4 flex flex-wrap items-center justify-between gap-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-bold text-white">{client.name}</p>
+                    <span className={`rounded-full border px-2.5 py-0.5 text-xs font-bold ${statusBadge(client.status)}`}>
+                      {client.status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">{client.email} · Since {client.startDate}</p>
+                </div>
+
+                <div className="flex items-center gap-4 shrink-0">
+                  <div className="text-right">
+                    <p className="text-lg font-black text-yellow-400">${client.weeklyRate.toLocaleString()}</p>
+                    <p className="text-xs text-slate-600">per week</p>
+                  </div>
+
+                  <button
+                    onClick={() => sendInvoice(client)}
+                    disabled={invStatus === "loading"}
+                    className={`flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-black transition ${
+                      invStatus === "sent"
+                        ? "bg-green-500/20 text-green-300 border border-green-500/30"
+                        : invStatus === "error"
+                        ? "bg-red-500/20 text-red-300 border border-red-500/30"
+                        : "bg-yellow-400 text-slate-950 hover:bg-yellow-300"
+                    } disabled:opacity-50`}
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    {invStatus === "loading" ? "Sending…"
+                      : invStatus === "sent"  ? "Sent!"
+                      : invStatus === "error" ? "Failed"
+                      : "Send Invoice"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* How it works */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <h3 className="text-lg font-black mb-4">How Invoice Payments Work</h3>
+        <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {[
+            { n: "1", title: "Click Send Invoice", body: "Opens a Stripe payment page for the client's weekly subscription." },
+            { n: "2", title: "Client Pays Online",   body: "Client enters their card. Stripe handles billing, receipts, and retries." },
+            { n: "3", title: "Auto Confirmation",    body: "Stripe sends receipt + invoice directly to the client's email." },
+            { n: "4", title: "Account Activated",    body: "Webhook fires on payment — company account gets marked as subscribed." },
+          ].map(({ n, title, body }) => (
+            <div key={n} className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+              <div className="h-7 w-7 rounded-full bg-yellow-400/20 flex items-center justify-center mb-3">
+                <span className="text-xs font-black text-yellow-400">{n}</span>
+              </div>
+              <p className="text-sm font-bold text-white">{title}</p>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">{body}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
-const TABS = ["Dashboard", "Links", "Handbook", "Users & Access"] as const;
+const TABS = ["Dashboard", "Revenue", "Links", "Handbook", "Users & Access"] as const;
 type Tab = typeof TABS[number];
 
 export default function OwnerPage() {
@@ -1478,9 +1731,10 @@ export default function OwnerPage() {
                   : "border-transparent text-slate-500 hover:text-white"
               }`}
             >
-              {tab === "Dashboard" ? "📊 Dashboard"
-                : tab === "Links" ? "🔗 Links"
-                : tab === "Handbook" ? "📖 Handbook"
+              {tab === "Dashboard"     ? "📊 Dashboard"
+                : tab === "Revenue"   ? "💰 Revenue"
+                : tab === "Links"     ? "🔗 Links"
+                : tab === "Handbook"  ? "📖 Handbook"
                 : "👥 Users & Access"}
             </button>
           ))}
@@ -1515,6 +1769,9 @@ export default function OwnerPage() {
             <ActivityLog />
           </>
         )}
+
+        {/* Revenue tab */}
+        {activeTab === "Revenue" && <RevenueTab />}
 
         {/* Links tab */}
         {activeTab === "Links" && <LinkLibrary />}
