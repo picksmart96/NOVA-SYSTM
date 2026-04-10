@@ -1,9 +1,11 @@
 import { Link, useLocation } from "wouter";
 import { LESSON_CONTENT } from "@/data/lessonContent";
 import { useProgressStore } from "@/lib/progressStore";
+import { useAuthStore } from "@/lib/authStore";
 import { Clock, BookOpen, Headphones, CheckCircle2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import LockedAction from "@/components/paywall/LockedAction";
+import DemoLockedAction from "@/components/paywall/DemoLockedAction";
 
 const DIFFICULTY_COLORS = {
   beginner: "bg-green-500/10 text-green-400 border-green-500/30",
@@ -15,6 +17,8 @@ export default function ModulesPage() {
   const { t } = useTranslation();
   const { progress } = useProgressStore();
   const [, navigate] = useLocation();
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const isDemo = !!currentUser?.isDemoUser;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -41,6 +45,15 @@ export default function ModulesPage() {
           </div>
         </div>
       </div>
+
+      {/* Demo banner */}
+      {isDemo && (
+        <div className="max-w-6xl mx-auto px-6 pt-6">
+          <div className="rounded-2xl border border-yellow-400 bg-yellow-500/10 px-5 py-4 text-yellow-200 text-sm font-semibold">
+            Demo preview only — you can explore the training layout, but full lessons require company access.
+          </div>
+        </div>
+      )}
 
       {/* Module Grid */}
       <div className="max-w-6xl mx-auto px-6 py-12">
@@ -116,17 +129,27 @@ export default function ModulesPage() {
                   )}
 
                   <div className="mt-auto">
-                    <LockedAction
-                      onAllowedClick={() => navigate(`/training/lesson/${lesson.moduleId}`)}
-                      className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl bg-yellow-400 text-slate-950 font-black hover:bg-yellow-300 transition-all active:scale-[0.98] cursor-pointer select-none"
-                    >
-                      <Headphones className="h-4 w-4" />
-                      {isPassed
-                        ? t("training.replayLesson")
-                        : isStarted
-                        ? t("training.continueLesson")
-                        : t("training.startLesson")}
-                    </LockedAction>
+                    {isDemo ? (
+                      <DemoLockedAction
+                        title={`Request Access to Unlock ${lesson.moduleTitle}`}
+                        className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl bg-yellow-400 text-slate-950 font-black hover:bg-yellow-300 transition-all active:scale-[0.98] cursor-pointer select-none"
+                      >
+                        <Headphones className="h-4 w-4" />
+                        Request Access to Start
+                      </DemoLockedAction>
+                    ) : (
+                      <LockedAction
+                        onAllowedClick={() => navigate(`/training/lesson/${lesson.moduleId}`)}
+                        className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl bg-yellow-400 text-slate-950 font-black hover:bg-yellow-300 transition-all active:scale-[0.98] cursor-pointer select-none"
+                      >
+                        <Headphones className="h-4 w-4" />
+                        {isPassed
+                          ? t("training.replayLesson")
+                          : isStarted
+                          ? t("training.continueLesson")
+                          : t("training.startLesson")}
+                      </LockedAction>
+                    )}
                   </div>
                 </div>
               </div>

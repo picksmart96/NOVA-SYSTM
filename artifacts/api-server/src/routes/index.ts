@@ -8,6 +8,7 @@ import novaDemoBrainRouter from "./novaDemoBrain";
 import transcribeRouter from "./transcribe";
 import requestAccessRouter from "./requestAccess";
 import createCheckoutRouter from "./createCheckout";
+import novaDemoAgentRouter from "./novaDemoAgent";
 
 const router: IRouter = Router();
 
@@ -17,6 +18,7 @@ router.use(warehouseRouter);
 router.use(trainingRouter);
 router.use(novaHelpRouter);
 router.use(novaDemoBrainRouter);
+router.use(novaDemoAgentRouter);
 router.use(transcribeRouter);
 router.use(requestAccessRouter);
 router.use(createCheckoutRouter);

@@ -108,7 +108,7 @@ export default function DemoLandingPage() {
             Ask NOVA anything about training, mentoring, selector struggles, safety, pallet building, pace, and performance improvement.
           </p>
           <button
-            onClick={() => enter("selector", "/demo/nova-help")}
+            onClick={() => navigate("/demo/nova-agent")}
             className="mt-8 inline-flex items-center gap-2 rounded-2xl bg-yellow-400 px-8 py-4 text-base font-bold text-slate-950 hover:bg-yellow-300 transition"
           >
             Click Here to Ask Everything You Want to Know About PickSmart Academy
@@ -320,7 +320,7 @@ export default function DemoLandingPage() {
             NOVA can answer any question about training, safety, pallet building, pace, and how PickSmart works — like talking to a real coach.
           </p>
           <button
-            onClick={() => enter("selector", "/demo/nova-help")}
+            onClick={() => navigate("/demo/nova-agent")}
             className="inline-flex items-center gap-2 rounded-xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
           >
             <Mic className="h-4 w-4" />

@@ -50,6 +50,7 @@ import TermsPage from "@/pages/terms";
 import WarehouseEntryPage from "@/pages/warehouse-entry";
 
 import CompanyOnboardPage from "@/pages/company-onboard";
+import NovaDemoAgentPage from "@/pages/demo/NovaDemoAgentPage";
 import DemoLandingPage from "@/pages/demo/DemoLandingPage";
 import DemoTrainingPage from "@/pages/demo/DemoTrainingPage";
 import DemoLeaderboardPage from "@/pages/demo/DemoLeaderboardPage";
@@ -303,6 +304,9 @@ function Router() {
       </Route>
       <Route path="/demo/nova-trainer">
         <DemoNovaTrainerPage />
+      </Route>
+      <Route path="/demo/nova-agent">
+        <NovaDemoAgentPage />
       </Route>
       <Route path="/demo/nova-help">
         <DemoNovaHelpPage />
