@@ -4,6 +4,28 @@
 
 Full-stack **multi-warehouse SaaS** training and operations platform. Each warehouse account is a private, isolated tenant. NOVA Trainer (ES3 voice workflow) is exclusive to ES3-type warehouses. Standard warehouses get all other features. Owner (`draogo96`) bypasses all feature and subscription checks.
 
+## Public Demo Mode
+
+A fully public demo at `/demo` — no account or subscription required. All six views are accessible directly.
+
+| Route | Page | Role |
+|---|---|---|
+| `/demo` | Demo Landing Page | Public |
+| `/demo/training` | Demo Training Modules | Public |
+| `/demo/leaderboard` | Demo Leaderboard (podium + full table) | Public |
+| `/demo/nova-trainer` | Live NOVA Trainer session (full ES3 workflow) | Public |
+| `/demo/trainer-dashboard` | Trainer Dashboard (10 demo selectors) | Public |
+| `/demo/supervisor-dashboard` | Supervisor Dashboard (company-wide) | Public |
+
+**Demo flow**: Visitor clicks "View Live Demo" on home page → `/demo` landing page → clicks a role card → `loginAsDemo(role)` sets `currentUser.isDemoUser=true`, `isSubscribed=true` → navigates to demo route → `DemoBanner` appears in Layout header with "Exit Demo" button. Demo sessions are NOT persisted to localStorage.
+
+**Key files**:
+- `src/data/demoWarehouseData.ts` — All fake data (10 selectors, assignments, sessions, leaderboard, activity, stats)
+- `src/components/DemoBanner.tsx` — Sticky yellow banner shown when `isDemoUser` is true
+- `src/pages/demo/` — DemoLandingPage, DemoTrainingPage, DemoLeaderboardPage, DemoNovaTrainerPage, DemoTrainerDashboard, DemoSupervisorDashboard
+- `src/lib/authStore.ts` — `isDemoUser?: boolean` on `AuthAccount`; `loginAsDemo(role)` action
+- `GatedRoute` in `App.tsx` — allows `isDemoUser` through (treats as subscribed)
+
 ## Multi-Warehouse Architecture
 - **Warehouse model**: `src/data/warehouses.ts` — Warehouse type, ES3 vs Standard feature sets
 - **Warehouse store**: `src/lib/warehouseStore.ts` — Zustand store (persisted); `useWarehouse()` hook

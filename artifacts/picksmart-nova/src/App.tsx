@@ -48,6 +48,13 @@ import PrivacyPage from "@/pages/privacy";
 import TermsPage from "@/pages/terms";
 import WarehouseEntryPage from "@/pages/warehouse-entry";
 
+import DemoLandingPage from "@/pages/demo/DemoLandingPage";
+import DemoTrainingPage from "@/pages/demo/DemoTrainingPage";
+import DemoLeaderboardPage from "@/pages/demo/DemoLeaderboardPage";
+import DemoTrainerDashboard from "@/pages/demo/DemoTrainerDashboard";
+import DemoSupervisorDashboard from "@/pages/demo/DemoSupervisorDashboard";
+import DemoNovaTrainerPage from "@/pages/demo/DemoNovaTrainerPage";
+
 function RedirectToOwner() {
   const [, navigate] = useLocation();
   useEffect(() => { navigate("/owner", { replace: true }); }, [navigate]);
@@ -65,7 +72,7 @@ function GatedRoute({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(true);
 
   const isOwner = currentUser?.role === "owner";
-  const isSubscribed = isOwner || !!currentUser?.isSubscribed;
+  const isSubscribed = isOwner || !!currentUser?.isDemoUser || !!currentUser?.isSubscribed;
 
   if (isSubscribed) return <>{children}</>;
 
@@ -233,6 +240,26 @@ function Router() {
       {/* ── Warehouse deep-link entry ── */}
       <Route path="/w/:slug">
         <WarehouseEntryPage />
+      </Route>
+
+      {/* ── Public demo — no login or subscription required ── */}
+      <Route path="/demo">
+        <Layout><DemoLandingPage /></Layout>
+      </Route>
+      <Route path="/demo/training">
+        <Layout><DemoTrainingPage /></Layout>
+      </Route>
+      <Route path="/demo/leaderboard">
+        <Layout><DemoLeaderboardPage /></Layout>
+      </Route>
+      <Route path="/demo/nova-trainer">
+        <DemoNovaTrainerPage />
+      </Route>
+      <Route path="/demo/trainer-dashboard">
+        <Layout><DemoTrainerDashboard /></Layout>
+      </Route>
+      <Route path="/demo/supervisor-dashboard">
+        <Layout><DemoSupervisorDashboard /></Layout>
       </Route>
 
       <Route>

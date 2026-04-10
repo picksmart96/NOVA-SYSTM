@@ -28,6 +28,8 @@ export interface AuthAccount {
   /** Warehouse this user belongs to. Null = unassigned (owner sees all). */
   warehouseId?: string | null;
   warehouseSlug?: string | null;
+  /** True when browsing the public demo — not persisted across page reloads. */
+  isDemoUser?: boolean;
 }
 
 export interface PendingInvite {
@@ -48,6 +50,7 @@ interface AuthState {
   locked: boolean;
 
   login: (username: string, password: string) => boolean;
+  loginAsDemo: (role?: AuthRole) => void;
   logout: () => void;
   lock: () => void;
   unlock: (password: string) => boolean;
@@ -156,6 +159,24 @@ export const useAuthStore = create<AuthState>()(
           return true;
         }
         return false;
+      },
+
+      loginAsDemo: (role: AuthRole = "selector") => {
+        set({
+          currentUser: {
+            id: "demo-session",
+            username: "demo",
+            password: "",
+            fullName: "Demo User",
+            role,
+            status: "active",
+            subscriptionPlan: "company",
+            isSubscribed: true,
+            createdAt: new Date().toISOString(),
+            isDemoUser: true,
+          },
+          locked: false,
+        });
       },
 
       logout: () => set({ currentUser: null }),
@@ -289,8 +310,9 @@ export const useAuthStore = create<AuthState>()(
         pendingInvites: state.pendingInvites,
         // usedTokens intentionally excluded — invite links are now permanent.
         // Persist currentUser so sessions survive page refresh and direct link visits.
+        // Demo sessions are NOT persisted — they must re-enter via /demo.
         // locked is excluded so the screen never auto-locks on load.
-        currentUser: state.currentUser,
+        currentUser: state.currentUser?.isDemoUser ? null : state.currentUser,
       }),
     }
   )

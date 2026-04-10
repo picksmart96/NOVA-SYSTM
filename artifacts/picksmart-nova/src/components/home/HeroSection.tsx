@@ -40,6 +40,12 @@ export default function HeroSection() {
           >
             {t("hero.viewPlans")}
           </Link>
+          <Link
+            href="/demo"
+            className="inline-flex items-center justify-center rounded-2xl border border-yellow-400/40 bg-yellow-400/10 px-6 py-3 text-yellow-300 font-semibold hover:bg-yellow-400/20 transition"
+          >
+            View Live Demo
+          </Link>
         </div>
 
         <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-300">

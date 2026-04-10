@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { useTranslation } from "react-i18next";
 import LanguageSwitcher from "@/components/layout/LanguageSwitcher";
 import SubscribePromptModal from "@/components/paywall/SubscribePromptModal";
+import DemoBanner from "@/components/DemoBanner";
 
 // Paths that are always free — no subscription required to visit.
 const FREE_PATHS = ["/", "/pricing", "/choose-plan", "/login", "/privacy", "/terms"];
@@ -69,6 +70,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground">
       <header className="sticky top-0 z-50 w-full border-b border-border bg-card">
+        <DemoBanner />
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           {/* Logo */}
           <div className="flex items-center gap-4">
