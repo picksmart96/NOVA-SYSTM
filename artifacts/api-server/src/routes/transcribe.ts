@@ -1,15 +1,15 @@
 import express, { Router } from "express";
-import { speechToText, ensureCompatibleFormat } from "@workspace/integrations-openai-ai-server/audio";
+import { speechToText } from "@workspace/integrations-openai-ai-server/audio";
 
 const router = Router();
 
 /**
  * POST /api/transcribe?lang=en
- * Body: raw audio bytes (Content-Type: audio/webm or audio/ogg or audio/mp4)
+ * Body: raw audio bytes (Content-Type: audio/webm | audio/ogg | audio/mp4 | audio/wav)
  * Returns: { transcript: string }
  *
- * Uses gpt-4o-mini-transcribe via the built-in speechToText helper.
- * Audio is automatically converted to WAV when the format isn't directly supported.
+ * Passes audio directly to OpenAI Whisper without ffmpeg conversion.
+ * Whisper natively supports webm, ogg, mp3, mp4, and wav — no format conversion needed.
  */
 router.post(
   "/transcribe",
@@ -24,15 +24,17 @@ router.post(
     console.log(`[transcribe] received ${audioBuffer.length} bytes`);
 
     try {
-      // Detect and convert to a format supported by speechToText: wav | mp3 | webm
-      const { buffer: compatBuffer, format } = await ensureCompatibleFormat(audioBuffer);
+      // Detect format directly from Content-Type — no ffmpeg needed.
+      // Whisper supports webm, ogg, mp3, mp4, wav natively.
+      const ct: string = (req.headers["content-type"] ?? "audio/webm").toLowerCase();
+      let format: "wav" | "mp3" | "webm" = "webm";
+      if (ct.includes("mp3") || ct.includes("mpeg")) format = "mp3";
+      else if (ct.includes("wav"))                   format = "wav";
+      else                                           format = "webm"; // webm/ogg both work
+
       console.log(`[transcribe] format: ${format}`);
 
-      // speechToText supports "wav" | "mp3" | "webm" — default to wav if unknown
-      const safeFormat: "wav" | "mp3" | "webm" =
-        format === "mp3" ? "mp3" : format === "webm" ? "webm" : "wav";
-
-      const transcript = await speechToText(compatBuffer, safeFormat);
+      const transcript = await speechToText(audioBuffer, format);
       const cleaned = transcript?.trim() ?? "";
       console.log(`[transcribe] result: "${cleaned}"`);
       return res.json({ transcript: cleaned });

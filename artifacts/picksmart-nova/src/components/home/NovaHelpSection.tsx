@@ -26,7 +26,7 @@ export default function NovaHelpSection() {
           </p>
 
           <Link
-            href="/nova"
+            href="/nova-help"
             className="mt-6 inline-flex items-center rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300"
           >
             {t("home.novaHelp.openNova")}
