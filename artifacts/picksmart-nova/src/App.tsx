@@ -54,6 +54,7 @@ import DemoLeaderboardPage from "@/pages/demo/DemoLeaderboardPage";
 import DemoTrainerDashboard from "@/pages/demo/DemoTrainerDashboard";
 import DemoSupervisorDashboard from "@/pages/demo/DemoSupervisorDashboard";
 import DemoNovaTrainerPage from "@/pages/demo/DemoNovaTrainerPage";
+import DemoNovaGatePage from "@/pages/demo/DemoNovaGatePage";
 import RequestAccessPage from "@/pages/RequestAccessPage";
 
 function RedirectToOwner() {
@@ -62,19 +63,51 @@ function RedirectToOwner() {
   return null;
 }
 
+// Map real page paths to NOVA Gate page names for demo users
+const DEMO_GATE_NAMES: Record<string, string> = {
+  "/training":              "Training",
+  "/nova-help":             "NOVA Help",
+  "/mistakes":              "Common Mistakes",
+  "/progress":              "My Progress",
+  "/leaderboard":           "Leaderboard",
+  "/selector-breaking-news":"Selector Breaking News",
+  "/selector-nation":       "Selector Breaking News",
+  "/owner":                 "Users & Access",
+  "/nova":                  "NOVA Help",
+  "/trainer-portal":        "Training",
+  "/supervisor":            "Training",
+};
+
+function demoGateName(path: string) {
+  for (const [prefix, name] of Object.entries(DEMO_GATE_NAMES)) {
+    if (path === prefix || path.startsWith(prefix + "/")) return name;
+  }
+  return null;
+}
+
 /**
  * GatedRoute — blocks unsubscribed / not-logged-in visitors from viewing any
- * content page. Instead of rendering the page at all, it immediately shows the
- * subscribe modal. Closing the modal sends the visitor back to the home page.
+ * content page. Demo users are redirected to the NOVA Gate page instead of
+ * seeing the real content. Closing the modal sends the visitor back to home.
  */
 function GatedRoute({ children }: { children: React.ReactNode }) {
   const currentUser = useAuthStore((s) => s.currentUser);
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const [open, setOpen] = useState(true);
 
   const isOwner = currentUser?.role === "owner";
-  const isSubscribed = isOwner || !!currentUser?.isDemoUser || !!currentUser?.isSubscribed;
+  const isSubscribed = isOwner || !!currentUser?.isSubscribed;
+  const isDemoUser = !!currentUser?.isDemoUser;
 
+  // Demo users get redirected to NOVA Gate for all locked pages
+  useEffect(() => {
+    if (isDemoUser) {
+      const name = demoGateName(location);
+      navigate(`/demo/nova-gate?page=${encodeURIComponent(name ?? "This Page")}`, { replace: true });
+    }
+  }, [isDemoUser, location]);
+
+  if (isDemoUser) return null;
   if (isSubscribed) return <>{children}</>;
 
   return (
@@ -266,6 +299,9 @@ function Router() {
       </Route>
       <Route path="/demo/supervisor-dashboard">
         <Layout><DemoSupervisorDashboard /></Layout>
+      </Route>
+      <Route path="/demo/nova-gate">
+        <DemoNovaGatePage />
       </Route>
 
       <Route>

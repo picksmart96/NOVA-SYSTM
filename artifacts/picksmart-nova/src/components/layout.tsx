@@ -30,6 +30,15 @@ function isFree(href: string) {
     href.startsWith("/w/");
 }
 
+// Paths demo users ARE allowed to navigate to directly.
+const DEMO_ALLOWED = ["/", "/demo", "/pricing", "/request-access", "/login", "/privacy", "/terms"];
+function isDemoAllowed(href: string) {
+  return DEMO_ALLOWED.includes(href) ||
+    href.startsWith("/demo/") ||
+    href.startsWith("/checkout") ||
+    href.startsWith("/invite");
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
   const { role, setRole } = useAppStore();
@@ -42,9 +51,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
   // Subscription check — owner always passes, everyone else needs isSubscribed.
   const isOwner = currentUser?.role === "owner";
   const isSubscribed = isOwner || !!currentUser?.isSubscribed;
+  const isDemoUser = !!currentUser?.isDemoUser;
 
-  // Intercept nav clicks: if the link requires subscription, show modal instead.
-  const handleNavClick = (e: React.MouseEvent, href: string) => {
+  // Intercept nav clicks for demo users — send them to NOVA Gate instead.
+  // For subscribed/non-demo users — show subscribe modal if page requires subscription.
+  const handleNavClick = (e: React.MouseEvent, href: string, label?: string) => {
+    if (isDemoUser && !isDemoAllowed(href)) {
+      e.preventDefault();
+      const pageName = label ?? href.replace(/^\//, "").replace(/-/g, " ");
+      navigate(`/demo/nova-gate?page=${encodeURIComponent(pageName)}`);
+      setIsMobileMenuOpen(false);
+      return;
+    }
     if (!isSubscribed && !isFree(href)) {
       e.preventDefault();
       setSubscribeOpen(true);
@@ -89,7 +107,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Link
                   key={link.href}
                   href={link.href}
-                  onClick={(e) => handleNavClick(e, link.href)}
+                  onClick={(e) => handleNavClick(e, link.href, link.label)}
                   className={`px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
                     isActive(link.href)
                       ? "bg-secondary text-secondary-foreground"
@@ -119,7 +137,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                             <DropdownMenuItem key={link.href} asChild>
                               <Link
                                 href={link.href}
-                                onClick={(e) => handleNavClick(e, link.href)}
+                                onClick={(e) => handleNavClick(e, link.href, link.label)}
                                 className={`cursor-pointer ${isActive(link.href) ? "text-primary" : ""}`}
                               >
                                 {link.label}
@@ -219,15 +237,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <Link
                       key={link.href}
                       href={link.href}
-                      onClick={(e) => {
-                        if (!isSubscribed && !isFree(link.href)) {
-                          e.preventDefault();
-                          setIsMobileMenuOpen(false);
-                          setSubscribeOpen(true);
-                        } else {
-                          setIsMobileMenuOpen(false);
-                        }
-                      }}
+                      onClick={(e) => handleNavClick(e, link.href, link.label)}
                       className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-md ${
                         isActive(link.href)
                           ? "bg-secondary text-secondary-foreground"
