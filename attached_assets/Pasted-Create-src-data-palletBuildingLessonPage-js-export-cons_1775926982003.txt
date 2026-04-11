@@ -1,0 +1,401 @@
+Create src/data/palletBuildingLessonPage.js
+export const palletBuildingLessonPage = {
+  id: "module-3-lesson-1",
+  moduleId: "module-3",
+  title: "Pallet Building Standards",
+  level: "Intermediate",
+  duration: "40 min",
+  steps: 6,
+  voiceEnabled: true,
+
+  hero: {
+    heading: "Pallet Building Standards",
+    subheading:
+      "Learn how to build strong, stable pallets that stay safe during movement and support better warehouse performance.",
+  },
+
+  introVoice:
+    "Welcome to Pallet Building Standards. In this lesson, you will learn how to build a pallet that stays strong while moving, turning, and traveling through the warehouse.",
+
+  sections: [
+    {
+      id: "base-principle",
+      title: "1. The Real Goal of Pallet Building",
+      body: [
+        "A strong pallet is not just a pallet that looks neat while standing still.",
+        "A strong pallet must survive movement, turns, stops, and pressure during the shift.",
+        "That means good pallet building is about structure, balance, weight control, and smart stacking decisions.",
+      ],
+      novaVoice:
+        "You are not building a pallet to stand still. You are building a pallet that must survive movement.",
+    },
+    {
+      id: "build-the-base",
+      title: "2. Build the Base First",
+      body: [
+        "The base is the foundation of the entire pallet.",
+        "Heavy and solid cases should go lower. The base should stay flat, tight, and balanced.",
+        "If the base has gaps, uneven height, or weak support, the whole pallet becomes unstable later.",
+      ],
+      novaVoice:
+        "Build your base first. Heavy items low. Keep it flat, tight, and balanced.",
+      bullets: [
+        "Use heavier products on the bottom.",
+        "Keep the first layer flat.",
+        "Fill space carefully and reduce gaps.",
+        "Avoid weak corners and uneven surfaces.",
+      ],
+    },
+    {
+      id: "structure",
+      title: "3. Build Structure, Not a Tower",
+      body: [
+        "Strong pallets are built with structure, not random stacking.",
+        "Layers should support each other. Cases should be placed so weight spreads across the pallet, not on one narrow line.",
+        "Avoid tall weak towers, unsupported edges, and heavy cases sitting on weak product.",
+      ],
+      novaVoice:
+        "Build structure, not a tower. Interlock when possible. Support weight across the pallet.",
+      bullets: [
+        "Think about support under every case.",
+        "Do not stack heavy product on weak items.",
+        "Avoid narrow vertical towers.",
+        "Keep the pallet stable from side to side.",
+      ],
+    },
+    {
+      id: "balance",
+      title: "4. Balance the Weight",
+      body: [
+        "A pallet that is too heavy on one side will lean, shift, or collapse during movement.",
+        "Weight must be distributed in a way that keeps the pallet centered and controlled.",
+        "Watch for leaning early. Fix imbalance before it becomes a bigger problem.",
+      ],
+      novaVoice:
+        "Balance the pallet early. Do not wait for a lean to become a collapse.",
+      bullets: [
+        "Spread weight across the pallet.",
+        "Do not overload one side.",
+        "Fix leaning as soon as you see it.",
+        "Keep the center strong and supported.",
+      ],
+    },
+    {
+      id: "top-layer",
+      title: "5. Finish the Top the Right Way",
+      body: [
+        "The top layer matters because it affects how the pallet moves and how secure it stays.",
+        "Lighter and more fragile product should go higher. The top should stay clean, flat, and controlled.",
+        "Do not leave hanging edges, loose cases, or a messy top that shifts while driving.",
+      ],
+      novaVoice:
+        "Finish clean. Light items higher. Keep the top flat and controlled.",
+      bullets: [
+        "Put lighter items on top.",
+        "Avoid overhang.",
+        "Do not leave loose unstable product at the top.",
+        "Keep the final shape controlled and compact.",
+      ],
+    },
+    {
+      id: "driving-stability",
+      title: "6. Build for Driving Stability",
+      body: [
+        "The pallet is tested when you move it. Hard turns, sudden stops, and rough driving expose weak builds immediately.",
+        "A strong selector builds the pallet and drives in a way that protects it.",
+        "Smooth movement, controlled turns, and stable pallet design work together.",
+      ],
+      novaVoice:
+        "Build for movement. Drive smooth. Slow down before turns. Protect the pallet with your decisions.",
+      bullets: [
+        "Slow down before turning.",
+        "Avoid hard stops.",
+        "Do not jerk the pallet.",
+        "Keep the load controlled during travel.",
+      ],
+    },
+  ],
+
+  quiz: {
+    passingScore: 80,
+    questions: [
+      {
+        id: "q1",
+        question: "What is the real goal of pallet building?",
+        options: [
+          "Make it look tall",
+          "Make it stand still for a moment",
+          "Build it so it survives movement safely",
+          "Finish faster than everyone else",
+        ],
+        correctIndex: 2,
+      },
+      {
+        id: "q2",
+        question: "What belongs on the bottom of a pallet?",
+        options: [
+          "The weakest items",
+          "Heavier solid product",
+          "Only light boxes",
+          "Loose product",
+        ],
+        correctIndex: 1,
+      },
+      {
+        id: "q3",
+        question: "What is a common bad pallet building habit?",
+        options: [
+          "Balanced support",
+          "Interlocked structure",
+          "Tall unsupported towers",
+          "Flat base",
+        ],
+        correctIndex: 2,
+      },
+      {
+        id: "q4",
+        question: "Why is balance important?",
+        options: [
+          "It only matters for the top layer",
+          "It prevents leaning and instability during movement",
+          "It makes the pallet taller",
+          "It only matters after wrapping",
+        ],
+        correctIndex: 1,
+      },
+      {
+        id: "q5",
+        question: "What should you do before turning with a loaded pallet?",
+        options: [
+          "Speed up",
+          "Slow down and stay controlled",
+          "Pull harder",
+          "Ignore the load shape",
+        ],
+        correctIndex: 1,
+      },
+    ],
+  },
+
+  completion: {
+    title: "Pallet Building Standards Completed",
+    message:
+      "Lesson complete. You now understand how to build stronger, safer pallets that stay stable during movement and support better performance.",
+    novaVoice:
+      "Lesson complete. Strong pallets come from strong decisions. Keep building with structure, balance, and control.",
+  },
+};
+2) Create src/pages/training/PalletBuildingLessonPage.jsx
+import { useMemo, useState } from "react";
+import { palletBuildingLessonPage as lesson } from "../../data/palletBuildingLessonPage";
+
+export default function PalletBuildingLessonPage() {
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [submitted, setSubmitted] = useState(false);
+
+  const score = useMemo(() => {
+    const correctCount = lesson.quiz.questions.filter(
+      (q) => answers[q.id] === q.correctIndex
+    ).length;
+
+    return Math.round((correctCount / lesson.quiz.questions.length) * 100);
+  }, [answers]);
+
+  const passed = score >= lesson.quiz.passingScore;
+  const question = lesson.quiz.questions[currentQuestion];
+
+  const handleAnswer = (questionId, optionIndex) => {
+    if (submitted) return;
+    setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
+  };
+
+  const handleSubmitQuiz = () => {
+    setSubmitted(true);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 p-6 text-white">
+      <div className="mx-auto max-w-5xl space-y-8">
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-bold text-yellow-300">
+              {lesson.level}
+            </span>
+            <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-bold text-slate-300">
+              {lesson.duration}
+            </span>
+          </div>
+
+          <h1 className="mt-4 text-4xl font-black">{lesson.hero.heading}</h1>
+          <p className="mt-4 text-lg text-slate-300">{lesson.hero.subheading}</p>
+
+          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
+            <p className="text-sm font-bold uppercase tracking-wide text-yellow-300">
+              NOVA Intro Voice
+            </p>
+            <p className="mt-3 text-slate-200">{lesson.introVoice}</p>
+          </div>
+        </div>
+
+        {lesson.sections.map((section) => (
+          <div
+            key={section.id}
+            className="rounded-3xl border border-slate-800 bg-slate-900 p-8"
+          >
+            <h2 className="text-2xl font-bold">{section.title}</h2>
+
+            <div className="mt-5 space-y-3 text-slate-300">
+              {section.body.map((line, index) => (
+                <p key={index}>{line}</p>
+              ))}
+            </div>
+
+            {section.bullets ? (
+              <ul className="mt-5 list-disc space-y-2 pl-6 text-slate-300">
+                {section.bullets.map((item, index) => (
+                  <li key={index}>{item}</li>
+                ))}
+              </ul>
+            ) : null}
+
+            <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
+              <p className="text-sm font-bold uppercase tracking-wide text-yellow-300">
+                NOVA Voice
+              </p>
+              <p className="mt-3 text-slate-200">{section.novaVoice}</p>
+            </div>
+          </div>
+        ))}
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8">
+          <h2 className="text-3xl font-black">Lesson Test</h2>
+          <p className="mt-3 text-slate-300">
+            Pass {lesson.quiz.passingScore}% or higher to complete this lesson.
+          </p>
+
+          <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-950 p-6">
+            <p className="text-sm font-bold uppercase tracking-wide text-yellow-300">
+              Question {currentQuestion + 1} of {lesson.quiz.questions.length}
+            </p>
+
+            <h3 className="mt-4 text-xl font-bold">{question.question}</h3>
+
+            <div className="mt-6 space-y-3">
+              {question.options.map((option, optionIndex) => {
+                const selected = answers[question.id] === optionIndex;
+                const correct = submitted && question.correctIndex === optionIndex;
+                const wrongSelected =
+                  submitted && selected && question.correctIndex !== optionIndex;
+
+                return (
+                  <button
+                    key={optionIndex}
+                    onClick={() => handleAnswer(question.id, optionIndex)}
+                    className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
+                      correct
+                        ? "border-green-500 bg-green-500/10 text-green-200"
+                        : wrongSelected
+                        ? "border-red-500 bg-red-500/10 text-red-200"
+                        : selected
+                        ? "border-yellow-400 bg-yellow-500/10 text-yellow-200"
+                        : "border-slate-700 bg-slate-900 text-slate-200 hover:border-yellow-400"
+                    }`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                onClick={() =>
+                  setCurrentQuestion((prev) => Math.max(prev - 1, 0))
+                }
+                disabled={currentQuestion === 0}
+                className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold disabled:opacity-40"
+              >
+                Previous
+              </button>
+
+              <button
+                onClick={() =>
+                  setCurrentQuestion((prev) =>
+                    Math.min(prev + 1, lesson.quiz.questions.length - 1)
+                  )
+                }
+                disabled={currentQuestion === lesson.quiz.questions.length - 1}
+                className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold disabled:opacity-40"
+              >
+                Next
+              </button>
+
+              {!submitted ? (
+                <button
+                  onClick={handleSubmitQuiz}
+                  className="rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300"
+                >
+                  Submit Test
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {submitted ? (
+            <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-950 p-6">
+              <p className="text-sm font-bold uppercase tracking-wide text-yellow-300">
+                Results
+              </p>
+              <h3 className="mt-3 text-3xl font-black">
+                {score}% {passed ? "Passed" : "Needs Review"}
+              </h3>
+              <p className="mt-3 text-slate-300">{lesson.completion.message}</p>
+
+              <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <p className="text-sm font-bold uppercase tracking-wide text-yellow-300">
+                  NOVA Completion Voice
+                </p>
+                <p className="mt-3 text-slate-200">{lesson.completion.novaVoice}</p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+3) Add route in src/App.jsx
+import PalletBuildingLessonPage from "./pages/training/PalletBuildingLessonPage";
+
+<Route path="/training/module-3" element={<PalletBuildingLessonPage />} />
+4) Update Module 3 button in your training page
+
+Use this pattern:
+
+{module.id === 1 ? (
+  <button
+    onClick={() => navigate("/training/module-1")}
+    className="mt-6 w-full rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300"
+  >
+    Start NOVA Lesson
+  </button>
+) : module.id === 2 ? (
+  <button
+    onClick={() => navigate("/training/module-2")}
+    className="mt-6 w-full rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300"
+  >
+    Start NOVA Lesson
+  </button>
+) : module.id === 3 ? (
+  <button
+    onClick={() => navigate("/training/module-3")}
+    className="mt-6 w-full rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300"
+  >
+    Start NOVA Lesson
+  </button>
+) : (
+  <button className="mt-6 w-full rounded-2xl border border-slate-700 px-5 py-3 font-bold text-slate-300">
+    Start NOVA Lesson
+  </button>
+)}
