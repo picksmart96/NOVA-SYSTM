@@ -62,7 +62,7 @@ const PAGES = [
       { label: "Trainer Portal", path: "/trainer-portal", icon: LayoutDashboard, desc: "Trainer dashboard" },
       { label: "Supervisor", path: "/supervisor", icon: Shield, desc: "Supervisor view" },
       { label: "Users & Access", path: "/users-access", icon: Users, desc: "Invite & manage users" },
-      { label: "Warehouse Entry", path: "/warehouse-entry", icon: Warehouse, desc: "Warehouse selector" },
+      { label: "Warehouse Entry", path: "/w/default", icon: Warehouse, desc: "Warehouse selector" },
     ],
   },
   {
@@ -73,7 +73,7 @@ const PAGES = [
       { label: "Owner Dashboard", path: "/owner", icon: Shield, desc: "Full admin panel" },
       { label: "Owner Access", path: "/owner-access", icon: Lock, desc: "Magic login link" },
       { label: "Company Onboard", path: "/checkout/company/onboard", icon: Building2, desc: "Onboarding flow" },
-      { label: "Selector Portal", path: "/selector-portal", icon: Navigation, desc: "Role selector" },
+      { label: "Selector Portal", path: "/selector", icon: Navigation, desc: "Role selector" },
     ],
   },
   {
@@ -84,8 +84,8 @@ const PAGES = [
       { label: "Demo Landing", path: "/demo", icon: FlaskConical, desc: "Demo home" },
       { label: "Demo Training", path: "/demo/training", icon: BookOpen, desc: "Demo training" },
       { label: "Demo Leaderboard", path: "/demo/leaderboard", icon: Trophy, desc: "Demo leaderboard" },
-      { label: "Demo Trainer", path: "/demo/trainer", icon: LayoutDashboard, desc: "Demo trainer" },
-      { label: "Demo Supervisor", path: "/demo/supervisor", icon: Shield, desc: "Demo supervisor" },
+      { label: "Demo Trainer", path: "/demo/trainer-dashboard", icon: LayoutDashboard, desc: "Demo trainer" },
+      { label: "Demo Supervisor", path: "/demo/supervisor-dashboard", icon: Shield, desc: "Demo supervisor" },
       { label: "Demo NOVA Agent", path: "/demo/nova-agent", icon: Mic, desc: "Demo NOVA" },
       { label: "Demo NOVA Help", path: "/demo/nova-help", icon: HelpCircle, desc: "Demo AI coach" },
       { label: "Demo NOVA Gate", path: "/demo/nova-gate", icon: Lock, desc: "Demo gate" },
