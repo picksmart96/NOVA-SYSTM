@@ -72,6 +72,8 @@ export default function UsersAccessPage() {
   const [generatedInviteName, setGeneratedInviteName] = useState("");
   const [generatedInviteEmail, setGeneratedInviteEmail] = useState("");
   const [generatedInviteRole, setGeneratedInviteRole] = useState<RoleKey>("Selector");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
   const canShare = typeof navigator !== "undefined" && !!navigator.share;
 
   const inviteLink = useMemo(() => roleLinks[inviteForm.role], [inviteForm.role]);
@@ -117,13 +119,44 @@ export default function UsersAccessPage() {
     setInviteForm({ fullName: "", email: "", role: "Selector" });
   };
 
-  const handleSendEmail = () => {
-    if (!generatedInviteUrl) return;
-    const subject = encodeURIComponent("You've been invited to PickSmart Academy");
-    const body = encodeURIComponent(
-      `Hi ${generatedInviteName},\n\nYou've been invited to join PickSmart Academy as a ${generatedInviteRole}.\n\nClick the link below to create your account:\n\n${generatedInviteUrl}\n\nSee you on the floor!\n— PickSmart Academy`
-    );
-    window.open(`mailto:${generatedInviteEmail}?subject=${subject}&body=${body}`, "_blank");
+  const handleSendEmail = async () => {
+    if (!generatedInviteUrl || emailSending) return;
+    setEmailSending(true);
+    setEmailSent(false);
+    try {
+      const apiBase = import.meta.env.VITE_API_URL ?? "";
+      const res = await fetch(`${apiBase}/api/invites/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: generatedInviteEmail,
+          name: generatedInviteName,
+          role: generatedInviteRole.toLowerCase(),
+          inviteUrl: generatedInviteUrl,
+        }),
+      });
+      if (res.ok) {
+        setEmailSent(true);
+        setTimeout(() => setEmailSent(false), 5000);
+      } else {
+        const data = await res.json().catch(() => ({})) as { detail?: string };
+        // Fallback to mailto if Resend not configured
+        const subject = encodeURIComponent("You've been invited to PickSmart Academy");
+        const body = encodeURIComponent(
+          `Hi ${generatedInviteName},\n\nYou've been invited to join PickSmart Academy as a ${generatedInviteRole}.\n\nClick the link below to create your account:\n\n${generatedInviteUrl}\n\nSee you on the floor!\n— PickSmart Academy`
+        );
+        window.open(`mailto:${generatedInviteEmail}?subject=${subject}&body=${body}`, "_blank");
+      }
+    } catch {
+      // Network error — fallback to mailto
+      const subject = encodeURIComponent("You've been invited to PickSmart Academy");
+      const body = encodeURIComponent(
+        `Hi ${generatedInviteName},\n\nYou've been invited to join PickSmart Academy as a ${generatedInviteRole}.\n\nClick the link below to create your account:\n\n${generatedInviteUrl}\n\nSee you on the floor!\n— PickSmart Academy`
+      );
+      window.open(`mailto:${generatedInviteEmail}?subject=${subject}&body=${body}`, "_blank");
+    } finally {
+      setEmailSending(false);
+    }
   };
 
   const handleShare = async () => {
@@ -249,9 +282,16 @@ export default function UsersAccessPage() {
                   <div className="flex flex-wrap gap-3">
                     <button
                       onClick={handleSendEmail}
-                      className="flex-1 min-w-[140px] rounded-2xl bg-yellow-400 px-4 py-2.5 font-bold text-sm text-slate-950 hover:bg-yellow-300 transition flex items-center justify-center gap-2"
+                      disabled={emailSending}
+                      className="flex-1 min-w-[140px] rounded-2xl bg-yellow-400 px-4 py-2.5 font-bold text-sm text-slate-950 hover:bg-yellow-300 transition flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <Mail className="h-4 w-4" /> Send Email
+                      {emailSending ? (
+                        <><span className="animate-spin inline-block h-4 w-4 border-2 border-slate-950/40 border-t-slate-950 rounded-full" /> Sending…</>
+                      ) : emailSent ? (
+                        <><Check className="h-4 w-4 text-green-700" /> Email Sent!</>
+                      ) : (
+                        <><Mail className="h-4 w-4" /> Send Email</>
+                      )}
                     </button>
 
                     {canShare && (
@@ -275,7 +315,9 @@ export default function UsersAccessPage() {
                   </div>
 
                   <p className="text-xs text-green-400/70">
-                    "Send Email" opens your email app pre-filled with {generatedInviteEmail} and the invite link.
+                    {emailSent
+                      ? `✓ Email with QR code sent to ${generatedInviteEmail} via Resend.`
+                      : `"Send Email" delivers a branded invite with QR code directly to ${generatedInviteEmail}.`}
                   </p>
                 </div>
               )}
