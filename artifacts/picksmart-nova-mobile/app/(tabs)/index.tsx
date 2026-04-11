@@ -1,6 +1,7 @@
 import * as Haptics from "expo-haptics";
 import * as Speech from "expo-speech";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -17,7 +18,7 @@ import { Feather } from "@expo/vector-icons";
 import colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import NovaOrb from "@/components/NovaOrb";
-import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { useWakeWordRecognition } from "@/hooks/useSpeechRecognition";
 
 type OrbState = "idle" | "wake" | "listening" | "thinking" | "speaking";
 interface Message { id: string; role: "nova" | "user"; text: string; }
@@ -36,139 +37,138 @@ async function askNova(question: string, lang: string): Promise<string> {
 }
 
 export default function NovaScreen() {
-  const insets = useSafeAreaInsets();
+  const insets      = useSafeAreaInsets();
   const { language, toggleLanguage } = useAuth();
-  const c = colors.dark;
-  const isES = language === "es";
+  const c           = colors.dark;
+  const isES        = language === "es";
 
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [orbState, setOrbState] = useState<OrbState>("idle");
-  const [sessionActive, setSessionActive] = useState(false);
-  const [errorBanner, setErrorBanner] = useState("");
-  const flatListRef = useRef<FlatList>(null);
+  const [messages,   setMessages]   = useState<Message[]>([]);
+  const [input,      setInput]      = useState("");
+  const [orbState,   setOrbState]   = useState<OrbState>("wake");
+  const [micEnabled, setMicEnabled] = useState(true);
+  const [errorMsg,   setErrorMsg]   = useState("");
+  const isBusyRef   = useRef(false);        // true while thinking or speaking
 
   const uid = () => Date.now().toString() + Math.random().toString(36).substring(2, 7);
+  const addMessage = (role: "nova" | "user", text: string) =>
+    setMessages(prev => [{ id: uid(), role, text }, ...prev]);
 
-  const addMessage = (role: "nova" | "user", text: string) => {
-    setMessages((prev) => [{ id: uid(), role, text }, ...prev]);
-  };
-
+  // ─── TTS ────────────────────────────────────────────────────────────────
   const speakNova = useCallback((text: string, onEnd?: () => void) => {
+    isBusyRef.current = true;
     setOrbState("speaking");
     Speech.speak(text, {
       language: language === "es" ? "es-ES" : "en-US",
       rate: 1.05,
       pitch: 1.0,
-      onDone: () => { setOrbState("wake"); onEnd?.(); },
-      onError: () => { setOrbState("wake"); onEnd?.(); },
+      onDone:  () => { isBusyRef.current = false; setOrbState("wake"); onEnd?.(); },
+      onError: () => { isBusyRef.current = false; setOrbState("wake"); onEnd?.(); },
     });
   }, [language]);
 
+  // ─── Send a question to NOVA AI ─────────────────────────────────────────
   const sendQuestion = useCallback(async (q: string) => {
-    if (!q.trim()) return;
+    if (!q.trim() || isBusyRef.current) return;
     const trimmed = q.trim();
     setInput("");
-    if (!sessionActive) setSessionActive(true);
+    setErrorMsg("");
     addMessage("user", trimmed);
+    isBusyRef.current = true;
     setOrbState("thinking");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
       const answer = await askNova(trimmed, language);
       addMessage("nova", answer);
-      speakNova(answer);
+      speakNova(answer, () => {
+        // Return mic to wake-word mode after speaking finishes
+        wakeWordHook.returnToWake();
+      });
     } catch {
       const err = isES
         ? "Tuve un problema. Intenta de nuevo."
-        : "I had trouble answering that. Please try again.";
+        : "I had trouble answering. Try again.";
       addMessage("nova", err);
+      isBusyRef.current = false;
       setOrbState("wake");
+      wakeWordHook.returnToWake();
     }
-  }, [sessionActive, language, speakNova, isES]);
+  }, [language, speakNova, isES]);
 
-  const { state: micState, interimText, start: startMic, stop: stopMic, isSupported } =
-    useSpeechRecognition({
-      language,
-      onResult: (transcript) => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        sendQuestion(transcript);
-      },
-      onError: (msg) => {
-        setErrorBanner(msg);
-        setTimeout(() => setErrorBanner(""), 5000);
-        setOrbState("wake");
-      },
-    });
-
-  // Sync mic state → orb state
-  useEffect(() => {
-    if (micState === "listening") setOrbState("listening");
-    else if (micState === "processing") setOrbState("thinking");
-    else if (orbState === "listening") setOrbState("wake");
-  }, [micState]);
-
-  const handleMicPress = () => {
-    if (!sessionActive) {
-      startSession();
-      return;
-    }
-    if (orbState === "speaking") {
-      Speech.stop();
+  // ─── Wake word hook ──────────────────────────────────────────────────────
+  const wakeWordHook = useWakeWordRecognition({
+    language,
+    enabled: micEnabled,
+    onWakeWord: () => {
+      if (isBusyRef.current) return;
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setOrbState("wake");
-      return;
-    }
-    if (micState === "listening") {
-      stopMic();
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } else if (orbState !== "thinking") {
-      setErrorBanner("");
-      startMic();
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
-  };
+      const ack = isES ? "Sí, dime." : "Yes, go ahead.";
+      addMessage("nova", ack);
+      speakNova(ack);
+    },
+    onQuestion: (transcript) => {
+      if (isBusyRef.current) return;
+      sendQuestion(transcript);
+    },
+    onError: (msg) => {
+      setErrorMsg(msg);
+      setTimeout(() => setErrorMsg(""), 7000);
+    },
+  });
 
-  const startSession = () => {
-    setSessionActive(true);
-    setMessages([]);
-    setOrbState("wake");
-    setErrorBanner("");
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const greeting = isES
-      ? "Sesión activa. Toca el micrófono y haz tu pregunta."
-      : "Session active. Tap the mic and ask your question.";
-    addMessage("nova", greeting);
-    speakNova(greeting);
-  };
+  const { mode, state: micState, interimText, isSupported } = wakeWordHook;
 
-  const endSession = () => {
-    Speech.stop();
-    stopMic();
-    setSessionActive(false);
-    setOrbState("idle");
-    setMessages([]);
-    setErrorBanner("");
-  };
+  // Auto-enable mic when screen gains focus; disable when leaving
+  useFocusEffect(
+    useCallback(() => {
+      setMicEnabled(true);
+      setOrbState("wake");
+      return () => {
+        setMicEnabled(false);
+        Speech.stop();
+        isBusyRef.current = false;
+      };
+    }, [])
+  );
 
-  const handleSubmit = () => {
-    if (input.trim()) sendQuestion(input.trim());
-  };
+  // Sync orb to mic state
+  const derivedOrb: OrbState =
+    orbState === "thinking" || orbState === "speaking" ? orbState
+    : micState === "listening" && mode === "wake"     ? "wake"
+    : micState === "listening" && mode === "question"  ? "listening"
+    : micState === "processing"                        ? "thinking"
+    : "wake";
 
-  useEffect(() => {
-    return () => { Speech.stop(); stopMic(); };
-  }, []);
+  // ─── Labels ─────────────────────────────────────────────────────────────
+  const topLabel =
+    derivedOrb === "speaking"  ? (isES ? "Respuesta de NOVA" : "NOVA responding")
+    : derivedOrb === "thinking" ? (isES ? "Pensando…" : "Thinking…")
+    : derivedOrb === "listening" ? (isES ? "Escuchando tu pregunta…" : "Listening for your question…")
+    : mode === "wake"           ? (isES ? 'Di "Hey NOVA" para activar' : 'Say "Hey NOVA" to activate')
+    : "";
+
+  const subLabel =
+    !isSupported
+      ? (isES ? "Micrófono no disponible. Usa texto abajo." : "Mic unavailable. Use text below.")
+      : micState === "starting"
+      ? (isES ? "Iniciando micrófono…" : "Starting mic…")
+      : "";
 
   const webTop = Platform.OS === "web" ? 67 : 0;
 
-  const orbLabel =
-    orbState === "speaking"  ? (isES ? "Toca el micrófono para interrumpir" : "Tap mic to interrupt")
-    : orbState === "thinking" ? (isES ? "Pensando…" : "Thinking…")
-    : orbState === "listening" ? (isES ? "Escuchando…" : "Listening…")
-    : sessionActive          ? (isES ? "Toca el micrófono para hablar" : "Tap the mic to speak")
-    : (isES ? "Toca para comenzar" : "Tap to start");
+  // ─── Manual text submit ──────────────────────────────────────────────────
+  const handleSubmit = () => { if (input.trim()) sendQuestion(input); };
 
-  const micActive = micState === "listening";
-  const micDisabled = orbState === "thinking";
+  // ─── Manual tap on orb / mic area ───────────────────────────────────────
+  const handleOrbTap = () => {
+    if (derivedOrb === "speaking") {
+      Speech.stop();
+      isBusyRef.current = false;
+      setOrbState("wake");
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -193,157 +193,141 @@ export default function NovaScreen() {
           >
             <Text style={[styles.langBtnText, { color: c.foreground }]}>{language.toUpperCase()}</Text>
           </Pressable>
-          {sessionActive && (
-            <Pressable onPress={endSession}
-              style={[styles.iconBtn, { backgroundColor: c.muted, borderColor: c.border }]}
-            >
-              <Feather name="x" size={16} color={c.mutedForeground} />
-            </Pressable>
-          )}
+          {/* Mic toggle */}
+          <Pressable
+            onPress={() => setMicEnabled(v => !v)}
+            style={[
+              styles.iconBtn,
+              { backgroundColor: micEnabled ? c.nova + "30" : c.muted, borderColor: micEnabled ? c.nova : c.border }
+            ]}
+          >
+            <Feather name={micEnabled ? "mic" : "mic-off"} size={15}
+              color={micEnabled ? c.novaPurple : c.mutedForeground} />
+          </Pressable>
         </View>
       </View>
 
       {/* Error banner */}
-      {errorBanner ? (
-        <View style={[styles.errorBanner, { backgroundColor: "rgba(224,53,53,0.15)", borderColor: "rgba(224,53,53,0.35)" }]}>
-          <Feather name="alert-circle" size={14} color={c.destructive} />
-          <Text style={[styles.errorText, { color: c.destructive }]}>{errorBanner}</Text>
+      {errorMsg ? (
+        <View style={[styles.banner, { backgroundColor: "rgba(224,53,53,0.12)", borderColor: "rgba(224,53,53,0.3)" }]}>
+          <Feather name="alert-circle" size={13} color={c.destructive} />
+          <Text style={[styles.bannerText, { color: c.destructive }]}>{errorMsg}</Text>
         </View>
       ) : null}
 
-      {/* Orb + mic button area */}
-      <View style={styles.orbArea}>
-        <NovaOrb state={orbState} size={120} />
+      {/* ── Orb section ── */}
+      <Pressable style={styles.orbArea} onPress={handleOrbTap}>
+        <NovaOrb state={derivedOrb} size={130} />
 
-        <Text style={[styles.orbLabel, {
-          color: orbState === "listening" ? c.primary
-          : orbState === "speaking"  ? c.novaPurple
-          : orbState === "thinking"  ? c.primary
-          : c.mutedForeground,
-          marginTop: 14,
-        }]}>
-          {orbLabel}
+        {/* Wake word ring label */}
+        {mode === "wake" && micState === "listening" && (
+          <View style={[styles.wakeRing, { borderColor: c.nova + "50", backgroundColor: c.nova + "10" }]}>
+            <View style={[styles.wakeRingDot, { backgroundColor: c.nova }]} />
+            <Text style={[styles.wakeRingText, { color: c.novaPurple }]}>
+              {isES ? 'Esperando "Hey NOVA"' : 'Waiting for "Hey NOVA"'}
+            </Text>
+          </View>
+        )}
+
+        <Text style={[
+          styles.orbLabel,
+          {
+            color: derivedOrb === "speaking"  ? c.novaPurple
+              : derivedOrb === "thinking"     ? c.primary
+              : derivedOrb === "listening"    ? c.primary
+              : c.mutedForeground,
+            marginTop: mode === "wake" && micState === "listening" ? 8 : 14,
+          }
+        ]}>
+          {topLabel}
         </Text>
 
-        {orbState === "thinking" && (
+        {subLabel ? (
+          <Text style={[styles.subLabel, { color: c.mutedForeground }]}>{subLabel}</Text>
+        ) : null}
+
+        {(derivedOrb === "thinking" || micState === "starting") && (
           <ActivityIndicator color={c.primary} size="small" style={{ marginTop: 6 }} />
         )}
 
-        {/* Interim voice text preview */}
-        {interimText ? (
-          <View style={[styles.interimBox, { backgroundColor: "rgba(124,58,237,0.12)", borderColor: "rgba(124,58,237,0.3)" }]}>
-            <Text style={[styles.interimText, { color: c.mutedForeground }]} numberOfLines={2}>
-              "{interimText}"
-            </Text>
-          </View>
-        ) : null}
+        {derivedOrb === "speaking" && (
+          <Text style={[styles.tapHint, { color: c.mutedForeground }]}>
+            {isES ? "Toca para detener" : "Tap to stop"}
+          </Text>
+        )}
+      </Pressable>
 
-        {/* Large mic button */}
-        <Pressable
-          onPress={handleMicPress}
-          disabled={micDisabled}
-          style={({ pressed }) => [
-            styles.bigMicBtn,
-            {
-              backgroundColor: micActive
-                ? c.primary
-                : orbState === "speaking"
-                ? c.nova
-                : c.secondary,
-              borderColor: micActive
-                ? c.primary
-                : orbState === "speaking"
-                ? c.nova
-                : c.border,
-              opacity: micDisabled ? 0.4 : pressed ? 0.75 : 1,
-              transform: [{ scale: pressed ? 0.94 : 1 }],
-            },
-          ]}
-        >
-          <Feather
-            name={micActive ? "mic" : orbState === "speaking" ? "volume-x" : "mic"}
-            size={28}
-            color={micActive ? c.primaryForeground : orbState === "speaking" ? "#fff" : c.mutedForeground}
-          />
-        </Pressable>
-
-        {/* Mic label */}
-        <Text style={[styles.micHint, { color: c.mutedForeground }]}>
-          {micActive
-            ? (isES ? "Toca para enviar" : "Tap to send")
-            : orbState === "speaking"
-            ? (isES ? "Toca para detener" : "Tap to stop")
-            : !isSupported
-            ? (isES ? "Escribe abajo (voz no disponible)" : "Type below (voice unavailable)")
-            : (isES ? "Toca para hablar" : "Tap to speak")}
-        </Text>
-      </View>
+      {/* Interim transcript preview */}
+      {interimText ? (
+        <View style={[styles.interimBox, { backgroundColor: c.nova + "15", borderColor: c.nova + "35" }]}>
+          <Text style={[styles.interimText, { color: c.mutedForeground }]} numberOfLines={2}>
+            "{interimText}"
+          </Text>
+        </View>
+      ) : null}
 
       {/* Messages */}
       <FlatList
-        ref={flatListRef}
         data={messages}
         keyExtractor={(m) => m.id}
         inverted
-        style={styles.messageList}
-        contentContainerStyle={styles.messageContent}
+        style={styles.msgList}
+        contentContainerStyle={styles.msgContent}
         showsVerticalScrollIndicator={false}
         renderItem={({ item: m }) => (
           <View style={[
             styles.bubble,
             m.role === "nova"
-              ? { backgroundColor: "rgba(124,58,237,0.15)", borderColor: "rgba(124,58,237,0.3)", alignSelf: "flex-start" as const }
+              ? { backgroundColor: "rgba(124,58,237,0.14)", borderColor: "rgba(124,58,237,0.28)", alignSelf: "flex-start" as const }
               : { backgroundColor: c.secondary, borderColor: c.border, alignSelf: "flex-end" as const },
           ]}>
-            {m.role === "nova" && (
-              <Text style={[styles.bubbleLabel, { color: c.nova }]}>NOVA</Text>
-            )}
+            {m.role === "nova" && <Text style={[styles.bubbleRole, { color: c.nova }]}>NOVA</Text>}
             <Text style={[styles.bubbleText, { color: c.foreground }]}>{m.text}</Text>
           </View>
         )}
         ListEmptyComponent={
-          sessionActive ? null : (
-            <View style={styles.emptyState}>
-              <Text style={[styles.emptyTitle, { color: c.foreground }]}>
-                {isES ? "NOVA lista" : "NOVA ready"}
-              </Text>
-              <Text style={[styles.emptyText, { color: c.mutedForeground }]}>
-                {isES
-                  ? "Toca el micrófono arriba para hacer una pregunta de voz, o escribe abajo."
-                  : "Tap the mic above to ask a voice question, or type below."}
-              </Text>
-            </View>
-          )
+          <View style={styles.emptyState}>
+            <Text style={[styles.emptyTitle, { color: c.foreground }]}>
+              {isES ? "NOVA lista para ayudarte" : "NOVA is ready for you"}
+            </Text>
+            <Text style={[styles.emptyBody, { color: c.mutedForeground }]}>
+              {isSupported
+                ? (isES
+                  ? 'Di "Hey NOVA" para comenzar, o escribe tu pregunta abajo.'
+                  : 'Say "Hey NOVA" to start, or type your question below.')
+                : (isES
+                  ? "El micrófono no está disponible en este navegador. Escribe tu pregunta abajo."
+                  : "Mic unavailable in this browser. Type your question below.")}
+            </Text>
+          </View>
         }
       />
 
-      {/* Text input row */}
+      {/* Text input */}
       <View style={[
-        styles.bottom,
+        styles.inputBar,
         { backgroundColor: c.card, borderTopColor: c.border, paddingBottom: insets.bottom + 8 + (Platform.OS === "web" ? 34 : 0) }
       ]}>
-        <View style={styles.inputRow}>
-          <TextInput
-            style={[styles.textInput, { backgroundColor: c.input, borderColor: c.border, color: c.foreground }]}
-            placeholder={isES ? "O escribe tu pregunta aquí…" : "Or type your question here…"}
-            placeholderTextColor={c.mutedForeground}
-            value={input}
-            onChangeText={setInput}
-            returnKeyType="send"
-            onSubmitEditing={handleSubmit}
-            editable={orbState !== "thinking" && !micActive}
-          />
-          <Pressable
-            onPress={handleSubmit}
-            disabled={!input.trim() || orbState === "thinking"}
-            style={({ pressed }) => [
-              styles.sendBtn,
-              { backgroundColor: c.nova, opacity: pressed || !input.trim() || orbState === "thinking" ? 0.45 : 1 }
-            ]}
-          >
-            <Feather name="send" size={18} color="#fff" />
-          </Pressable>
-        </View>
+        <TextInput
+          style={[styles.textInput, { backgroundColor: c.input, borderColor: c.border, color: c.foreground }]}
+          placeholder={isES ? 'O escribe tu pregunta…' : 'Or type your question…'}
+          placeholderTextColor={c.mutedForeground}
+          value={input}
+          onChangeText={setInput}
+          returnKeyType="send"
+          onSubmitEditing={handleSubmit}
+          editable={derivedOrb !== "thinking" && derivedOrb !== "speaking"}
+        />
+        <Pressable
+          onPress={handleSubmit}
+          disabled={!input.trim() || derivedOrb === "thinking"}
+          style={({ pressed }) => [
+            styles.sendBtn,
+            { backgroundColor: c.nova, opacity: pressed || !input.trim() || derivedOrb === "thinking" ? 0.4 : 1 }
+          ]}
+        >
+          <Feather name="send" size={18} color="#fff" />
+        </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
@@ -352,90 +336,46 @@ export default function NovaScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
+    flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between",
+    paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1,
   },
   headerTitle: { fontSize: 18, fontWeight: "700" as const },
-  headerSub: { fontSize: 12, marginTop: 2 },
+  headerSub:   { fontSize: 12, marginTop: 2 },
   headerRight: { flexDirection: "row", gap: 8, alignItems: "center" },
-  langBtn: {
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 8, borderWidth: 1,
-  },
+  langBtn:     { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
   langBtnText: { fontSize: 12, fontWeight: "700" as const, letterSpacing: 1 },
-  iconBtn: {
-    width: 32, height: 32, borderRadius: 16,
-    alignItems: "center", justifyContent: "center", borderWidth: 1,
+  iconBtn:     { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  banner: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    margin: 10, marginBottom: 0, padding: 11, borderRadius: 10, borderWidth: 1,
   },
-  errorBanner: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-    margin: 12,
-    marginBottom: 0,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
+  bannerText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  orbArea: { alignItems: "center", paddingTop: 22, paddingBottom: 10, gap: 6 },
+  wakeRing: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    marginTop: 10, paddingHorizontal: 14, paddingVertical: 7,
+    borderRadius: 20, borderWidth: 1,
   },
-  errorText: { flex: 1, fontSize: 13, lineHeight: 18 },
-  orbArea: {
-    alignItems: "center",
-    paddingTop: 20,
-    paddingBottom: 16,
-    gap: 10,
-  },
-  orbLabel: {
-    fontSize: 13,
-    fontWeight: "500" as const,
-    letterSpacing: 0.3,
-    textAlign: "center",
-  },
-  interimBox: {
-    marginHorizontal: 24,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  interimText: { fontSize: 14, fontStyle: "italic" as const, textAlign: "center" },
-  bigMicBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 4,
-  },
-  micHint: { fontSize: 12, letterSpacing: 0.2 },
-  messageList: { flex: 1 },
-  messageContent: { padding: 14, gap: 8, flexGrow: 1, justifyContent: "flex-end" },
-  bubble: {
-    borderRadius: 14, padding: 13, borderWidth: 1,
-    maxWidth: "88%",
-  },
-  bubbleLabel: { fontSize: 10, fontWeight: "700" as const, letterSpacing: 1, marginBottom: 4 },
-  bubbleText: { fontSize: 14, lineHeight: 21 },
-  emptyState: {
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: "600" as const },
-  emptyText: { fontSize: 14, textAlign: "center", lineHeight: 20 },
-  bottom: { borderTopWidth: 1, padding: 10 },
-  inputRow: { flexDirection: "row", gap: 8, alignItems: "center" },
+  wakeRingDot:  { width: 6, height: 6, borderRadius: 3 },
+  wakeRingText: { fontSize: 13, fontWeight: "600" as const },
+  orbLabel:     { fontSize: 13, fontWeight: "500" as const, textAlign: "center", letterSpacing: 0.2 },
+  subLabel:     { fontSize: 12, textAlign: "center" },
+  tapHint:      { fontSize: 12, marginTop: 2 },
+  interimBox:   { marginHorizontal: 20, marginBottom: 4, padding: 10, borderRadius: 10, borderWidth: 1 },
+  interimText:  { fontSize: 14, fontStyle: "italic" as const, textAlign: "center" },
+  msgList:      { flex: 1 },
+  msgContent:   { padding: 14, gap: 8, flexGrow: 1, justifyContent: "flex-end" },
+  bubble:       { borderRadius: 14, padding: 12, borderWidth: 1, maxWidth: "88%" },
+  bubbleRole:   { fontSize: 10, fontWeight: "700" as const, letterSpacing: 1, marginBottom: 4 },
+  bubbleText:   { fontSize: 14, lineHeight: 21 },
+  emptyState:   { alignItems: "center", gap: 8, paddingVertical: 20, paddingHorizontal: 28 },
+  emptyTitle:   { fontSize: 16, fontWeight: "600" as const, textAlign: "center" },
+  emptyBody:    { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  inputBar:     { borderTopWidth: 1, padding: 10 },
+  inputRow:     { flexDirection: "row", gap: 8, alignItems: "center" },
   textInput: {
     flex: 1, height: 46, borderRadius: 12, borderWidth: 1,
     paddingHorizontal: 14, fontSize: 14,
   },
-  sendBtn: {
-    width: 46, height: 46, borderRadius: 12,
-    alignItems: "center", justifyContent: "center",
-  },
+  sendBtn: { width: 46, height: 46, borderRadius: 12, alignItems: "center", justifyContent: "center" },
 });
