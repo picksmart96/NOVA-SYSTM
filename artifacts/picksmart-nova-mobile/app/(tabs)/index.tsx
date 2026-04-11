@@ -23,6 +23,17 @@ import { useWakeWordRecognition } from "@/hooks/useSpeechRecognition";
 type OrbState = "idle" | "wake" | "listening" | "thinking" | "speaking";
 interface Message { id: string; role: "nova" | "user"; text: string; }
 
+// Unlock browser audio policy with a silent utterance (must be called
+// synchronously inside a user-gesture handler before any async speak calls).
+function unlockWebAudio() {
+  if (Platform.OS !== "web" || typeof window === "undefined") return;
+  try {
+    const u = new (window as any).SpeechSynthesisUtterance("");
+    u.volume = 0;
+    (window as any).speechSynthesis.speak(u);
+  } catch { /* ignore */ }
+}
+
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
 async function askNova(question: string, lang: string): Promise<string> {
@@ -42,12 +53,17 @@ export default function NovaScreen() {
   const c           = colors.dark;
   const isES        = language === "es";
 
-  const [messages,   setMessages]   = useState<Message[]>([]);
-  const [input,      setInput]      = useState("");
-  const [orbState,   setOrbState]   = useState<OrbState>("wake");
-  const [micEnabled, setMicEnabled] = useState(true);
-  const [errorMsg,   setErrorMsg]   = useState("");
-  const isBusyRef   = useRef(false);        // true while thinking or speaking
+  const [messages,      setMessages]      = useState<Message[]>([]);
+  const [input,         setInput]         = useState("");
+  const [orbState,      setOrbState]      = useState<OrbState>("wake");
+  const [micEnabled,    setMicEnabled]    = useState(true);
+  const [errorMsg,      setErrorMsg]      = useState("");
+  // Web audio autoplay policy: speechSynthesis must be triggered by a user gesture.
+  // On native it's always unlocked; on web we need a tap first.
+  const [audioUnlocked, setAudioUnlocked] = useState(Platform.OS !== "web");
+  const isBusyRef        = useRef(false);
+  const audioUnlockedRef = useRef(Platform.OS !== "web"); // sync ref mirrors state
+  const pendingSpeakRef  = useRef<{ text: string; onEnd?: () => void } | null>(null);
 
   const uid = () => Date.now().toString() + Math.random().toString(36).substring(2, 7);
   const addMessage = (role: "nova" | "user", text: string) =>
@@ -57,6 +73,12 @@ export default function NovaScreen() {
   const speakNova = useCallback((text: string, onEnd?: () => void) => {
     isBusyRef.current = true;
     setOrbState("speaking");
+    if (!audioUnlockedRef.current) {
+      // Audio locked — store pending, show visual state, onEnd fires after unlock
+      pendingSpeakRef.current = { text, onEnd };
+      return;
+    }
+    pendingSpeakRef.current = null;
     Speech.speak(text, {
       language: language === "es" ? "es-ES" : "en-US",
       rate: 1.05,
@@ -65,6 +87,28 @@ export default function NovaScreen() {
       onError: () => { isBusyRef.current = false; setOrbState("wake"); onEnd?.(); },
     });
   }, [language]);
+
+  // ─── Unlock audio (MUST be called synchronously in a gesture handler) ───
+  const handleUnlockAudio = () => {
+    unlockWebAudio();                      // fires synchronously — unlocks policy
+    audioUnlockedRef.current = true;
+    setAudioUnlocked(true);
+    // If there's a queued utterance, speak it now
+    const pending = pendingSpeakRef.current;
+    pendingSpeakRef.current = null;
+    const greeting = isES ? "Audio activado. Di Hey NOVA para comenzar." : "Audio enabled. Say Hey NOVA to begin.";
+    const toSpeak  = pending ? pending.text : greeting;
+    const toEnd    = pending?.onEnd;
+    Speech.speak(toSpeak, {
+      language: language === "es" ? "es-ES" : "en-US",
+      rate: 1.05,
+      pitch: 1.0,
+      onDone:  () => { isBusyRef.current = false; setOrbState("wake"); toEnd?.(); },
+      onError: () => { isBusyRef.current = false; setOrbState("wake"); toEnd?.(); },
+    });
+    if (!pending) addMessage("nova", greeting);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
 
   // ─── Send a question to NOVA AI ─────────────────────────────────────────
   const sendQuestion = useCallback(async (q: string) => {
@@ -207,6 +251,23 @@ export default function NovaScreen() {
         </View>
       </View>
 
+      {/* ── Audio unlock banner (web only, one-time tap) ── */}
+      {!audioUnlocked && (
+        <Pressable
+          onPress={handleUnlockAudio}
+          style={({ pressed }) => [
+            styles.unlockBanner,
+            { backgroundColor: pressed ? c.primary + "ee" : c.primary, opacity: pressed ? 0.92 : 1 },
+          ]}
+        >
+          <Feather name="volume-2" size={16} color={c.primaryForeground} />
+          <Text style={[styles.unlockText, { color: c.primaryForeground }]}>
+            {isES ? "Toca aquí para activar el audio de NOVA" : "Tap here to enable NOVA's voice"}
+          </Text>
+          <Feather name="chevron-right" size={16} color={c.primaryForeground} />
+        </Pressable>
+      )}
+
       {/* Error banner */}
       {errorMsg ? (
         <View style={[styles.banner, { backgroundColor: "rgba(224,53,53,0.12)", borderColor: "rgba(224,53,53,0.3)" }]}>
@@ -345,6 +406,11 @@ const styles = StyleSheet.create({
   langBtn:     { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
   langBtnText: { fontSize: 12, fontWeight: "700" as const, letterSpacing: 1 },
   iconBtn:     { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  unlockBanner: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    margin: 10, marginBottom: 0, padding: 14, borderRadius: 12,
+  },
+  unlockText: { flex: 1, fontSize: 14, fontWeight: "600" as const },
   banner: {
     flexDirection: "row", alignItems: "flex-start", gap: 8,
     margin: 10, marginBottom: 0, padding: 11, borderRadius: 10, borderWidth: 1,

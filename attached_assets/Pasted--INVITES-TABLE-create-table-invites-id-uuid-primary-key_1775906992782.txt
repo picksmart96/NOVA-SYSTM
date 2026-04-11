@@ -1,0 +1,140 @@
+🔐 INVITES TABLE
+create table invites (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid,
+  role text,
+  code text unique,
+  used boolean default false,
+  created_at timestamp default now()
+);
+⚙️ BACKEND — GENERATE INVITE
+server/routes/createInvite.js
+import express from "express";
+import crypto from "crypto";
+
+const router = express.Router();
+
+router.post("/", async (req, res) => {
+  const { company_id, role } = req.body;
+
+  const code = crypto.randomBytes(4).toString("hex"); // ABC123 style
+
+  await supabase.from("invites").insert([
+    {
+      company_id,
+      role,
+      code,
+    },
+  ]);
+
+  const link = `${process.env.APP_URL}/invite/${role}/${code}`;
+
+  res.json({ link });
+});
+
+export default router;
+🔗 INVITE LINK PAGE
+src/pages/public/InvitePage.jsx
+import { useParams, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
+
+export default function InvitePage() {
+  const { role, code } = useParams();
+  const navigate = useNavigate();
+
+  const [valid, setValid] = useState(false);
+
+  useEffect(() => {
+    checkInvite();
+  }, []);
+
+  const checkInvite = async () => {
+    const { data } = await supabase
+      .from("invites")
+      .select("*")
+      .eq("code", code)
+      .single();
+
+    if (!data) {
+      alert("Invalid invite");
+      return;
+    }
+
+    // Save session
+    localStorage.setItem("userRole", data.role);
+    localStorage.setItem("companyId", data.company_id);
+
+    setValid(true);
+  };
+
+  if (!valid) return <div>Checking invite...</div>;
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white">
+      <h1 className="text-3xl font-bold text-yellow-400">
+        Welcome to PickSmart NOVA
+      </h1>
+
+      <p className="mt-4">
+        You're joining as: <strong>{role}</strong>
+      </p>
+
+      <div className="mt-6 space-y-3">
+        <button
+          onClick={() => navigate("/download")}
+          className="bg-yellow-400 text-black px-6 py-3 rounded-xl font-bold"
+        >
+          Download App
+        </button>
+
+        <button
+          onClick={() => navigate(getDashboard(role))}
+          className="border px-6 py-3 rounded-xl"
+        >
+          Continue in Browser
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function getDashboard(role) {
+  if (role === "owner") return "/supervisor-dashboard";
+  if (role === "supervisor") return "/supervisor-dashboard";
+  if (role === "trainer") return "/trainer-dashboard";
+  return "/training";
+}
+📱 DOWNLOAD PAGE
+src/pages/public/DownloadPage.jsx
+export default function DownloadPage() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white">
+      <h1 className="text-3xl font-bold text-yellow-400">
+        Download PickSmart NOVA
+      </h1>
+
+      <p className="mt-4 text-slate-300">
+        Install the app for the best voice experience.
+      </p>
+
+      <div className="mt-6 space-y-3">
+        <button className="bg-yellow-400 text-black px-6 py-3 rounded-xl">
+          Download for Windows
+        </button>
+
+        <button className="bg-yellow-400 text-black px-6 py-3 rounded-xl">
+          Download for Mobile
+        </button>
+
+        <button className="border px-6 py-3 rounded-xl">
+          Continue in Browser
+        </button>
+      </div>
+    </div>
+  );
+}
+🔗 ROUTES
+App.jsx
+<Route path="/invite/:role/:code" element={<InvitePage />} />
+<Route path="/download" element={<DownloadPage />} />
