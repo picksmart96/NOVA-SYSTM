@@ -1,0 +1,391 @@
+src/data/pickPathOptimizationLessonPage.js
+export const pickPathOptimizationLessonPage = {
+  id: "module-4-lesson-1",
+  moduleId: "module-4",
+  title: "Pick Path Optimization",
+  level: "Intermediate",
+  duration: "38 min",
+  steps: 5,
+  voiceEnabled: true,
+
+  hero: {
+    heading: "Pick Path Optimization",
+    subheading:
+      "Learn how to move smarter, reduce wasted time, and build a smoother picking rhythm from slot to slot.",
+  },
+
+  introVoice:
+    "Welcome to Pick Path Optimization. In this lesson, you will learn how strong selectors move efficiently, reduce wasted steps, and build a faster, smoother flow through the warehouse.",
+
+  sections: [
+    {
+      id: "what-is-pick-path",
+      title: "1. What Pick Path Optimization Really Means",
+      body: [
+        "Pick path optimization means moving through your work in the smartest and cleanest way possible.",
+        "It is not about running. It is about reducing wasted movement, wasted thinking, and wasted delay.",
+        "Strong selectors protect their pace by staying organized in how they approach each pick.",
+      ],
+      novaVoice:
+        "Pick path optimization is not reckless speed. It is smart movement, reduced waste, and better rhythm.",
+    },
+    {
+      id: "wasted-motion",
+      title: "2. Eliminate Wasted Motion",
+      body: [
+        "A lot of lost rate comes from small wasted actions that repeat all shift.",
+        "Examples include unnecessary pauses, walking extra steps, poor positioning, rechecking too late, and standing still after each pick.",
+        "When those small delays happen over and over, your pace drops hard.",
+      ],
+      novaVoice:
+        "Small wasted movements become big lost time. Remove extra steps, extra pauses, and extra hesitation.",
+      bullets: [
+        "Do not stop longer than needed after a pick.",
+        "Position yourself to work cleanly the first time.",
+        "Avoid repeated corrections caused by poor setup.",
+        "Protect your rhythm by removing wasted pauses.",
+      ],
+    },
+    {
+      id: "prepare-next-move",
+      title: "3. Prepare the Next Move Early",
+      body: [
+        "One of the biggest differences between average selectors and strong selectors is how early they prepare the next move.",
+        "While your hands are finishing one pick, your mind should already be tracking what comes next.",
+        "That preparation reduces hesitation and helps your pace stay stable.",
+      ],
+      novaVoice:
+        "Do not wait until one move is fully over to think again. Finish the current pick with your hands and start the next one with your mind.",
+      bullets: [
+        "Look ahead mentally while placing the current case.",
+        "Stay aware of what comes next.",
+        "Reduce hesitation between picks.",
+        "Keep your workflow connected instead of broken.",
+      ],
+    },
+    {
+      id: "body-positioning",
+      title: "4. Use Better Body and Equipment Positioning",
+      body: [
+        "Good movement is not only about speed. It is also about where you place your body and equipment before the work starts.",
+        "Bad positioning creates extra steps, awkward lifts, poor turns, and more fatigue.",
+        "Clean positioning helps you pick faster with less wasted effort.",
+      ],
+      novaVoice:
+        "Position early. Set your body and your jack up for the cleanest next move.",
+      bullets: [
+        "Approach the slot under control.",
+        "Reduce awkward reaching and turning.",
+        "Set the pallet jack up to support your next move.",
+        "Use your position to save time and protect energy.",
+      ],
+    },
+    {
+      id: "build-rhythm",
+      title: "5. Build a Repeatable Rhythm",
+      body: [
+        "The goal is not random speed. The goal is a repeatable pattern of clean movement.",
+        "When your path, timing, and mental preparation become consistent, your picking gets faster without feeling wild.",
+        "A strong rhythm keeps you accurate, reduces fatigue, and protects performance across the full shift.",
+      ],
+      novaVoice:
+        "Strong selectors build rhythm. Rhythm protects pace, reduces fatigue, and creates cleaner performance all shift long.",
+      bullets: [
+        "Stay smooth instead of rushed.",
+        "Protect consistency over random bursts of speed.",
+        "Build a repeatable movement pattern.",
+        "Let rhythm create faster performance naturally.",
+      ],
+    },
+  ],
+
+  quiz: {
+    passingScore: 80,
+    questions: [
+      {
+        id: "q1",
+        question: "What is pick path optimization mainly about?",
+        options: [
+          "Running faster than everyone else",
+          "Smart movement and reduced waste",
+          "Ignoring accuracy to gain speed",
+          "Taking longer paths",
+        ],
+        correctIndex: 1,
+      },
+      {
+        id: "q2",
+        question: "What is an example of wasted motion?",
+        options: [
+          "Preparing the next move early",
+          "Standing still too long after each pick",
+          "Good equipment positioning",
+          "Smooth movement",
+        ],
+        correctIndex: 1,
+      },
+      {
+        id: "q3",
+        question: "When should a selector start thinking about the next move?",
+        options: [
+          "Only after everything is finished",
+          "At break time",
+          "While finishing the current pick",
+          "Only when told to",
+        ],
+        correctIndex: 2,
+      },
+      {
+        id: "q4",
+        question: "Why is positioning important?",
+        options: [
+          "It makes the job look easier",
+          "It reduces awkward movement and wasted effort",
+          "It only matters for supervisors",
+          "It slows down the pick path",
+        ],
+        correctIndex: 1,
+      },
+      {
+        id: "q5",
+        question: "What does strong rhythm help create?",
+        options: [
+          "Random speed bursts",
+          "More hesitation",
+          "Cleaner, more repeatable performance",
+          "Less control",
+        ],
+        correctIndex: 2,
+      },
+    ],
+  },
+
+  completion: {
+    title: "Pick Path Optimization Completed",
+    message:
+      "Lesson complete. You now understand how to reduce wasted movement, prepare the next move earlier, and build a stronger picking rhythm.",
+    novaVoice:
+      "Lesson complete. Smart movement protects pace. Keep building rhythm, reducing waste, and moving with purpose.",
+  },
+};
+2) Create src/pages/training/PickPathOptimizationLessonPage.jsx
+import { useMemo, useState } from "react";
+import { pickPathOptimizationLessonPage as lesson } from "../../data/pickPathOptimizationLessonPage";
+
+export default function PickPathOptimizationLessonPage() {
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [submitted, setSubmitted] = useState(false);
+
+  const score = useMemo(() => {
+    const correctCount = lesson.quiz.questions.filter(
+      (q) => answers[q.id] === q.correctIndex
+    ).length;
+
+    return Math.round((correctCount / lesson.quiz.questions.length) * 100);
+  }, [answers]);
+
+  const passed = score >= lesson.quiz.passingScore;
+  const question = lesson.quiz.questions[currentQuestion];
+
+  const handleAnswer = (questionId, optionIndex) => {
+    if (submitted) return;
+    setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
+  };
+
+  const handleSubmitQuiz = () => {
+    setSubmitted(true);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 p-6 text-white">
+      <div className="mx-auto max-w-5xl space-y-8">
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-bold text-yellow-300">
+              {lesson.level}
+            </span>
+            <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-bold text-slate-300">
+              {lesson.duration}
+            </span>
+          </div>
+
+          <h1 className="mt-4 text-4xl font-black">{lesson.hero.heading}</h1>
+          <p className="mt-4 text-lg text-slate-300">{lesson.hero.subheading}</p>
+
+          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
+            <p className="text-sm font-bold uppercase tracking-wide text-yellow-300">
+              NOVA Intro Voice
+            </p>
+            <p className="mt-3 text-slate-200">{lesson.introVoice}</p>
+          </div>
+        </div>
+
+        {lesson.sections.map((section) => (
+          <div
+            key={section.id}
+            className="rounded-3xl border border-slate-800 bg-slate-900 p-8"
+          >
+            <h2 className="text-2xl font-bold">{section.title}</h2>
+
+            <div className="mt-5 space-y-3 text-slate-300">
+              {section.body.map((line, index) => (
+                <p key={index}>{line}</p>
+              ))}
+            </div>
+
+            {section.bullets ? (
+              <ul className="mt-5 list-disc space-y-2 pl-6 text-slate-300">
+                {section.bullets.map((item, index) => (
+                  <li key={index}>{item}</li>
+                ))}
+              </ul>
+            ) : null}
+
+            <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
+              <p className="text-sm font-bold uppercase tracking-wide text-yellow-300">
+                NOVA Voice
+              </p>
+              <p className="mt-3 text-slate-200">{section.novaVoice}</p>
+            </div>
+          </div>
+        ))}
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8">
+          <h2 className="text-3xl font-black">Lesson Test</h2>
+          <p className="mt-3 text-slate-300">
+            Pass {lesson.quiz.passingScore}% or higher to complete this lesson.
+          </p>
+
+          <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-950 p-6">
+            <p className="text-sm font-bold uppercase tracking-wide text-yellow-300">
+              Question {currentQuestion + 1} of {lesson.quiz.questions.length}
+            </p>
+
+            <h3 className="mt-4 text-xl font-bold">{question.question}</h3>
+
+            <div className="mt-6 space-y-3">
+              {question.options.map((option, optionIndex) => {
+                const selected = answers[question.id] === optionIndex;
+                const correct = submitted && question.correctIndex === optionIndex;
+                const wrongSelected =
+                  submitted && selected && question.correctIndex !== optionIndex;
+
+                return (
+                  <button
+                    key={optionIndex}
+                    onClick={() => handleAnswer(question.id, optionIndex)}
+                    className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
+                      correct
+                        ? "border-green-500 bg-green-500/10 text-green-200"
+                        : wrongSelected
+                        ? "border-red-500 bg-red-500/10 text-red-200"
+                        : selected
+                        ? "border-yellow-400 bg-yellow-500/10 text-yellow-200"
+                        : "border-slate-700 bg-slate-900 text-slate-200 hover:border-yellow-400"
+                    }`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                onClick={() =>
+                  setCurrentQuestion((prev) => Math.max(prev - 1, 0))
+                }
+                disabled={currentQuestion === 0}
+                className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold disabled:opacity-40"
+              >
+                Previous
+              </button>
+
+              <button
+                onClick={() =>
+                  setCurrentQuestion((prev) =>
+                    Math.min(prev + 1, lesson.quiz.questions.length - 1)
+                  )
+                }
+                disabled={currentQuestion === lesson.quiz.questions.length - 1}
+                className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold disabled:opacity-40"
+              >
+                Next
+              </button>
+
+              {!submitted ? (
+                <button
+                  onClick={handleSubmitQuiz}
+                  className="rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300"
+                >
+                  Submit Test
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {submitted ? (
+            <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-950 p-6">
+              <p className="text-sm font-bold uppercase tracking-wide text-yellow-300">
+                Results
+              </p>
+              <h3 className="mt-3 text-3xl font-black">
+                {score}% {passed ? "Passed" : "Needs Review"}
+              </h3>
+              <p className="mt-3 text-slate-300">{lesson.completion.message}</p>
+
+              <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <p className="text-sm font-bold uppercase tracking-wide text-yellow-300">
+                  NOVA Completion Voice
+                </p>
+                <p className="mt-3 text-slate-200">{lesson.completion.novaVoice}</p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+3) Add route in src/App.jsx
+import PickPathOptimizationLessonPage from "./pages/training/PickPathOptimizationLessonPage";
+
+<Route path="/training/module-4" element={<PickPathOptimizationLessonPage />} />
+4) Update Module 4 button in your training page
+
+Use this full button pattern:
+
+{module.id === 1 ? (
+  <button
+    onClick={() => navigate("/training/module-1")}
+    className="mt-6 w-full rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300"
+  >
+    Start NOVA Lesson
+  </button>
+) : module.id === 2 ? (
+  <button
+    onClick={() => navigate("/training/module-2")}
+    className="mt-6 w-full rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300"
+  >
+    Start NOVA Lesson
+  </button>
+) : module.id === 3 ? (
+  <button
+    onClick={() => navigate("/training/module-3")}
+    className="mt-6 w-full rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300"
+  >
+    Start NOVA Lesson
+  </button>
+) : module.id === 4 ? (
+  <button
+    onClick={() => navigate("/training/module-4")}
+    className="mt-6 w-full rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300"
+  >
+    Start NOVA Lesson
+  </button>
+) : (
+  <button className="mt-6 w-full rounded-2xl border border-slate-700 px-5 py-3 font-bold text-slate-300">
+    Start NOVA Lesson
+  </button>
+)}
