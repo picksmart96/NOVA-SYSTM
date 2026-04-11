@@ -32,10 +32,12 @@ export interface NovaDemoVoiceAgent {
   stopSpeaking: () => void;
   sendText: (text: string) => Promise<void>;
   speakMessage: (text: string) => void;
+  unlockAndSpeak: (text: string) => void;
   stateLabel: string;
   isListening: boolean;
   isSpeaking: boolean;
   isThinking: boolean;
+  ttsEnabled: boolean;
   lastHeard: string;
   lastReply: string;
   transcript: TranscriptEntry[];
@@ -64,6 +66,7 @@ export default function useNovaDemoVoiceAgent(): NovaDemoVoiceAgent {
   const [micPermission, setMicPermission] = useState<"unknown" | "granted" | "denied">("unknown");
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [showLeadPrompt, setShowLeadPrompt] = useState(false);
+  const [ttsEnabled, setTtsEnabled] = useState(false);
 
   const stateLabel = useMemo(() => {
     if (error) return "Error";
@@ -287,15 +290,36 @@ export default function useNovaDemoVoiceAgent(): NovaDemoVoiceAgent {
     };
   }, []);
 
-  // Public TTS-only method — no mic required
+  // Public TTS-only method — no mic required (requires prior unlock)
   const speakMessage = (text: string) => {
     interruptRef.current = false;
     speak(text);
   };
 
+  // Must be called directly from a user gesture (click/tap).
+  // Plays a silent utterance to unlock the browser's autoplay policy,
+  // then immediately speaks `text`. All future speak() calls will work.
+  const unlockAndSpeak = (text: string) => {
+    if (!("speechSynthesis" in window)) return;
+    // Cancel any pending queue first
+    window.speechSynthesis.cancel();
+    // Silent unlock utterance — must happen synchronously in the gesture handler
+    const silent = new SpeechSynthesisUtterance(" ");
+    silent.volume = 0;
+    silent.rate = 10; // finish instantly
+    silent.onend = () => {
+      // Now TTS is unlocked — speak the real message
+      interruptRef.current = false;
+      setTtsEnabled(true);
+      speak(text);
+    };
+    window.speechSynthesis.speak(silent);
+    setTtsEnabled(true);
+  };
+
   return {
-    initialize, destroy, stopSpeaking, sendText, speakMessage,
-    stateLabel, isListening, isSpeaking, isThinking,
+    initialize, destroy, stopSpeaking, sendText, speakMessage, unlockAndSpeak,
+    stateLabel, isListening, isSpeaking, isThinking, ttsEnabled,
     lastHeard, lastReply, transcript, error, micPermission,
     voiceSupported,
     language, setLanguage, showLeadPrompt, setShowLeadPrompt,

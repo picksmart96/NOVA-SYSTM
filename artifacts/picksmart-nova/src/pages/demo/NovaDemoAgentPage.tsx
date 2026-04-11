@@ -2,14 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import useNovaDemoVoiceAgent from "@/hooks/useNovaDemoVoiceAgent";
 import {
-  Mic, MicOff, VolumeX, Volume2, Globe, Send, Zap,
-  MessageSquare, Info, ChevronDown, ChevronUp,
+  Mic, MicOff, VolumeX, Volume2, Globe, Send,
+  Zap, Info, ChevronDown, ChevronUp,
 } from "lucide-react";
 
 const WELCOME_EN =
   "Hi, I'm NOVA — PickSmart Academy's public demo voice agent. I can answer any questions you have about warehouse training, selector coaching, safety, and performance improvement. What would you like to know?";
 const WELCOME_ES =
-  "Hola, soy NOVA — el agente de voz de demostración de PickSmart Academy. Puedo responder preguntas sobre capacitación de almacén, coaching de selectores, seguridad y mejora de rendimiento. ¿Qué te gustaría saber?";
+  "Hola, soy NOVA — el agente de voz de demostración de PickSmart Academy. Puedo responder preguntas sobre capacitación, coaching de selectores, seguridad y mejora de rendimiento. ¿Qué te gustaría saber?";
 
 const SUGGESTED = [
   "How does NOVA improve selector picking rates?",
@@ -25,9 +25,7 @@ export default function NovaDemoAgentPage() {
   const agent = useNovaDemoVoiceAgent();
 
   const [input, setInput] = useState("");
-  const [voiceMode, setVoiceMode] = useState(false);
   const [showSuggested, setShowSuggested] = useState(true);
-  const [welcomed, setWelcomed] = useState(false);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -36,21 +34,16 @@ export default function NovaDemoAgentPage() {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [agent.transcript]);
 
-  // Auto-speak welcome on first load (TTS only, no mic)
-  useEffect(() => {
-    if (welcomed) return;
-    const delay = setTimeout(() => {
-      const msg = agent.language === "es" ? WELCOME_ES : WELCOME_EN;
-      agent.speakMessage(msg);
-      setWelcomed(true);
-    }, 800);
-    return () => clearTimeout(delay);
-  }, [welcomed]);
-
   // Cleanup on unmount
   useEffect(() => {
     return () => { agent.destroy(); };
   }, []);
+
+  // ── Tap to Activate — must be called from a click handler (user gesture) ──
+  const handleActivate = () => {
+    const welcome = agent.language === "es" ? WELCOME_ES : WELCOME_EN;
+    agent.unlockAndSpeak(welcome);
+  };
 
   const handleSend = async () => {
     const text = input.trim();
@@ -75,28 +68,18 @@ export default function NovaDemoAgentPage() {
   };
 
   const startVoice = async () => {
-    setVoiceMode(true);
     await agent.initialize();
   };
 
-  const stopVoice = () => {
-    setVoiceMode(false);
-    agent.stopSpeaking();
-  };
-
-  const toggleLanguage = () => {
-    agent.setLanguage(agent.language === "en" ? "es" : "en");
-    setWelcomed(false); // re-trigger welcome in new language
-  };
-
-  // Orb ring color based on state
   const orbRing = agent.isSpeaking
-    ? "border-purple-400 shadow-[0_0_60px_rgba(168,85,247,0.5),0_0_120px_rgba(168,85,247,0.2)]"
+    ? "border-purple-400 shadow-[0_0_60px_rgba(168,85,247,0.5),0_0_120px_rgba(168,85,247,0.15)]"
     : agent.isListening
-    ? "border-yellow-400 shadow-[0_0_60px_rgba(250,204,21,0.5),0_0_120px_rgba(250,204,21,0.2)]"
+    ? "border-yellow-400 shadow-[0_0_60px_rgba(250,204,21,0.5),0_0_120px_rgba(250,204,21,0.15)]"
     : agent.isThinking
     ? "border-blue-400 shadow-[0_0_40px_rgba(96,165,250,0.4)] animate-pulse"
-    : "border-slate-700 shadow-none";
+    : agent.ttsEnabled
+    ? "border-green-700 shadow-[0_0_20px_rgba(34,197,94,0.15)]"
+    : "border-slate-700";
 
   const orbPulse = agent.isListening || agent.isSpeaking || agent.isThinking;
 
@@ -104,7 +87,7 @@ export default function NovaDemoAgentPage() {
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
 
       {/* ── Header ── */}
-      <header className="border-b border-slate-800/60 bg-slate-950/90 backdrop-blur sticky top-0 z-10">
+      <header className="border-b border-slate-800/60 bg-slate-950/90 backdrop-blur sticky top-0 z-20">
         <div className="mx-auto max-w-4xl px-5 py-4 flex items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2.5">
@@ -119,7 +102,7 @@ export default function NovaDemoAgentPage() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={toggleLanguage}
+              onClick={() => agent.setLanguage(agent.language === "en" ? "es" : "en")}
               className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-bold text-slate-300 hover:border-yellow-400 hover:text-yellow-400 transition"
             >
               <Globe className="h-3.5 w-3.5" />
@@ -135,16 +118,62 @@ export default function NovaDemoAgentPage() {
         </div>
       </header>
 
+      {/* ── ACTIVATE VOICE OVERLAY — shown until user taps ── */}
+      {!agent.ttsEnabled && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/95 backdrop-blur-sm px-6">
+          <div className="max-w-md w-full text-center space-y-8">
+            {/* Pulsing orb */}
+            <div className="relative mx-auto w-36 h-36">
+              <div className="absolute inset-0 rounded-full border-4 border-yellow-400/30 animate-ping" />
+              <div className="absolute inset-2 rounded-full border-4 border-yellow-400/20 animate-ping" style={{ animationDelay: "400ms" }} />
+              <div className="relative flex h-full w-full items-center justify-center rounded-full border-4 border-yellow-400 bg-slate-950 shadow-[0_0_60px_rgba(250,204,21,0.4)]">
+                <div className="text-center">
+                  <p className="text-3xl font-black text-white">NOVA</p>
+                  <p className="text-[10px] text-yellow-400 font-bold tracking-widest">VOICE AGENT</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h2 className="text-2xl font-black text-white mb-2">
+                {agent.language === "en" ? "Tap to hear NOVA speak" : "Toca para escuchar a NOVA"}
+              </h2>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                {agent.language === "en"
+                  ? "Browsers require a tap before playing audio. Tap the button below and NOVA will greet you out loud."
+                  : "Los navegadores requieren una interacción antes de reproducir audio. Toca el botón y NOVA te saludará en voz alta."}
+              </p>
+            </div>
+
+            <button
+              onClick={handleActivate}
+              className="w-full flex items-center justify-center gap-3 rounded-3xl bg-yellow-400 px-8 py-5 font-black text-slate-950 text-lg hover:bg-yellow-300 active:scale-95 transition shadow-[0_0_40px_rgba(250,204,21,0.3)]"
+            >
+              <Volume2 className="h-6 w-6" />
+              {agent.language === "en" ? "Activate NOVA Voice" : "Activar voz de NOVA"}
+            </button>
+
+            <button
+              onClick={() => {
+                // Skip voice — just unlock without speaking so UI loads
+                agent.unlockAndSpeak(" ");
+              }}
+              className="text-slate-600 text-sm hover:text-slate-400 transition underline"
+            >
+              {agent.language === "en" ? "Skip voice — text only" : "Sin voz — solo texto"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Main ── */}
       <main className="flex-1 mx-auto w-full max-w-4xl px-4 py-8 space-y-6">
 
         {/* NOVA orb + status */}
         <div className="flex flex-col items-center gap-5">
-          {/* Orb */}
           <div className="relative">
-            {/* Outer glow ring */}
             {orbPulse && (
-              <div className={`absolute inset-0 rounded-full border-4 ${orbRing} animate-ping opacity-25`} />
+              <div className={`absolute inset-0 rounded-full border-4 ${orbRing} animate-ping opacity-20`} />
             )}
             <div className={`relative flex h-32 w-32 items-center justify-center rounded-full border-4 bg-slate-950 transition-all duration-500 ${orbRing}`}>
               <div className="text-center">
@@ -156,7 +185,6 @@ export default function NovaDemoAgentPage() {
             </div>
           </div>
 
-          {/* Status text */}
           <div className="text-center">
             <p className="font-bold text-slate-200">
               {agent.isSpeaking
@@ -165,9 +193,7 @@ export default function NovaDemoAgentPage() {
                 ? "Listening — speak now"
                 : agent.isThinking
                 ? "NOVA is thinking…"
-                : agent.transcript.length === 0
-                ? "Ready — type below or try a suggestion"
-                : "Ready for your next question"}
+                : "Ready for your question"}
             </p>
             {agent.isSpeaking && (
               <button
@@ -179,42 +205,34 @@ export default function NovaDemoAgentPage() {
             )}
           </div>
 
-          {/* Voice conversation toggle */}
-          {agent.voiceSupported && !agent.isListening && !voiceMode && (
+          {/* Voice mic conversation toggle */}
+          {agent.voiceSupported && agent.ttsEnabled && !agent.isListening && (
             <button
               onClick={startVoice}
-              className="flex items-center gap-2.5 rounded-2xl bg-yellow-400 px-8 py-4 font-black text-slate-950 text-base hover:bg-yellow-300 active:scale-95 transition shadow-[0_0_30px_rgba(250,204,21,0.3)]"
+              className="flex items-center gap-2.5 rounded-2xl bg-yellow-400 px-8 py-4 font-black text-slate-950 text-base hover:bg-yellow-300 active:scale-95 transition shadow-[0_0_30px_rgba(250,204,21,0.25)]"
             >
               <Mic className="h-5 w-5" /> Start Voice Conversation
             </button>
           )}
           {agent.isListening && (
             <button
-              onClick={stopVoice}
+              onClick={agent.stopSpeaking}
               className="flex items-center gap-2.5 rounded-2xl bg-red-500 px-8 py-4 font-black text-white text-base hover:bg-red-400 active:scale-95 transition"
             >
-              <MicOff className="h-5 w-5" /> End Voice Session
+              <MicOff className="h-5 w-5" /> Stop Listening
             </button>
-          )}
-          {agent.voiceSupported && (
-            <p className="text-slate-600 text-xs text-center -mt-2">
-              {agent.isListening
-                ? "Speak clearly — NOVA will respond aloud"
-                : "Voice conversation — NOVA listens and speaks back"}
-            </p>
           )}
         </div>
 
         {/* ── Conversation panel ── */}
         <div className="rounded-3xl border border-slate-800 bg-slate-900 overflow-hidden">
-
           {/* Transcript */}
           <div className="overflow-y-auto px-5 py-5 space-y-3 max-h-[380px]">
             {agent.transcript.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-10 text-center">
                 <Volume2 className="h-10 w-10 text-slate-800" />
                 <p className="text-slate-600 text-sm">
-                  NOVA's replies appear here. Try a question below or use voice above.
+                  NOVA's replies appear here — and she'll speak them aloud.
                 </p>
               </div>
             ) : (
@@ -253,7 +271,7 @@ export default function NovaDemoAgentPage() {
             <div ref={transcriptEndRef} />
           </div>
 
-          {/* Suggested questions (collapsible) */}
+          {/* Suggested questions */}
           <div className="border-t border-slate-800">
             <button
               onClick={() => setShowSuggested((v) => !v)}
@@ -281,7 +299,6 @@ export default function NovaDemoAgentPage() {
           {/* Text input */}
           <div className="border-t border-slate-800 p-4">
             <div className="flex gap-3 items-center">
-              <MessageSquare className="h-4 w-4 text-slate-600 shrink-0" />
               <input
                 ref={inputRef}
                 type="text"
@@ -289,29 +306,29 @@ export default function NovaDemoAgentPage() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={agent.language === "es" ? "Escríbele a NOVA…" : "Type your question for NOVA…"}
-                disabled={agent.isThinking}
+                disabled={agent.isThinking || !agent.ttsEnabled}
                 className="flex-1 rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-yellow-400 placeholder:text-slate-600 disabled:opacity-50 transition"
               />
               <button
                 onClick={handleSend}
-                disabled={!input.trim() || agent.isThinking}
+                disabled={!input.trim() || agent.isThinking || !agent.ttsEnabled}
                 className="shrink-0 w-11 h-11 rounded-2xl bg-yellow-400 flex items-center justify-center text-slate-950 hover:bg-yellow-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Send className="h-4 w-4" />
               </button>
             </div>
-            <p className="text-slate-700 text-xs mt-2 pl-7">
+            <p className="text-slate-700 text-xs mt-2">
               Press Enter to send · NOVA speaks every reply aloud
             </p>
           </div>
         </div>
 
-        {/* Non-Chrome voice notice */}
-        {!agent.voiceSupported && (
+        {/* Non-Chrome voice input notice */}
+        {!agent.voiceSupported && agent.ttsEnabled && (
           <div className="rounded-2xl border border-slate-700 bg-slate-900/50 px-5 py-4 flex items-start gap-3 text-sm text-slate-400">
             <Info className="h-4 w-4 shrink-0 mt-0.5 text-slate-500" />
             <span>
-              <strong className="text-slate-300">Voice input</strong> requires Chrome or Edge. Text input works in all browsers — and NOVA will still speak replies aloud if your browser supports it.
+              <strong className="text-slate-300">Voice input</strong> requires Chrome or Edge. Text input works in all browsers — NOVA speaks every reply aloud.
             </span>
           </div>
         )}
@@ -332,7 +349,7 @@ export default function NovaDemoAgentPage() {
             </h3>
             <p className="mx-auto max-w-lg text-slate-300 text-sm leading-relaxed mb-5">
               Request company access and we'll show you how PickSmart Academy trains,
-              coaches, and improves performance for your entire warehouse team.
+              coaches, and improves performance for your entire team.
             </p>
             <div className="flex flex-wrap justify-center gap-3">
               <button
