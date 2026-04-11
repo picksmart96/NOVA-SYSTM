@@ -129,7 +129,7 @@ router.post("/invites/send", async (req, res) => {
 
     // Use the Gmail connector (Google-mail integration via Replit)
     const raw = buildRawMessage({
-      from: "PickSmart NOVA <me>",
+      from: "PickSmart NOVA <picksmart@picksmartacademy.net>",
       to: email,
       subject: `You've been invited to PickSmart NOVA as ${roleLabel}`,
       html,
