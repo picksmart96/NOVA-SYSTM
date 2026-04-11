@@ -740,8 +740,23 @@ export default function NovaHelpPage() {
   useEffect(() => { handleSafetyCheckInputRef.current   = handleSafetyCheckInput;  }, [handleSafetyCheckInput]);
   useEffect(() => { startSafetyCheckRef.current         = startSafetyCheck;        }, [startSafetyCheck]);
 
+  // ── TTS unlock helper — must be called synchronously inside a click/tap handler ──
+  const unlockTTS = () => {
+    if (!("speechSynthesis" in window)) return;
+    try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+    // A zero-content silent utterance triggers the browser's audio permission
+    // and keeps the audio context warm for all future async speechSynthesis.speak() calls
+    const silent = new SpeechSynthesisUtterance(" ");
+    silent.volume = 0;
+    silent.rate = 10;
+    window.speechSynthesis.speak(silent);
+  };
+
   // ── Session start ─────────────────────────────────────────────────────────
   const startSession = () => {
+    // Unlock TTS synchronously on this user gesture — keeps it warm for async calls
+    unlockTTS();
+
     sessionActiveRef.current = true;
     wakeModeRef.current = true;
     setSessionActive(true);
@@ -819,6 +834,8 @@ export default function NovaHelpPage() {
     e?.preventDefault();
     const q = textInput.trim();
     if (!q) return;
+    // Re-unlock TTS on every text submit (keeps audio context warm for async responses)
+    unlockTTS();
     if (!sessionActive) {
       sessionActiveRef.current = true;
       wakeModeRef.current = false;
