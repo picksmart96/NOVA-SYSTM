@@ -58,7 +58,7 @@ export default function PalletBuildingLessonPage() {
   const { startLesson, completeLesson } = useProgressStore();
 
   const [phase, setPhase] = useState<Phase>("intro");
-  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [currentSection, setCurrentSection] = useState(0);
   const [novaMessage, setNovaMessage] = useState(lesson.introVoice);
 
   const [currentQ, setCurrentQ] = useState(0);
@@ -93,32 +93,58 @@ export default function PalletBuildingLessonPage() {
     }
   }, [submitted]);
 
+  const totalSections = lesson.sections.length;
+  const sectionData = lesson.sections[currentSection] ?? lesson.sections[0];
+  const isLastSection = currentSection === totalSections - 1;
+
   const progressPercent =
-    phase === "intro" ? 0 : phase === "quiz" ? 100 : 50;
+    phase === "intro"
+      ? 0
+      : phase === "quiz"
+      ? 100
+      : Math.round(10 + ((currentSection + 1) / totalSections) * 80);
 
   const question = lesson.quiz.questions[currentQ];
 
-  function handleSectionSpeak(id: string, voice: string) {
-    stopSpeaking();
-    setActiveSection(id);
-    setNovaMessage(voice);
-    speak(voice, () => setActiveSection(null));
+  function speakSection(idx: number) {
+    const s = lesson.sections[idx];
+    setNovaMessage(s.novaVoice);
+    speak(s.novaVoice);
   }
 
   function handleStartLesson() {
     stopSpeaking();
+    setCurrentSection(0);
     setPhase("lesson");
-    const msg = "Lesson starting. Read each section carefully.";
-    setNovaMessage(msg);
-    speak(msg);
+    speakSection(0);
   }
 
-  function handleGoToQuiz() {
+  function handleNextSection() {
     stopSpeaking();
-    setPhase("quiz");
-    const msg = "Lesson complete. Time for the test. Pass eighty percent or higher to finish.";
-    setNovaMessage(msg);
-    speak(msg);
+    if (!isLastSection) {
+      const next = currentSection + 1;
+      setCurrentSection(next);
+      speakSection(next);
+    } else {
+      setPhase("quiz");
+      const msg = "Lesson complete. Time for the test. Pass eighty percent or higher to finish.";
+      setNovaMessage(msg);
+      speak(msg);
+    }
+  }
+
+  function handlePrevSection() {
+    if (currentSection > 0) {
+      stopSpeaking();
+      const prev = currentSection - 1;
+      setCurrentSection(prev);
+      speakSection(prev);
+    }
+  }
+
+  function handleReplaySection() {
+    stopSpeaking();
+    speakSection(currentSection);
   }
 
   function handleAnswer(qId: string, idx: number) {
@@ -220,63 +246,81 @@ export default function PalletBuildingLessonPage() {
         {/* ════ LESSON ═════════════════════════════════════════════════════════ */}
         {phase === "lesson" && (
           <>
-            {lesson.sections.map((section) => {
-              const isActive = activeSection === section.id;
-              return (
+            {/* Step dots */}
+            <div className="flex items-center gap-2">
+              {lesson.sections.map((_, i) => (
                 <div
-                  key={section.id}
-                  className={`rounded-3xl border bg-slate-900 p-8 transition-all duration-300 ${
-                    isActive ? "border-yellow-400/50 shadow-lg shadow-yellow-400/5" : "border-slate-800"
+                  key={i}
+                  className={`h-2 rounded-full transition-all duration-500 ${
+                    i === currentSection
+                      ? "flex-1 bg-yellow-400"
+                      : i < currentSection
+                      ? "w-5 bg-green-500"
+                      : "w-5 bg-slate-700"
                   }`}
-                >
-                  <div className="flex items-start justify-between gap-4 mb-5">
-                    <h2 className="text-2xl font-bold text-white">{section.title}</h2>
-                    <button
-                      onClick={() => handleSectionSpeak(section.id, section.novaVoice)}
-                      title="Play NOVA voice for this section"
-                      className={`shrink-0 p-2 rounded-xl border transition ${
-                        isActive
-                          ? "bg-yellow-400 border-yellow-400 text-slate-950"
-                          : "border-slate-700 text-slate-400 hover:border-yellow-400 hover:text-yellow-400"
-                      }`}
-                    >
-                      <Headphones className="h-4 w-4" />
-                    </button>
-                  </div>
+                />
+              ))}
+              <span className="text-xs text-slate-500 font-semibold whitespace-nowrap ml-1">
+                {currentSection + 1} / {totalSections}
+              </span>
+            </div>
 
-                  <div className="space-y-3 text-slate-300">
-                    {section.body.map((line, i) => (
-                      <p key={i} className="leading-relaxed">{line}</p>
-                    ))}
-                  </div>
+            {/* Active section card */}
+            <div className="rounded-3xl border border-yellow-400/30 bg-slate-900 p-8 shadow-lg shadow-yellow-400/5 transition-all duration-300">
+              <h2 className="text-2xl font-bold text-white mb-5">{sectionData.title}</h2>
 
-                  {section.bullets && (
-                    <ul className="mt-5 space-y-2 pl-1">
-                      {section.bullets.map((item, i) => (
-                        <li key={i} className="flex items-start gap-3 text-slate-300">
-                          <span className="mt-2 w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0" />
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+              <div className="space-y-3 text-slate-300">
+                {sectionData.body.map((line, i) => (
+                  <p key={i} className="leading-relaxed">{line}</p>
+                ))}
+              </div>
 
-                  <div className="mt-6 rounded-2xl border border-slate-700 bg-slate-950 p-5">
-                    <p className="text-xs font-bold uppercase tracking-widest text-yellow-400 mb-2">
-                      NOVA Voice
-                    </p>
-                    <p className="text-slate-200 italic leading-relaxed">"{section.novaVoice}"</p>
-                  </div>
+              {sectionData.bullets && (
+                <ul className="mt-5 space-y-2 pl-1">
+                  {sectionData.bullets.map((item, i) => (
+                    <li key={i} className="flex items-start gap-3 text-slate-300">
+                      <span className="mt-2 w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <div className="mt-6 rounded-2xl border border-yellow-400/20 bg-slate-950 p-5">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-bold uppercase tracking-widest text-yellow-400">NOVA Voice</p>
+                  <div className={`w-2 h-2 rounded-full ${isSpeaking ? "bg-yellow-400 animate-pulse" : "bg-slate-600"}`} />
                 </div>
-              );
-            })}
+                <p className="text-slate-200 italic leading-relaxed">"{sectionData.novaVoice}"</p>
+              </div>
+            </div>
 
-            <button
-              onClick={handleGoToQuiz}
-              className="w-full py-4 rounded-2xl bg-yellow-400 text-slate-950 font-black text-lg hover:bg-yellow-300 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-            >
-              Continue to Lesson Test <ChevronRight className="h-5 w-5" />
-            </button>
+            {/* Navigation */}
+            <div className="flex flex-wrap gap-3">
+              {currentSection > 0 && (
+                <button
+                  onClick={handlePrevSection}
+                  className="flex items-center gap-1.5 rounded-2xl border border-slate-700 px-5 py-3 font-semibold text-slate-300 hover:border-slate-500 transition"
+                >
+                  <ChevronLeft className="h-4 w-4" /> Back
+                </button>
+              )}
+
+              <button
+                onClick={handleReplaySection}
+                className="flex items-center gap-1.5 rounded-2xl border border-slate-700 px-5 py-3 font-semibold text-slate-400 hover:text-yellow-400 hover:border-yellow-400 transition"
+              >
+                <Headphones className="h-4 w-4" /> Replay NOVA
+              </button>
+
+              <button
+                onClick={handleNextSection}
+                className="ml-auto flex items-center gap-2 rounded-2xl bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300 transition-all active:scale-[0.98]"
+              >
+                {isLastSection ? "Continue to Test" : "Next Section"}
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </>
         )}
 
