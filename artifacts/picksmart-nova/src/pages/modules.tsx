@@ -143,6 +143,8 @@ export default function ModulesPage() {
                           navigate(
                             lesson.moduleId === "mod-1"
                               ? "/training/module-1"
+                              : lesson.moduleId === "mod-2"
+                              ? "/training/module-2"
                               : `/training/lesson/${lesson.moduleId}`
                           )
                         }
