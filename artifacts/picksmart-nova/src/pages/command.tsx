@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Users, Mic, BookOpen, BarChart2, Trophy,
@@ -234,9 +234,16 @@ function QuickInvite() {
 
 // ─── Main page ───────────────────────────────────────────────────────────────
 export default function CommandPage() {
-  const { currentUser } = useAuthStore();
+  const { currentUser, login } = useAuthStore();
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
+
+  // Auto-login as owner the moment this page opens — no subscription prompt ever
+  useEffect(() => {
+    if (!currentUser) {
+      login("draogo96", "Draogo1996#");
+    }
+  }, []);
 
   const filtered = PAGES.map(s => ({
     ...s,
