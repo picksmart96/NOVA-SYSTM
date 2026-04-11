@@ -1,11 +1,49 @@
 import { Router } from "express";
-import { Resend } from "resend";
 import QRCode from "qrcode";
 import { logger } from "../lib/logger";
+import { ReplitConnectors } from "@replit/connectors-sdk";
 
 const router = Router();
 
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+// Build a base64-encoded RFC 2822 email message for Gmail API
+function buildRawMessage({
+  to,
+  from,
+  subject,
+  html,
+}: {
+  to: string;
+  from: string;
+  subject: string;
+  html: string;
+}): string {
+  const boundary = `----=_Part_${Date.now()}`;
+  const lines = [
+    `From: ${from}`,
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    ``,
+    `--${boundary}`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    ``,
+    `You've been invited to PickSmart NOVA. Open the link to accept.`,
+    ``,
+    `--${boundary}`,
+    `Content-Type: text/html; charset="UTF-8"`,
+    ``,
+    html,
+    ``,
+    `--${boundary}--`,
+  ];
+  const raw = lines.join("\r\n");
+  return Buffer.from(raw)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
 
 router.post("/invites/send", async (req, res) => {
   const { email, name, role, inviteUrl } = req.body as {
@@ -20,21 +58,12 @@ router.post("/invites/send", async (req, res) => {
     return;
   }
 
-  if (!resend) {
-    res.status(503).json({
-      error: "Email service not configured",
-      detail: "RESEND_API_KEY is not set. Add it to your environment secrets.",
-    });
-    return;
-  }
-
   try {
     const qrDataUrl = await QRCode.toDataURL(inviteUrl, {
       width: 200,
       margin: 2,
       color: { dark: "#0d1118", light: "#ffffff" },
     });
-    const qrBase64 = qrDataUrl.replace(/^data:image\/png;base64,/, "");
 
     const roleLabel = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
     const appUrl = process.env.APP_URL ?? "https://nova-warehouse-control.replit.app";
@@ -62,7 +91,7 @@ router.post("/invites/send", async (req, res) => {
     .divider { border: none; border-top: 1px solid #252d3d; margin: 28px 0; }
     .qr-section { text-align: center; margin: 24px 0; }
     .qr-section p { font-size: 13px; color: #7d8fa0; margin-bottom: 14px; }
-    .qr-img { border-radius: 12px; border: 1px solid #252d3d; }
+    .qr-img { border-radius: 12px; border: 1px solid #252d3d; max-width: 200px; }
     .link-box { background: #141a26; border: 1px solid #252d3d; border-radius: 10px; padding: 12px 16px; word-break: break-all; font-size: 12px; color: #7d8fa0; font-family: monospace; }
     .footer { background: #141a26; padding: 24px 40px; text-align: center; border-top: 1px solid #252d3d; }
     .footer p { font-size: 12px; color: #4a5568; margin: 0; }
@@ -82,7 +111,7 @@ router.post("/invites/send", async (req, res) => {
       <hr class="divider" />
       <div class="qr-section">
         <p>Or scan this QR code with your phone to open on mobile:</p>
-        <img src="cid:qrcode" alt="Invite QR Code" width="200" height="200" class="qr-img" />
+        <img src="${qrDataUrl}" alt="Invite QR Code" width="200" height="200" class="qr-img" />
       </div>
       <hr class="divider" />
       <p style="font-size:13px;">If the button doesn't work, copy and paste this link:</p>
@@ -96,25 +125,32 @@ router.post("/invites/send", async (req, res) => {
 </body>
 </html>`;
 
-    const fromDomain = process.env.RESEND_FROM_EMAIL ?? "noreply@picksmart.academy";
+    const connectors = new ReplitConnectors();
 
-    const result = await resend.emails.send({
-      from: `PickSmart NOVA <${fromDomain}>`,
+    // Use the Gmail connector (Google-mail integration via Replit)
+    const raw = buildRawMessage({
+      from: "PickSmart NOVA <me>",
       to: email,
       subject: `You've been invited to PickSmart NOVA as ${roleLabel}`,
       html,
-      attachments: [
-        {
-          filename: "invite-qr.png",
-          content: qrBase64,
-          content_type: "image/png",
-          content_id: "qrcode",
-        },
-      ],
     });
 
-    logger.info({ email, role, id: result.data?.id }, "Invite email sent");
-    res.json({ ok: true, emailId: result.data?.id });
+    const gmailRes = await connectors.proxy("google-mail", "/gmail/v1/users/me/messages/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw }),
+    });
+
+    if (!gmailRes.ok) {
+      const errText = await gmailRes.text();
+      logger.error({ status: gmailRes.status, errText }, "Gmail send failed");
+      res.status(500).json({ error: "Failed to send email", detail: errText });
+      return;
+    }
+
+    const data = await gmailRes.json();
+    logger.info({ email, role, id: data.id }, "Invite email sent via Gmail");
+    res.json({ ok: true, emailId: data.id });
   } catch (err) {
     logger.error({ err }, "Failed to send invite email");
     res.status(500).json({ error: "Failed to send email", detail: String(err) });
