@@ -61,10 +61,6 @@ export function useRoleNav(): NavLink[] {
 
   links.push({ href: "/nova-help", label: t("nav.novaHelp"), group: "nova" });
 
-  if (isOwner) {
-    links.push({ href: "/owner", label: "Users & Access", group: "owner" });
-  }
-
   links.push(
     { href: "/mistakes", label: t("nav.commonMistakes"), group: "public" },
     { href: "/progress", label: t("nav.myProgress"), group: "public" },
