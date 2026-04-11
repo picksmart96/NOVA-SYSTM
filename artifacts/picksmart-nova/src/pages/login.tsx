@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useAuthStore } from "@/lib/authStore";
 import type { AuthRole } from "@/lib/authStore";
 import { Activity, Eye, EyeOff, Lock } from "lucide-react";
@@ -9,7 +9,7 @@ const ROLE_HOME: Record<AuthRole, string> = {
   trainer: "/trainer-portal",
   supervisor: "/supervisor",
   manager: "/supervisor",
-  owner: "/users-access",
+  owner: "/command",
 };
 
 export default function LoginPage() {
@@ -88,7 +88,14 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm text-slate-400 mb-2">Password</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm text-slate-400">Password</label>
+                <Link href="/forgot">
+                  <span className="text-xs text-yellow-400 hover:text-yellow-300 transition cursor-pointer">
+                    Forgot password?
+                  </span>
+                </Link>
+              </div>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
@@ -116,6 +123,15 @@ export default function LoginPage() {
               {loading ? "Signing in…" : "Sign in"}
             </button>
           </form>
+
+          <div className="mt-5 pt-5 border-t border-slate-800 flex items-center justify-center gap-1 text-sm text-slate-500">
+            Can't sign in?
+            <Link href="/forgot">
+              <span className="text-slate-400 hover:text-yellow-400 transition cursor-pointer ml-1">
+                Recover your username or password →
+              </span>
+            </Link>
+          </div>
         </div>
 
         <p className="mt-6 text-center text-slate-600 text-sm">

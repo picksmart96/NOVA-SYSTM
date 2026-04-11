@@ -20,6 +20,7 @@ export interface AuthAccount {
   username: string;
   password: string;
   fullName: string;
+  email?: string;
   role: AuthRole;
   status: "active" | "inactive" | "banned";
   subscriptionPlan: "owner" | "personal" | "company" | null;
@@ -63,6 +64,8 @@ interface AuthState {
   addInvite: (data: { fullName: string; email: string; role: AuthRole; warehouseId?: string | null; warehouseSlug?: string | null }) => string;
   acceptInvite: (token: string, username: string, password: string) => boolean;
   getInvite: (token: string) => PendingInvite | undefined;
+  getUserByEmail: (email: string) => AuthAccount | undefined;
+  resetPassword: (email: string, newPassword: string) => boolean;
 }
 
 const MASTER_ACCOUNT: AuthAccount = {
@@ -288,6 +291,7 @@ export const useAuthStore = create<AuthState>()(
               username,
               password,
               fullName: invite.fullName,
+              email: invite.email,
               role: invite.role,
               status: "active",
               subscriptionPlan: "company" as const,
@@ -299,6 +303,23 @@ export const useAuthStore = create<AuthState>()(
           ],
           // Remove from pending list if present (cosmetic — link stays valid)
           pendingInvites: state.pendingInvites.filter((i) => i.token !== token),
+        }));
+        return true;
+      },
+
+      getUserByEmail: (email) => {
+        const lower = email.toLowerCase();
+        return get().accounts.find((a) => a.email?.toLowerCase() === lower);
+      },
+
+      resetPassword: (email, newPassword) => {
+        const lower = email.toLowerCase();
+        const account = get().accounts.find((a) => a.email?.toLowerCase() === lower);
+        if (!account) return false;
+        set((state) => ({
+          accounts: state.accounts.map((a) =>
+            a.email?.toLowerCase() === lower ? { ...a, password: newPassword } : a
+          ),
         }));
         return true;
       },

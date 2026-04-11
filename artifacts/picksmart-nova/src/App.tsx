@@ -44,6 +44,7 @@ import LoginPage from "@/pages/login";
 import InvitePage from "@/pages/invite";
 import DownloadPage from "@/pages/download";
 import CommandPage from "@/pages/command";
+import ForgotPage from "@/pages/forgot";
 import LockScreen from "@/components/LockScreen";
 import OwnerGate from "@/components/OwnerGate";
 import { useAuthStore } from "@/lib/authStore";
@@ -138,6 +139,9 @@ function Router() {
       </Route>
       <Route path="/invite/:token">
         <InvitePage />
+      </Route>
+      <Route path="/forgot">
+        <ForgotPage />
       </Route>
       <Route path="/download">
         <DownloadPage />
