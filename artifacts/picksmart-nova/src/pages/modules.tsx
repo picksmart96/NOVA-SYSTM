@@ -139,7 +139,13 @@ export default function ModulesPage() {
                       </DemoLockedAction>
                     ) : (
                       <LockedAction
-                        onAllowedClick={() => navigate(`/training/lesson/${lesson.moduleId}`)}
+                        onAllowedClick={() =>
+                          navigate(
+                            lesson.moduleId === "mod-1"
+                              ? "/training/module-1"
+                              : `/training/lesson/${lesson.moduleId}`
+                          )
+                        }
                         className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl bg-yellow-400 text-slate-950 font-black hover:bg-yellow-300 transition-all active:scale-[0.98] cursor-pointer select-none"
                       >
                         <Headphones className="h-4 w-4" />

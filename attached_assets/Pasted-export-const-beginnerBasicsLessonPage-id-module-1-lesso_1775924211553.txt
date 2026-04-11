@@ -1,0 +1,194 @@
+export const beginnerBasicsLessonPage = {
+  id: "module-1-lesson-1",
+  moduleId: "module-1",
+  title: "Beginner Basics",
+  level: "Beginner",
+  duration: "25 min",
+  voiceEnabled: true,
+  badge: "FREE",
+
+  hero: {
+    heading: "Beginner Basics",
+    subheading:
+      "Your first foundation class for warehouse order selecting. Learn how to think, move, and build strong habits from day one.",
+  },
+
+  introVoice:
+    "Welcome to Beginner Basics. You do not need to be perfect today. You need the right foundation. In this lesson, I will show you how to think, move, and work like a strong selector.",
+
+  sections: [
+    {
+      id: "welcome",
+      title: "1. Welcome to the Job",
+      body: [
+        "This lesson is your starting point.",
+        "The best selectors are not just fast. They are accurate, safe, organized, and consistent.",
+        "You are not here to be perfect today. You are here to build the right foundation.",
+      ],
+      novaVoice:
+        "Welcome. The goal is not speed first. The goal is foundation. Accuracy and safety come first. Strong habits create strong performance.",
+    },
+    {
+      id: "what-is-selector",
+      title: "2. What a Selector Really Does",
+      body: [
+        "A selector builds orders correctly, safely, and efficiently.",
+        "Every pick includes finding the location, confirming the item, pulling the quantity, and building the pallet.",
+        "This is decision-making while moving.",
+      ],
+      novaVoice:
+        "A selector is not just moving cases. A selector is making correct decisions while moving. Every pick affects speed, accuracy, pallet quality, and safety.",
+    },
+    {
+      id: "five-rules",
+      title: "3. The 5 Beginner Rules",
+      body: [
+        "Rule 1: Accuracy before speed.",
+        "Rule 2: Build your pallet from the bottom up.",
+        "Rule 3: Move with purpose.",
+        "Rule 4: Think one step ahead.",
+        "Rule 5: Safety is part of performance.",
+      ],
+      novaVoice:
+        "First be clean, then be fast. Your first layer decides your pallet strength. Do not move rushed. Move with purpose. Finish this pick with your hands. Start the next pick with your mind. Safe work is strong work.",
+      bullets: [
+        "Mistakes slow you down more than moving slower.",
+        "A strong base creates a strong pallet.",
+        "Avoid unnecessary pauses.",
+        "Prepare for the next move while working.",
+        "Safe selectors perform better long term.",
+      ],
+    },
+    {
+      id: "mindset",
+      title: "4. How to Think During a Shift",
+      body: [
+        "Beginners struggle when they try to be fast too early.",
+        "Follow this order: learn the flow, stay accurate, build rhythm, then increase speed naturally.",
+        "Stay calm. Stay focused. Keep moving.",
+      ],
+      novaVoice:
+        "Your goal is not instant speed. Your goal is calm accuracy, strong rhythm, and steady improvement.",
+      bullets: [
+        "I need to stay clean and keep moving.",
+        "I am still learning the flow.",
+        "Fix mistakes and continue.",
+      ],
+    },
+    {
+      id: "confidence",
+      title: "5. Confidence and Progress",
+      body: [
+        "In your first week, success means learning the process, improving daily, building confidence, and reducing mistakes.",
+        "You are building, not proving.",
+        "Every strong selector started where you are now.",
+      ],
+      novaVoice:
+        "You are not behind. You are building. Stay accurate, stay safe, and keep improving.",
+    },
+  ],
+
+  quiz: {
+    passingScore: 80,
+    questions: [
+      {
+        id: "q1",
+        question: "What should a beginner focus on first?",
+        options: [
+          "Speed only",
+          "Accuracy and safety",
+          "Competing with others",
+          "Moving fast",
+        ],
+        correctIndex: 1,
+      },
+      {
+        id: "q2",
+        question: "Why is the base of a pallet important?",
+        options: [
+          "It does not matter",
+          "Only for looks",
+          "It supports the entire pallet",
+          "Only for light items",
+        ],
+        correctIndex: 2,
+      },
+      {
+        id: "q3",
+        question: "What does move with purpose mean?",
+        options: [
+          "Run all shift",
+          "Stop often",
+          "Stay active without wasting time",
+          "Rush everything",
+        ],
+        correctIndex: 2,
+      },
+      {
+        id: "q4",
+        question: "What should your mind do during a pick?",
+        options: [
+          "Stop thinking",
+          "Prepare the next move",
+          "Focus only on speed",
+          "Wait for help",
+        ],
+        correctIndex: 1,
+      },
+      {
+        id: "q5",
+        question: "What is success in week one?",
+        options: [
+          "Be the fastest",
+          "Make no mistakes ever",
+          "Learn and improve",
+          "Skip the basics",
+        ],
+        correctIndex: 2,
+      },
+    ],
+  },
+
+  completion: {
+    title: "Beginner Basics Completed",
+    message:
+      "Lesson complete. You now understand the beginner foundation for selecting. Keep building step by step.",
+    novaVoice:
+      "Lesson complete. Strong start. You now understand the beginner foundation. Keep building.",
+  },
+};
+If your page loads lessons by module ID
+
+Use it like this for Module 1 only:
+
+import { beginnerBasicsLessonPage } from "./beginnerBasicsLessonPage";
+
+export const lessonPagesByModule = {
+  "module-1": beginnerBasicsLessonPage,
+};
+If you want a single React page instead
+
+Use this:
+
+import { beginnerBasicsLessonPage as lesson } from "../data/beginnerBasicsLessonPage";
+
+export default function BeginnerBasicsPage() {
+  return (
+    <div className="min-h-screen bg-slate-950 text-white p-6">
+      <div className="max-w-4xl mx-auto space-y-8">
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8">
+          <p className="text-yellow-400 text-sm font-semibold">{lesson.level} · {lesson.badge}</p>
+          <h1 className="text-4xl font-black mt-2">{lesson.hero.heading}</h1>
+          <p className="text-slate-300 mt-4">{lesson.hero.subheading}</p>
+        </div>
+
+        {lesson.sections.map((section) => (
+          <div key={section.id} className="rounded-3xl border border-slate-800 bg-slate-900 p-8">
+            <h2 className="text-2xl font-bold">{section.title}</h2>
+            <div className="mt-4 space-y-3 text-slate-300">
+              {section.body.map((line, i) => (
+                <p key={i}>{line}</p>
+              ))}
+            </div>
+
+            {section.bullets ? (

@@ -1,0 +1,374 @@
+export const beginnerBasicsLessonPage = {
+  id: "module-1-lesson-1",
+  moduleId: "module-1",
+  title: "Beginner Basics",
+  level: "Beginner",
+  duration: "25 min",
+  steps: 5,
+  voiceEnabled: true,
+  badge: "FREE",
+
+  hero: {
+    heading: "Beginner Basics",
+    subheading:
+      "Your first foundation class for warehouse order selecting. Learn how to think, move, and build strong habits from day one.",
+  },
+
+  introVoice:
+    "Welcome to Beginner Basics. You do not need to be perfect today. You need the right foundation. In this lesson, I will show you how to think, move, and work like a strong selector.",
+
+  sections: [
+    {
+      id: "welcome",
+      title: "1. Welcome to the Job",
+      body: [
+        "This lesson is your starting point.",
+        "The best selectors are not just fast. They are accurate, safe, organized, and consistent.",
+        "You are not here to be perfect today. You are here to build the right foundation.",
+      ],
+      novaVoice:
+        "Welcome. The goal is not speed first. The goal is foundation. Accuracy and safety come first. Strong habits create strong performance.",
+    },
+    {
+      id: "what-is-selector",
+      title: "2. What a Selector Really Does",
+      body: [
+        "A selector builds orders correctly, safely, and efficiently.",
+        "Every pick includes finding the location, confirming the item, pulling the quantity, and building the pallet.",
+        "This is decision-making while moving.",
+      ],
+      novaVoice:
+        "A selector is not just moving cases. A selector is making correct decisions while moving. Every pick affects speed, accuracy, pallet quality, and safety.",
+    },
+    {
+      id: "five-rules",
+      title: "3. The 5 Beginner Rules",
+      body: [
+        "Rule 1: Accuracy before speed.",
+        "Rule 2: Build your pallet from the bottom up.",
+        "Rule 3: Move with purpose.",
+        "Rule 4: Think one step ahead.",
+        "Rule 5: Safety is part of performance.",
+      ],
+      novaVoice:
+        "First be clean, then be fast. Your first layer decides your pallet strength. Do not move rushed. Move with purpose. Finish this pick with your hands. Start the next pick with your mind. Safe work is strong work.",
+      bullets: [
+        "Mistakes slow you down more than moving slower.",
+        "A strong base creates a strong pallet.",
+        "Avoid unnecessary pauses.",
+        "Prepare for the next move while working.",
+        "Safe selectors perform better long term.",
+      ],
+    },
+    {
+      id: "mindset",
+      title: "4. How to Think During a Shift",
+      body: [
+        "Beginners struggle when they try to be fast too early.",
+        "Follow this order: learn the flow, stay accurate, build rhythm, then increase speed naturally.",
+        "Stay calm. Stay focused. Keep moving.",
+      ],
+      novaVoice:
+        "Your goal is not instant speed. Your goal is calm accuracy, strong rhythm, and steady improvement.",
+      bullets: [
+        "I need to stay clean and keep moving.",
+        "I am still learning the flow.",
+        "Fix mistakes and continue.",
+      ],
+    },
+    {
+      id: "confidence",
+      title: "5. Confidence and Progress",
+      body: [
+        "In your first week, success means learning the process, improving daily, building confidence, and reducing mistakes.",
+        "You are building, not proving.",
+        "Every strong selector started where you are now.",
+      ],
+      novaVoice:
+        "You are not behind. You are building. Stay accurate, stay safe, and keep improving.",
+    },
+  ],
+
+  quiz: {
+    passingScore: 80,
+    questions: [
+      {
+        id: "q1",
+        question: "What should a beginner focus on first?",
+        options: [
+          "Speed only",
+          "Accuracy and safety",
+          "Competing with others",
+          "Moving fast",
+        ],
+        correctIndex: 1,
+      },
+      {
+        id: "q2",
+        question: "Why is the base of a pallet important?",
+        options: [
+          "It does not matter",
+          "Only for looks",
+          "It supports the entire pallet",
+          "Only for light items",
+        ],
+        correctIndex: 2,
+      },
+      {
+        id: "q3",
+        question: "What does move with purpose mean?",
+        options: [
+          "Run all shift",
+          "Stop often",
+          "Stay active without wasting time",
+          "Rush everything",
+        ],
+        correctIndex: 2,
+      },
+      {
+        id: "q4",
+        question: "What should your mind do during a pick?",
+        options: [
+          "Stop thinking",
+          "Prepare the next move",
+          "Focus only on speed",
+          "Wait for help",
+        ],
+        correctIndex: 1,
+      },
+      {
+        id: "q5",
+        question: "What is success in week one?",
+        options: [
+          "Be the fastest",
+          "Make no mistakes ever",
+          "Learn and improve",
+          "Skip the basics",
+        ],
+        correctIndex: 2,
+      },
+    ],
+  },
+
+  completion: {
+    title: "Beginner Basics Completed",
+    message:
+      "Lesson complete. You now understand the beginner foundation for selecting. Keep building step by step.",
+    novaVoice:
+      "Lesson complete. Strong start. You now understand the beginner foundation. Keep building.",
+  },
+};
+2) Create src/pages/training/BeginnerBasicsLessonPage.jsx
+import { useMemo, useState } from "react";
+import { beginnerBasicsLessonPage as lesson } from "../../data/beginnerBasicsLessonPage";
+
+export default function BeginnerBasicsLessonPage() {
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [submitted, setSubmitted] = useState(false);
+
+  const score = useMemo(() => {
+    const correctCount = lesson.quiz.questions.filter(
+      (q) => answers[q.id] === q.correctIndex
+    ).length;
+
+    return Math.round((correctCount / lesson.quiz.questions.length) * 100);
+  }, [answers]);
+
+  const passed = score >= lesson.quiz.passingScore;
+
+  const handleAnswer = (questionId, optionIndex) => {
+    if (submitted) return;
+    setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
+  };
+
+  const handleSubmitQuiz = () => {
+    setSubmitted(true);
+  };
+
+  const question = lesson.quiz.questions[currentQuestion];
+
+  return (
+    <div className="min-h-screen bg-slate-950 p-6 text-white">
+      <div className="mx-auto max-w-5xl space-y-8">
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-bold text-yellow-300">
+              {lesson.level}
+            </span>
+            <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs font-bold text-green-300">
+              {lesson.badge}
+            </span>
+            <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-bold text-slate-300">
+              {lesson.duration}
+            </span>
+          </div>
+
+          <h1 className="mt-4 text-4xl font-black">{lesson.hero.heading}</h1>
+          <p className="mt-4 text-lg text-slate-300">{lesson.hero.subheading}</p>
+
+          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
+            <p className="text-sm font-bold uppercase tracking-wide text-yellow-300">
+              NOVA Intro Voice
+            </p>
+            <p className="mt-3 text-slate-200">{lesson.introVoice}</p>
+          </div>
+        </div>
+
+        {lesson.sections.map((section) => (
+          <div
+            key={section.id}
+            className="rounded-3xl border border-slate-800 bg-slate-900 p-8"
+          >
+            <h2 className="text-2xl font-bold">{section.title}</h2>
+
+            <div className="mt-5 space-y-3 text-slate-300">
+              {section.body.map((line, index) => (
+                <p key={index}>{line}</p>
+              ))}
+            </div>
+
+            {section.bullets ? (
+              <ul className="mt-5 list-disc space-y-2 pl-6 text-slate-300">
+                {section.bullets.map((item, index) => (
+                  <li key={index}>{item}</li>
+                ))}
+              </ul>
+            ) : null}
+
+            <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
+              <p className="text-sm font-bold uppercase tracking-wide text-yellow-300">
+                NOVA Voice
+              </p>
+              <p className="mt-3 text-slate-200">{section.novaVoice}</p>
+            </div>
+          </div>
+        ))}
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8">
+          <h2 className="text-3xl font-black">Lesson Test</h2>
+          <p className="mt-3 text-slate-300">
+            Pass {lesson.quiz.passingScore}% or higher to complete this lesson.
+          </p>
+
+          <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-950 p-6">
+            <p className="text-sm font-bold uppercase tracking-wide text-yellow-300">
+              Question {currentQuestion + 1} of {lesson.quiz.questions.length}
+            </p>
+
+            <h3 className="mt-4 text-xl font-bold">{question.question}</h3>
+
+            <div className="mt-6 space-y-3">
+              {question.options.map((option, optionIndex) => {
+                const selected = answers[question.id] === optionIndex;
+                const correct = submitted && question.correctIndex === optionIndex;
+                const wrongSelected =
+                  submitted && selected && question.correctIndex !== optionIndex;
+
+                return (
+                  <button
+                    key={optionIndex}
+                    onClick={() => handleAnswer(question.id, optionIndex)}
+                    className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
+                      correct
+                        ? "border-green-500 bg-green-500/10 text-green-200"
+                        : wrongSelected
+                        ? "border-red-500 bg-red-500/10 text-red-200"
+                        : selected
+                        ? "border-yellow-400 bg-yellow-500/10 text-yellow-200"
+                        : "border-slate-700 bg-slate-900 text-slate-200 hover:border-yellow-400"
+                    }`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                onClick={() =>
+                  setCurrentQuestion((prev) => Math.max(prev - 1, 0))
+                }
+                disabled={currentQuestion === 0}
+                className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold disabled:opacity-40"
+              >
+                Previous
+              </button>
+
+              <button
+                onClick={() =>
+                  setCurrentQuestion((prev) =>
+                    Math.min(prev + 1, lesson.quiz.questions.length - 1)
+                  )
+                }
+                disabled={currentQuestion === lesson.quiz.questions.length - 1}
+                className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold disabled:opacity-40"
+              >
+                Next
+              </button>
+
+              {!submitted ? (
+                <button
+                  onClick={handleSubmitQuiz}
+                  className="rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300"
+                >
+                  Submit Test
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {submitted ? (
+            <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-950 p-6">
+              <p className="text-sm font-bold uppercase tracking-wide text-yellow-300">
+                Results
+              </p>
+              <h3 className="mt-3 text-3xl font-black">
+                {score}% {passed ? "Passed" : "Needs Review"}
+              </h3>
+              <p className="mt-3 text-slate-300">{lesson.completion.message}</p>
+
+              <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <p className="text-sm font-bold uppercase tracking-wide text-yellow-300">
+                  NOVA Completion Voice
+                </p>
+                <p className="mt-3 text-slate-200">{lesson.completion.novaVoice}</p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+3) Update your module 1 button to go only to this page
+
+In your training page, make Module 1 route here:
+
+onClick={() => navigate("/training/module-1")}
+
+If you already use a button, replace only the Module 1 action with that route.
+
+4) Add this route in src/App.jsx
+import BeginnerBasicsLessonPage from "./pages/training/BeginnerBasicsLessonPage";
+
+<Route path="/training/module-1" element={<BeginnerBasicsLessonPage />} />
+5) If you want Module 1 card hardwired right now
+
+Use this exact card button logic inside your training module list:
+
+{module.id === 1 ? (
+  <button
+    onClick={() => navigate("/training/module-1")}
+    className="mt-6 w-full rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 hover:bg-yellow-300"
+  >
+    Start NOVA Lesson
+  </button>
+) : (
+  <button
+    className="mt-6 w-full rounded-2xl border border-slate-700 px-5 py-3 font-bold text-slate-300"
+  >
+    Start NOVA Lesson
+  </button>
+)}

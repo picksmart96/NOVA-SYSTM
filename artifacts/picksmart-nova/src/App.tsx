@@ -12,6 +12,7 @@ import HomePage from "@/pages/home";
 import ModulesPage from "@/pages/modules";
 import LessonSessionPage from "@/pages/lesson-session";
 import ModuleDetailPage from "@/pages/module-detail";
+import BeginnerBasicsLessonPage from "@/pages/BeginnerBasicsLessonPage";
 import CommonMistakesPage from "@/pages/mistakes";
 import MistakeCoachingPage from "@/pages/mistake-coaching";
 import ProgressPage from "@/pages/progress";
@@ -171,6 +172,9 @@ function Router() {
       {/* ── Gated — requires active subscription to view any content ── */}
       <Route path="/training">
         <Layout><GatedRoute><ModulesPage /></GatedRoute></Layout>
+      </Route>
+      <Route path="/training/module-1">
+        <GatedRoute><BeginnerBasicsLessonPage /></GatedRoute>
       </Route>
       <Route path="/training/lesson/:id">
         <GatedRoute><LessonSessionPage /></GatedRoute>
