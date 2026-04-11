@@ -20,6 +20,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "book", selected: "book.fill" }} />
         <Label>Training</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="admin">
+        <Icon sf={{ default: "command", selected: "command" }} />
+        <Label>Command</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
         <Label>Profile</Label>
@@ -77,6 +81,18 @@ function ClassicTabLayout() {
               <SymbolView name="book" tintColor={color} size={24} />
             ) : (
               <Feather name="book-open" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="admin"
+        options={{
+          title: "Command",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="command" tintColor={color} size={24} />
+            ) : (
+              <Feather name="command" size={22} color={color} />
             ),
         }}
       />
