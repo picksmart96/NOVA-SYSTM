@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/mobile/"
+title = "PickSmart NOVA Mobile"
+version = "1.0.0"
+id = "artifacts/picksmart-nova-mobile"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/mobile/" ]
+localPort = 21376
+
+[services.development]
+run = "pnpm --filter @workspace/picksmart-nova-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/picksmart-nova-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/picksmart-nova-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "21376"
+BASE_PATH = "/mobile/"
