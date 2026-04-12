@@ -1,0 +1,599 @@
+export const module1Lesson = {
+  id: "module-1",
+  slug: "beginner-basics",
+  title: "Beginner Basics",
+  level: "Beginner",
+  duration: "25 min",
+  steps: 5,
+  voiceEnabled: true,
+  badge: "FREE",
+  type: "NOVA Voice Guided",
+
+  hero: {
+    heading: "Beginner Basics",
+    subheading:
+      "Your first foundation class for warehouse order selecting. Learn the 5 beginner rules that protect your time, pace, confidence, and money from day one.",
+  },
+
+  introCard: {
+    title: "Lesson Focus",
+    text: "This lesson teaches the 5 beginner rules that protect time, pace, confidence, and money from the start.",
+    novaIntroVoice:
+      "Welcome to Beginner Basics. In this lesson, you will learn the rules that protect your time, your energy, and your money on every shift.",
+  },
+
+  sections: [
+    {
+      id: "rule-1",
+      title: "Rule 1 — Accuracy Before Speed",
+      novaLine: "First be clean, then be fast.",
+      whyItMatters:
+        "Wrong slot confirmation stops your flow, wastes time, and breaks your money pace.",
+      badExample:
+        "You arrive at the slot, rush the check number, say the wrong number, and the system says invalid.",
+      whatHappens: [
+        "system rejects the number",
+        "you stop moving",
+        "you repeat yourself",
+        "your rhythm breaks",
+        "you lose time and energy",
+      ],
+      howToPrevent: [
+        "look at the slot first",
+        "read the number clearly",
+        "confirm it in your mind",
+        "say it once, correctly",
+      ],
+      novaVoiceScript: `Listen carefully. This is one of the biggest mistakes new selectors make.
+
+You are moving fast. You feel good. You want to keep that speed.
+
+You arrive at the slot.
+
+The system is waiting for your check number.
+
+You hear:
+Aisle 17… slot 66… pick 10.
+
+But instead of slowing down for one second to confirm…
+
+You rush.
+
+You do not fully look.
+You do not fully read.
+
+You just say a number.
+
+Wrong.
+
+The system responds… invalid.
+
+Now everything stops.
+
+You cannot move forward.
+You cannot grab the case.
+You are waiting on the system.
+
+You try again… wrong again.
+
+Now your pace is completely broken.
+
+And now something important is happening.
+
+The time you are losing…
+is your time.
+
+And your time is your money.
+
+You thought moving faster would help you.
+
+But the mistake cost more time than moving correctly.
+
+You lose seconds.
+You lose rhythm.
+You lose energy.
+
+And those seconds add up fast.
+
+Now let me show you how strong selectors handle this.
+
+You hear the same command.
+
+Aisle 17. Slot 66. Pick 10.
+
+You arrive under control.
+
+Your eyes go to the check number first.
+
+You read it clearly.
+
+You confirm it in your mind.
+
+Then you speak.
+
+The system accepts it immediately.
+
+No delay.
+No correction.
+
+Now something important happens.
+
+Before you even grab the case…
+the system is already giving you the next instruction.
+
+Now you are moving freely, focused.
+
+Your hands, your eyes, and your mind are working together.
+
+You grab the case clean.
+
+While you are placing it…
+you already know what is coming next.
+
+You know the next slot.
+You know the next quantity.
+You know how big the next case is.
+And you already know where it should go on the pallet.
+
+So when your hands finish the current pick…
+your body is already moving to the next.
+
+No pause.
+No repeat.
+No wasted motion.
+
+That is how you protect your time.
+
+That is how you protect your money.
+
+Remember this:
+
+Every wrong check number costs you time.
+
+Every correct confirmation keeps you moving.
+
+Stay clean first.
+
+Then build speed on top of that.`,
+      whatThisMeans: [
+        "wrong confirmation breaks your rhythm",
+        "repeating the wrong slot wastes energy",
+        "clean confirmation keeps you in motion",
+        "motion protects your pace",
+        "pace protects your money",
+      ],
+      coachingClose: "Time is money. Clean work keeps both.",
+    },
+
+    {
+      id: "rule-2",
+      title: "Rule 2 — Build From the Bottom Up",
+      novaLine: "Your first layer decides your pallet strength.",
+      whyItMatters:
+        "A weak base creates problems later, slows your stacking, and steals your time.",
+      badExample:
+        "You start the pallet too fast with small weak cases, leave gaps, and do not build flat.",
+      whatHappens: [
+        "heavy cases crush the bottom later",
+        "the pallet leans",
+        "you stop to restack and adjust",
+        "you lose confidence in the build",
+        "your pace slows down",
+      ],
+      howToPrevent: [
+        "put heavier stable cases low",
+        "keep the base flat",
+        "remove gaps early",
+        "build support before height",
+      ],
+      novaVoiceScript: `Let me show you why your first layer matters.
+
+You start your pallet too fast.
+
+You place small, light, uneven cases first.
+You leave gaps.
+You do not build flat.
+
+It looks fine right now.
+
+But later in the order… heavy product comes.
+
+Now those heavy cases sit on weak support.
+
+The base shifts.
+The pallet leans.
+The structure breaks.
+
+Now you are forced to slow down.
+
+You adjust every case.
+You stop to fix it.
+You fight the pallet instead of building it.
+
+And when you fight the pallet…
+
+You lose time.
+
+And your time is your money.
+
+Now watch the right way.
+
+You start again.
+
+This time, you choose strong, heavy cases first.
+
+You build flat.
+You build tight.
+You remove gaps.
+
+Now your base is solid.
+
+Later, when heavy product comes…
+
+It is supported.
+
+The pallet stays stable.
+Your stacking becomes easier.
+Your speed increases naturally.
+
+You are not fixing problems anymore.
+
+You are building clean from the start.
+
+Remember this:
+
+A weak base steals time later.
+
+A strong base saves time all shift.`,
+      whatThisMeans: [
+        "weak base means restacking later",
+        "restacking means lost time and lost energy",
+        "strong base makes later stacking faster",
+        "stable pallet creates smoother movement",
+        "smooth movement protects money pace",
+      ],
+      coachingClose:
+        "Build it right the first time. A strong base saves time later.",
+    },
+
+    {
+      id: "rule-3",
+      title: "Rule 3 — Move With Purpose",
+      novaLine: "Do not move rushed. Move with purpose.",
+      whyItMatters:
+        "Pauses and wasted steps destroy pace, while rushed bad movement creates more corrections.",
+      badExample:
+        "You finish a pick, stop too long, or rush into bad position and waste steps.",
+      whatHappens: [
+        "broken rhythm",
+        "extra steps",
+        "bad positioning",
+        "more corrections",
+        "lower overall pace",
+      ],
+      howToPrevent: [
+        "move immediately after the pick",
+        "position yourself cleanly",
+        "avoid unnecessary pauses",
+        "stay smooth, not wild",
+      ],
+      novaVoiceScript: `Let’s look at how movement affects your performance.
+
+You finish a pick.
+
+Then you stop.
+
+You look around.
+You think.
+You wait.
+
+Then you move.
+
+That may feel small.
+
+But it happens every pick.
+
+Those seconds turn into minutes.
+
+Now let’s look at another mistake.
+
+You try to move faster.
+
+But you rush.
+
+You misposition.
+You take extra steps.
+You correct yourself again.
+
+That is not speed.
+
+That is wasted movement.
+
+And wasted movement costs time.
+
+Now watch how strong selectors move.
+
+They hear the command.
+
+They move immediately.
+
+Not rushed.
+Not slow.
+
+But controlled.
+
+They position correctly.
+They grab clean.
+They move again.
+
+No pause.
+No extra steps.
+No wasted motion.
+
+That is real speed.
+
+Remember this:
+
+Every pause costs time.
+
+Every wasted step costs time.
+
+And your time is your money.`,
+      whatThisMeans: [
+        "pauses kill pace",
+        "rushing badly also kills pace",
+        "smooth movement is faster than messy movement",
+        "good positioning saves steps",
+        "saved steps equal saved time",
+      ],
+      coachingClose:
+        "No wasted pauses. No wasted steps. Move with purpose.",
+    },
+
+    {
+      id: "rule-4",
+      title: "Rule 4 — Think One Step Ahead",
+      novaLine:
+        "Finish this pick with your hands. Start the next pick with your mind.",
+      whyItMatters:
+        "Late thinking creates hesitation. Early thinking keeps transitions fast and smooth.",
+      badExample:
+        "You finish a pick, stop, wait, and only then try to think about what comes next.",
+      whatHappens: [
+        "hesitation",
+        "slow transitions",
+        "broken flow",
+        "mental reset every pick",
+        "lost time",
+      ],
+      howToPrevent: [
+        "think ahead during the current pick",
+        "know your next movement early",
+        "use placement time to prepare mentally",
+        "keep your mind ahead of your hands",
+      ],
+      novaVoiceScript: `This is where strong selectors separate themselves.
+
+You finish a pick…
+
+Then you stop thinking.
+
+You wait.
+Then you react.
+
+That creates delay every time.
+
+Now watch the difference.
+
+You are placing your current case…
+
+But your mind is already ahead.
+
+You are thinking:
+
+Where is the next slot?
+Where am I going next?
+What is coming next?
+
+So when the next instruction comes…
+
+You are ready.
+
+You move immediately.
+
+No delay.
+No hesitation.
+
+Your hands finish the current pick.
+
+Your mind starts the next one.
+
+That is how you protect your time.
+
+Remember this:
+
+Thinking late = moving late.
+
+Thinking early = moving early.
+
+And early movement protects your money.`,
+      whatThisMeans: [
+        "late thinking creates hesitation",
+        "thinking ahead removes delay",
+        "better transitions increase speed",
+        "better transitions reduce mental fatigue",
+        "less hesitation protects money pace",
+      ],
+      coachingClose: "Stay ahead. Think early, move early.",
+    },
+
+    {
+      id: "rule-5",
+      title: "Rule 5 — Safety Is Part of Performance",
+      novaLine: "Safe work is strong work.",
+      whyItMatters:
+        "Unsafe movement causes fatigue, instability, and slower performance later in the shift.",
+      badExample:
+        "You twist while lifting, rush corners, and move the jack too hard.",
+      whatHappens: [
+        "unstable pallet",
+        "faster fatigue",
+        "loss of control",
+        "slower pace later",
+        "more stress on the body",
+      ],
+      howToPrevent: [
+        "lift with your legs",
+        "control your movement",
+        "slow before turns",
+        "protect the load while moving",
+      ],
+      novaVoiceScript: `Let me show you why unsafe work costs you time.
+
+You rush your movement.
+
+You twist while lifting.
+You pull too hard.
+You take turns too fast.
+
+At first, it feels faster.
+
+But then…
+
+Your pallet becomes unstable.
+Your body gets tired faster.
+Your control drops.
+
+Now your speed drops anyway.
+
+Now you are working harder…
+
+But producing less.
+
+Now watch the right way.
+
+You move with control.
+
+You lift correctly.
+You slow before turns.
+You protect the load.
+
+Now everything stays stable.
+
+Your body lasts longer.
+Your pace stays strong.
+
+Remember this:
+
+When you lose control…
+
+You lose time.
+
+And your time is your money.`,
+      whatThisMeans: [
+        "unsafe movement causes faster fatigue",
+        "fatigue slows production later",
+        "stable movement protects long-shift pace",
+        "control reduces mistakes and restacking",
+        "safe work helps you hold money pace longer",
+      ],
+      coachingClose:
+        "Control your body. Control your load. Protect your time.",
+    },
+  ],
+
+  lessonClose: {
+    title: "Lesson Close",
+    novaVoice: `Those are your 5 beginner rules.
+
+Be clean before fast.
+Build your base strong.
+Move with purpose.
+Think ahead.
+And work with control.
+
+If you protect your time…
+you protect your pace.
+
+And if you protect your pace…
+you protect your money.`,
+  },
+
+  quizIntro: {
+    title: "Lesson Test",
+    text: "Pass 80% or higher to complete Beginner Basics.",
+    novaVoice:
+      "Now let’s test your understanding of the 5 beginner rules and how they protect your time, pace, and money.",
+  },
+
+  quiz: {
+    passingScore: 80,
+    questions: [
+      {
+        id: "q1",
+        question: "What should a beginner focus on first?",
+        options: [
+          "Speed only",
+          "Accuracy and safety",
+          "Competing with others",
+          "Moving fast",
+        ],
+        correctIndex: 1,
+      },
+      {
+        id: "q2",
+        question: "Why is the base of a pallet important?",
+        options: [
+          "It does not matter",
+          "Only for looks",
+          "It supports the entire pallet",
+          "Only for light items",
+        ],
+        correctIndex: 2,
+      },
+      {
+        id: "q3",
+        question: "What does move with purpose mean?",
+        options: [
+          "Run all shift",
+          "Stop often",
+          "Stay active without wasting time",
+          "Rush everything",
+        ],
+        correctIndex: 2,
+      },
+      {
+        id: "q4",
+        question: "What should your mind do during a pick?",
+        options: [
+          "Stop thinking",
+          "Prepare the next move",
+          "Focus only on speed",
+          "Wait for help",
+        ],
+        correctIndex: 1,
+      },
+      {
+        id: "q5",
+        question: "What is success in week one?",
+        options: [
+          "Be the fastest",
+          "Make no mistakes ever",
+          "Learn and improve",
+          "Skip the basics",
+        ],
+        correctIndex: 2,
+      },
+    ],
+  },
+
+  completion: {
+    title: "Beginner Basics Completed",
+    message:
+      "Lesson complete. You now understand the beginner foundation for selecting and how the 5 rules protect your time, pace, and money.",
+    novaVoice:
+      "Lesson complete. Strong start. You now understand the beginner foundation. Keep building.",
+  },
+};
+
+export default module1Lesson;

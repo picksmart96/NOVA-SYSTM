@@ -61,7 +61,7 @@ export default function BeginnerBasicsLessonPage() {
 
   const [phase, setPhase] = useState<Phase>("intro");
   const [currentSection, setCurrentSection] = useState(0);
-  const [novaMessage, setNovaMessage] = useState(lesson.introVoice);
+  const [novaMessage, setNovaMessage] = useState(lesson.introCard.novaIntroVoice);
 
   // quiz state
   const [currentQ, setCurrentQ] = useState(0);
@@ -74,7 +74,7 @@ export default function BeginnerBasicsLessonPage() {
   // On mount: auto-speak intro, mark lesson started
   useEffect(() => {
     startLesson("mod-1");
-    speak(lesson.introVoice);
+    speak(lesson.introCard.novaIntroVoice);
     return () => stopSpeaking();
   }, []);
 
@@ -113,8 +113,8 @@ export default function BeginnerBasicsLessonPage() {
 
   function speakSection(idx: number) {
     const s = lesson.sections[idx];
-    setNovaMessage(s.novaVoice);
-    speak(s.novaVoice);
+    setNovaMessage(s.novaVoiceScript);
+    speak(s.novaVoiceScript);
   }
 
   function handleStartLesson() {
@@ -248,6 +248,12 @@ export default function BeginnerBasicsLessonPage() {
               </p>
             </div>
 
+            {/* Intro focus card */}
+            <div className="rounded-2xl border border-slate-700 bg-slate-900 p-6">
+              <p className="text-xs font-bold uppercase tracking-widest text-yellow-400 mb-2">{lesson.introCard.title}</p>
+              <p className="text-slate-200 leading-relaxed">{lesson.introCard.text}</p>
+            </div>
+
             {/* Start button */}
             <button
               onClick={handleStartLesson}
@@ -281,32 +287,71 @@ export default function BeginnerBasicsLessonPage() {
             </div>
 
             {/* Active section card */}
-            <div className="rounded-3xl border border-yellow-400/30 bg-slate-900 p-8 shadow-lg shadow-yellow-400/5 transition-all duration-300">
-              <h2 className="text-2xl font-bold text-white mb-5">{sectionData.title}</h2>
-
-              <div className="space-y-3 text-slate-300">
-                {sectionData.body.map((line, i) => (
-                  <p key={i} className="leading-relaxed">{line}</p>
-                ))}
+            <div className="rounded-3xl border border-yellow-400/30 bg-slate-900 p-8 shadow-lg shadow-yellow-400/5 transition-all duration-300 space-y-6">
+              {/* Title + NOVA tagline */}
+              <div>
+                <h2 className="text-2xl font-bold text-white">{sectionData.title}</h2>
+                <p className="mt-2 text-yellow-400 font-bold italic text-lg">"{sectionData.novaLine}"</p>
               </div>
 
-              {sectionData.bullets && (
-                <ul className="mt-5 space-y-2 pl-1">
-                  {sectionData.bullets.map((item, i) => (
+              {/* Why it matters */}
+              <div className="rounded-2xl border border-slate-700 bg-slate-950 p-5">
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">Why It Matters</p>
+                <p className="text-slate-200 leading-relaxed">{sectionData.whyItMatters}</p>
+              </div>
+
+              {/* Bad example */}
+              <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-5">
+                <p className="text-xs font-bold uppercase tracking-widest text-red-400 mb-2">What Goes Wrong</p>
+                <p className="text-slate-300 leading-relaxed">{sectionData.badExample}</p>
+                <ul className="mt-3 space-y-1.5">
+                  {sectionData.whatHappens.map((item, i) => (
+                    <li key={i} className="flex items-start gap-2 text-slate-400 text-sm">
+                      <span className="mt-2 w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* How to prevent */}
+              <div className="rounded-2xl border border-green-500/20 bg-green-500/5 p-5">
+                <p className="text-xs font-bold uppercase tracking-widest text-green-400 mb-2">How to Do It Right</p>
+                <ul className="space-y-2">
+                  {sectionData.howToPrevent.map((item, i) => (
+                    <li key={i} className="flex items-start gap-3 text-slate-200">
+                      <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0 mt-0.5" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* What this means */}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">What This Means for You</p>
+                <ul className="space-y-2">
+                  {sectionData.whatThisMeans.map((item, i) => (
                     <li key={i} className="flex items-start gap-3 text-slate-300">
                       <span className="mt-2 w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0" />
                       {item}
                     </li>
                   ))}
                 </ul>
-              )}
+              </div>
 
-              <div className="mt-6 rounded-2xl border border-yellow-400/20 bg-slate-950 p-5">
+              {/* Coaching close */}
+              <div className="rounded-2xl border border-yellow-400/30 bg-yellow-400/5 px-5 py-4">
+                <p className="font-black text-yellow-300 text-base">{sectionData.coachingClose}</p>
+              </div>
+
+              {/* NOVA voice indicator */}
+              <div className="rounded-2xl border border-yellow-400/20 bg-slate-950 p-5">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-bold uppercase tracking-widest text-yellow-400">NOVA Voice</p>
+                  <p className="text-xs font-bold uppercase tracking-widest text-yellow-400">NOVA Is Reading This Section</p>
                   <div className={`w-2 h-2 rounded-full ${isSpeaking ? "bg-yellow-400 animate-pulse" : "bg-slate-600"}`} />
                 </div>
-                <p className="text-slate-200 italic leading-relaxed">"{sectionData.novaVoice}"</p>
+                <p className="text-slate-400 text-sm">Hit "Replay NOVA" below to hear this section again at any time.</p>
               </div>
             </div>
 
