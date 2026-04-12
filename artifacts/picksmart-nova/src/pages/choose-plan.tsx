@@ -44,13 +44,19 @@ export default function ChoosePlanPage() {
           <div className="rounded-3xl border border-yellow-400 bg-slate-900 p-8 shadow-xl">
             <p className="font-semibold text-yellow-400">Company Unlimited</p>
             <h2 className="mt-3 text-3xl font-black">For Teams and Operations</h2>
-            <p className="mt-3 text-slate-300">Weekly, monthly, or yearly unlimited company access.</p>
+            <p className="mt-3 text-slate-300">Unlimited company access with custom pricing for your team.</p>
 
-            <div className="mt-6 space-y-2 text-slate-300">
-              <p>• $1,600/year</p>
+            <div className="mt-5 rounded-2xl border border-yellow-400/20 bg-slate-950 p-4">
+              <p className="text-xs font-bold uppercase tracking-widest text-yellow-400 mb-1">Pricing</p>
+              <p className="text-2xl font-black text-white">Custom Quote</p>
+              <p className="text-slate-400 text-sm mt-1">Based on team size and contract length</p>
+            </div>
+
+            <div className="mt-5 space-y-2 text-slate-300">
               <p>• Unlimited users</p>
               <p>• Trainer Dashboard</p>
               <p>• Supervisor Dashboard</p>
+              <p>• Weekly, monthly, or yearly contracts</p>
             </div>
 
             <p className="mt-4 text-sm text-red-300">
@@ -58,10 +64,10 @@ export default function ChoosePlanPage() {
             </p>
 
             <button
-              onClick={() => navigate("/checkout/company?billing=weekly")}
+              onClick={() => navigate("/company-request")}
               className="mt-8 w-full rounded-2xl bg-yellow-400 px-6 py-4 text-lg font-bold text-slate-950 transition hover:bg-yellow-300"
             >
-              Continue Company
+              Request Company Pricing
             </button>
           </div>
         </div>

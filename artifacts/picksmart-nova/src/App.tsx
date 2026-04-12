@@ -21,6 +21,7 @@ import MistakeCoachingPage from "@/pages/mistake-coaching";
 import ProgressPage from "@/pages/progress";
 import LeaderboardPage from "@/pages/leaderboard";
 import PricingPage from "@/pages/pricing";
+import CompanyRequestPage from "@/pages/company-request";
 import SelectorNationPage from "@/pages/selector-nation";
 import SelectorBreakingNewsPage from "@/pages/app/SelectorBreakingNewsPage";
 
@@ -158,6 +159,9 @@ function Router() {
       </Route>
       <Route path="/pricing">
         <Layout><PricingPage /></Layout>
+      </Route>
+      <Route path="/company-request">
+        <CompanyRequestPage />
       </Route>
       <Route path="/choose-plan">
         <Layout><ChoosePlanPage /></Layout>

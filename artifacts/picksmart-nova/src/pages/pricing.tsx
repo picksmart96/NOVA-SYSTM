@@ -4,19 +4,11 @@ import { useLocation } from "wouter";
 export default function PricingPage() {
   const [, navigate] = useLocation();
   const [singleBilling, setSingleBilling] = useState<"monthly" | "yearly">("monthly");
-  const [companyBilling, setCompanyBilling] = useState<"weekly" | "monthly" | "yearly">("weekly");
 
   const singlePrice =
     singleBilling === "monthly"
       ? { price: "$25", billing: "per month" }
       : { price: "$250", billing: "per year" };
-
-  const companyPrice =
-    companyBilling === "weekly"
-      ? { price: "$400", billing: "per week" }
-      : companyBilling === "monthly"
-      ? { price: "$1,600", billing: "per month" }
-      : { price: "$1,600", billing: "per year" };
 
   return (
     <div className="min-h-screen bg-slate-950 px-6 py-12 text-white">
@@ -88,45 +80,18 @@ export default function PricingPage() {
               Unlimited Access
             </div>
 
-            <div className="mb-5 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-yellow-400 font-semibold">Best for teams and warehouse operations</p>
-                <h2 className="mt-2 text-3xl font-black">Company Unlimited</h2>
-              </div>
-              <div className="inline-flex rounded-2xl border border-slate-700 bg-slate-950 p-1">
-                <button
-                  onClick={() => setCompanyBilling("weekly")}
-                  className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
-                    companyBilling === "weekly" ? "bg-yellow-400 text-slate-950" : "text-slate-300"
-                  }`}
-                >
-                  Weekly
-                </button>
-                <button
-                  onClick={() => setCompanyBilling("monthly")}
-                  className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
-                    companyBilling === "monthly" ? "bg-yellow-400 text-slate-950" : "text-slate-300"
-                  }`}
-                >
-                  Monthly
-                </button>
-                <button
-                  onClick={() => setCompanyBilling("yearly")}
-                  className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
-                    companyBilling === "yearly" ? "bg-yellow-400 text-slate-950" : "text-slate-300"
-                  }`}
-                >
-                  Yearly
-                </button>
-              </div>
+            <div className="mb-5">
+              <p className="text-yellow-400 font-semibold">Best for teams and warehouse operations</p>
+              <h2 className="mt-2 text-3xl font-black">Company Unlimited</h2>
             </div>
 
-            <div className="mt-5">
-              <p className="text-5xl font-black text-white">{companyPrice.price}</p>
-              <p className="mt-2 text-slate-400">{companyPrice.billing}</p>
+            <div className="mt-5 rounded-2xl border border-yellow-400/20 bg-slate-950 p-5">
+              <p className="text-xs font-bold uppercase tracking-widest text-yellow-400 mb-1">Pricing</p>
+              <p className="text-3xl font-black text-white">Custom Quote</p>
+              <p className="mt-2 text-slate-400 text-sm">
+                Pricing is based on your team size and contract length. Contact us to get the right plan for your operation.
+              </p>
             </div>
-
-            <p className="mt-4 text-sm text-yellow-300">Full company access with unlimited team use.</p>
 
             <div className="mt-6 space-y-3 text-slate-300">
               <p>• Everything in Professional Single</p>
@@ -134,7 +99,7 @@ export default function PricingPage() {
               <p>• Supervisor Dashboard</p>
               <p>• Unlimited company users</p>
               <p>• Unlimited training and workflow access</p>
-              <p>• Weekly, monthly, or yearly billing</p>
+              <p>• Weekly, monthly, or yearly contracts</p>
             </div>
 
             <p className="mt-5 text-sm text-red-300">
@@ -142,10 +107,10 @@ export default function PricingPage() {
             </p>
 
             <button
-              onClick={() => navigate(`/checkout/company?billing=${companyBilling}`)}
+              onClick={() => navigate("/company-request")}
               className="mt-8 w-full rounded-2xl bg-yellow-400 px-6 py-4 text-lg font-bold text-slate-950 transition hover:bg-yellow-300"
             >
-              Choose Company
+              Request Company Pricing
             </button>
           </div>
         </div>
