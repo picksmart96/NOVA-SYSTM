@@ -1,102 +1,333 @@
 export const pickPathOptimizationLessonPage = {
-  id: "module-4-lesson-1",
+  id: "module-4",
   moduleId: "module-4",
   title: "Pick Path Optimization",
   level: "Intermediate",
   duration: "38 min",
   steps: 5,
   voiceEnabled: true,
+  type: "NOVA Voice Guided",
 
   hero: {
     heading: "Pick Path Optimization",
     subheading:
-      "Learn how to move smarter, reduce wasted time, and build a smoother picking rhythm from slot to slot.",
+      "Learn how to move smarter, reduce wasted motion, and protect your pace so your time keeps turning into money.",
   },
 
-  introVoice:
-    "Welcome to Pick Path Optimization. In this lesson, you will learn how strong selectors move efficiently, reduce wasted steps, and build a faster, smoother flow through the warehouse.",
+  introCard: {
+    title: "Lesson Focus",
+    text: "This lesson teaches how smart movement, better transitions, and fewer wasted steps protect your pace, your energy, and your money.",
+    novaIntroVoice:
+      "Welcome to Pick Path Optimization. In this lesson, you will learn how strong selectors move smarter, reduce wasted motion, and protect their time and money all shift long.",
+  },
 
   sections: [
     {
-      id: "what-is-pick-path",
-      title: "1. What Pick Path Optimization Really Means",
-      body: [
-        "Pick path optimization means moving through your work in the smartest and cleanest way possible.",
-        "It is not about running. It is about reducing wasted movement, wasted thinking, and wasted delay.",
-        "Strong selectors protect their pace by staying organized in how they approach each pick.",
+      id: "rule-1",
+      title: "Rule 1 — Every Step Must Have a Purpose",
+      novaLine: "Wasted steps waste money.",
+      whyItMatters:
+        "Every extra step, turn, and correction adds up over the shift and slows your rate.",
+      badExample:
+        "You walk into the slot badly, step back, reposition, then take extra movement just to do one pick.",
+      whatHappens: [
+        "You waste steps",
+        "You break your rhythm",
+        "You use more energy than needed",
+        "Your pace drops over time",
       ],
-      novaVoice:
-        "Pick path optimization is not reckless speed. It is smart movement, reduced waste, and better rhythm.",
+      howToPrevent: [
+        "Walk into the slot under control",
+        "Set your body up correctly the first time",
+        "Reduce extra repositioning",
+        "Make every step count",
+      ],
+      novaVoiceScript: `Let me show you how wasted steps cost you money.
+
+You move into the slot.
+
+But you do not approach it clean.
+
+You step too far.
+You adjust.
+You step back.
+You reposition.
+
+Now one pick is taking more movement than it should.
+
+That may not feel big.
+
+But if you do that all shift…
+those extra steps become lost time.
+
+And your time is your money.
+
+Now watch the right way.
+
+You approach the slot under control.
+
+You place your body correctly the first time.
+You grab clean.
+You move on.
+
+No extra footwork.
+No wasted repositioning.
+
+Just efficient movement.
+
+Remember this:
+
+Every wasted step costs time.
+
+And wasted time costs money.`,
+      coachingClose: "Make every step count. Wasted steps waste money.",
     },
+
     {
-      id: "wasted-motion",
-      title: "2. Eliminate Wasted Motion",
-      body: [
-        "A lot of lost rate comes from small wasted actions that repeat all shift.",
-        "Examples include unnecessary pauses, walking extra steps, poor positioning, rechecking too late, and standing still after each pick.",
-        "When those small delays happen over and over, your pace drops hard.",
+      id: "rule-2",
+      title: "Rule 2 — Do Not Break Your Rhythm",
+      novaLine: "Broken rhythm kills rate.",
+      whyItMatters:
+        "Pausing too often or stopping your movement too much destroys the flow of the shift.",
+      badExample:
+        "You finish a pick, stop, look around, reset mentally, then move again.",
+      whatHappens: [
+        "Small pauses build up",
+        "Your pace gets broken",
+        "Your mind has to keep restarting",
+        "You lose time and energy",
       ],
-      novaVoice:
-        "Small wasted movements become big lost time. Remove extra steps, extra pauses, and extra hesitation.",
-      bullets: [
-        "Do not stop longer than needed after a pick.",
-        "Position yourself to work cleanly the first time.",
-        "Avoid repeated corrections caused by poor setup.",
-        "Protect your rhythm by removing wasted pauses.",
+      howToPrevent: [
+        "Move directly into the next action",
+        "Keep your motion connected",
+        "Avoid standing still between picks",
+        "Protect the flow of the shift",
       ],
+      novaVoiceScript: `Let me show you how broken rhythm costs you money.
+
+You finish a pick.
+
+Then you stop.
+
+You look around.
+You pause.
+You reset yourself.
+
+Then you start moving again.
+
+That little break may feel small.
+
+But it happens again.
+And again.
+And again.
+
+Now your shift has no rhythm.
+
+Now your pace drops.
+
+Now your energy gets wasted because your mind keeps restarting the work.
+
+And your time is your money.
+
+Now watch the right way.
+
+You finish one pick…
+and flow directly into the next.
+
+You do not stand around.
+You do not reset every few seconds.
+
+You stay connected.
+
+That is what strong selectors do.
+
+Remember this:
+
+Broken rhythm kills rate.
+
+Protected rhythm protects money.`,
+      coachingClose: "Protect the rhythm. Rhythm protects your money.",
     },
+
     {
-      id: "prepare-next-move",
-      title: "3. Prepare the Next Move Early",
-      body: [
-        "One of the biggest differences between average selectors and strong selectors is how early they prepare the next move.",
-        "While your hands are finishing one pick, your mind should already be tracking what comes next.",
-        "That preparation reduces hesitation and helps your pace stay stable.",
+      id: "rule-3",
+      title: "Rule 3 — Position Early, Not Late",
+      novaLine: "Good positioning saves time before the work starts.",
+      whyItMatters:
+        "If your body and jack are in the wrong place, the pick becomes slower before it even begins.",
+      badExample:
+        "You arrive at the slot with bad angle, bad jack position, and no clean space to work.",
+      whatHappens: [
+        "Awkward reaching",
+        "Bad lifting angle",
+        "Extra repositioning",
+        "Slow, clumsy picks",
       ],
-      novaVoice:
-        "Do not wait until one move is fully over to think again. Finish the current pick with your hands and start the next one with your mind.",
-      bullets: [
-        "Look ahead mentally while placing the current case.",
-        "Stay aware of what comes next.",
-        "Reduce hesitation between picks.",
-        "Keep your workflow connected instead of broken.",
+      howToPrevent: [
+        "Set the jack up early",
+        "Approach at a better angle",
+        "Give yourself clean working space",
+        "Position before you pick, not after",
       ],
+      novaVoiceScript: `Let me show you how late positioning costs you money.
+
+You get to the slot.
+
+But your jack is in the wrong place.
+Your body is in the wrong angle.
+Now you are trying to work from a bad setup.
+
+That makes everything slower.
+
+You reach awkwardly.
+You adjust the jack.
+You move your feet again.
+
+Now you are wasting time before the real work even starts.
+
+And your time is your money.
+
+Now watch the right way.
+
+You position early.
+
+You set the jack up better.
+You give yourself a clean angle.
+You make the pick easier before it begins.
+
+Now the work flows.
+
+Remember this:
+
+Bad positioning creates slow picks.
+
+Good positioning saves time before the work starts.`,
+      coachingClose: "Position early. Make the next move easier.",
     },
+
     {
-      id: "body-positioning",
-      title: "4. Use Better Body and Equipment Positioning",
-      body: [
-        "Good movement is not only about speed. It is also about where you place your body and equipment before the work starts.",
-        "Bad positioning creates extra steps, awkward lifts, poor turns, and more fatigue.",
-        "Clean positioning helps you pick faster with less wasted effort.",
+      id: "rule-4",
+      title: "Rule 4 — Think Ahead While You Move",
+      novaLine: "Your mind should already be on the next move.",
+      whyItMatters:
+        "Late thinking creates hesitation. Early thinking creates flow.",
+      badExample:
+        "You only think about the next move after you completely finish the current one.",
+      whatHappens: [
+        "You hesitate more",
+        "You react late",
+        "Your transitions slow down",
+        "You lose pace",
       ],
-      novaVoice:
-        "Position early. Set your body and your jack up for the cleanest next move.",
-      bullets: [
-        "Approach the slot under control.",
-        "Reduce awkward reaching and turning.",
-        "Set the pallet jack up to support your next move.",
-        "Use your position to save time and protect energy.",
+      howToPrevent: [
+        "Think ahead while placing the current case",
+        "Use movement time to prepare mentally",
+        "Know where you are going next",
+        "Keep your brain ahead of your hands",
       ],
+      novaVoiceScript: `Let me show you how late thinking costs you money.
+
+You finish one move.
+
+Then you start thinking about the next one.
+
+That is late.
+
+Now you hesitate.
+Now you react slowly.
+Now your transition takes longer than it should.
+
+And that costs time.
+
+Now watch the right way.
+
+While your hands are finishing the current pick…
+your mind is already moving ahead.
+
+You already know where you are going.
+You already know what kind of move is next.
+You are ready before the system finishes talking.
+
+Now the transition is smooth.
+
+No delay.
+No hesitation.
+
+That is how strong selectors protect pace.
+
+Remember this:
+
+Think late, move late.
+
+Think early, move early.
+
+And early movement protects money.`,
+      coachingClose: "Keep your mind ahead. It keeps your money moving.",
     },
+
     {
-      id: "build-rhythm",
-      title: "5. Build a Repeatable Rhythm",
-      body: [
-        "The goal is not random speed. The goal is a repeatable pattern of clean movement.",
-        "When your path, timing, and mental preparation become consistent, your picking gets faster without feeling wild.",
-        "A strong rhythm keeps you accurate, reduces fatigue, and protects performance across the full shift.",
+      id: "rule-5",
+      title: "Rule 5 — Smart Movement Beats Fast Panic",
+      novaLine: "Do not rush. Move smart.",
+      whyItMatters:
+        "Fast panic creates mistakes, extra motion, and wasted time. Smart movement keeps the shift efficient.",
+      badExample:
+        "You rush hard, overshoot the slot, grab awkwardly, and create more corrections.",
+      whatHappens: [
+        "More mistakes",
+        "More wasted movement",
+        "More mental fatigue",
+        "Slower overall performance",
       ],
-      novaVoice:
-        "Strong selectors build rhythm. Rhythm protects pace, reduces fatigue, and creates cleaner performance all shift long.",
-      bullets: [
-        "Stay smooth instead of rushed.",
-        "Protect consistency over random bursts of speed.",
-        "Build a repeatable movement pattern.",
-        "Let rhythm create faster performance naturally.",
+      howToPrevent: [
+        "Stay smooth instead of panicked",
+        "Move smart instead of wild",
+        "Keep control over your body and jack",
+        "Trust rhythm over random speed",
       ],
+      novaVoiceScript: `Let me show you the difference between panic speed and real speed.
+
+You try to move faster.
+
+So you rush everything.
+
+You overshoot the slot.
+You come in awkward.
+You create more movement instead of less.
+
+That is not real speed.
+
+That is panic.
+
+And panic costs time.
+
+And your time is your money.
+
+Now watch the right way.
+
+You move smart.
+
+You stay under control.
+You trust rhythm.
+You trust clean setup.
+You trust smooth transitions.
+
+Now the work gets faster without getting messy.
+
+Remember this:
+
+Fast panic wastes money.
+
+Smart movement protects it.`,
+      coachingClose: "Do not rush. Move smart. Smart movement makes money.",
     },
   ],
+
+  lessonClose: {
+    title: "Lesson Close",
+    novaVoice:
+      "Pick path optimization is not about running. It is about removing waste. Make every step count. Protect your rhythm. Position early. Think ahead. And move smart instead of panicked. If you reduce wasted motion, you protect your pace. And if you protect your pace, you protect your money.",
+  },
 
   quiz: {
     passingScore: 80,
@@ -147,12 +378,12 @@ export const pickPathOptimizationLessonPage = {
       },
       {
         id: "q5",
-        question: "What does strong rhythm help create?",
+        question: "What does broken rhythm do to your shift?",
         options: [
-          "Random speed bursts",
-          "More hesitation",
-          "Cleaner, more repeatable performance",
-          "Less control",
+          "Creates random speed bursts",
+          "Has no real effect",
+          "Kills rate and wastes energy",
+          "Helps you slow down safely",
         ],
         correctIndex: 2,
       },
@@ -162,8 +393,8 @@ export const pickPathOptimizationLessonPage = {
   completion: {
     title: "Pick Path Optimization Completed",
     message:
-      "Lesson complete. You now understand how to reduce wasted movement, prepare the next move earlier, and build a stronger picking rhythm.",
+      "Lesson complete. You now understand how better movement, cleaner positioning, and smoother transitions protect your pace and save time.",
     novaVoice:
-      "Lesson complete. Smart movement protects pace. Keep building rhythm, reducing waste, and moving with purpose.",
+      "Lesson complete. Strong selectors do not just move fast. They move smart. Keep protecting your pace.",
   },
 };

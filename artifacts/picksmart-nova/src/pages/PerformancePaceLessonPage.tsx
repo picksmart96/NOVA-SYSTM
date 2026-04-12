@@ -1,11 +1,11 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "wouter";
-import { palletBuildingLessonPage as lesson } from "@/data/palletBuildingLessonPage";
+import { performancePaceLessonPage as lesson } from "@/data/performancePaceLessonPage";
 import { useProgressStore } from "@/lib/progressStore";
 import { NovaLessonGuide } from "@/components/training/NovaLessonGuide";
 import {
   ArrowLeft, Volume2, VolumeX, CheckCircle2, XCircle, ChevronLeft,
-  ChevronRight, Clock, BookOpen, Headphones, Award, Layers,
+  ChevronRight, Clock, BookOpen, Headphones, Award, ShieldCheck,
 } from "lucide-react";
 
 function useSpeech() {
@@ -54,7 +54,7 @@ function useSpeech() {
 
 type Phase = "intro" | "lesson" | "quiz";
 
-export default function PalletBuildingLessonPage() {
+export default function PerformancePaceLessonPage() {
   const { startLesson, completeLesson } = useProgressStore();
 
   const [phase, setPhase] = useState<Phase>("intro");
@@ -69,7 +69,7 @@ export default function PalletBuildingLessonPage() {
   const { isSpeaking, muted, toggleMute, speak, stopSpeaking } = useSpeech();
 
   useEffect(() => {
-    startLesson("mod-3");
+    startLesson("mod-5");
     speak(lesson.introCard.novaIntroVoice);
     return () => stopSpeaking();
   }, []);
@@ -86,7 +86,7 @@ export default function PalletBuildingLessonPage() {
   useEffect(() => {
     if (submitted && !scoreRecorded) {
       setScoreRecorded(true);
-      completeLesson("mod-3", score, lesson.quiz.questions.length);
+      completeLesson("mod-5", score, lesson.quiz.questions.length);
       const msg = lesson.completion.novaVoice;
       setNovaMessage(msg);
       speak(msg);
@@ -159,7 +159,6 @@ export default function PalletBuildingLessonPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
-      {/* Sticky header */}
       <div className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 backdrop-blur px-4 py-4">
         <div className="max-w-3xl mx-auto flex items-center gap-4">
           <Link
@@ -172,7 +171,7 @@ export default function PalletBuildingLessonPage() {
 
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold uppercase tracking-widest text-slate-500 truncate">
-              Intermediate
+              Performance
             </p>
             <p className="font-black text-white text-sm truncate">{lesson.title}</p>
           </div>
@@ -185,7 +184,7 @@ export default function PalletBuildingLessonPage() {
             {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           </button>
 
-          <span className="px-2 py-1 rounded-md text-xs font-bold uppercase bg-yellow-400/10 text-yellow-300 border border-yellow-400/30 shrink-0">
+          <span className="px-2 py-1 rounded-md text-xs font-bold uppercase bg-purple-500/20 text-purple-400 border border-purple-500/30 shrink-0">
             {lesson.level}
           </span>
         </div>
@@ -210,13 +209,12 @@ export default function PalletBuildingLessonPage() {
 
         <NovaLessonGuide message={novaMessage} isSpeaking={isSpeaking} />
 
-        {/* ════ INTRO ══════════════════════════════════════════════════════════ */}
         {phase === "intro" && (
           <>
             <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8">
               <div className="flex flex-wrap items-center gap-2 mb-4">
-                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-yellow-400/10 border border-yellow-400/30 text-xs font-bold text-yellow-300">
-                  <Layers className="h-3 w-3" /> {lesson.level}
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-xs font-bold text-purple-400">
+                  <ShieldCheck className="h-3 w-3" /> {lesson.level}
                 </span>
                 <span className="flex items-center gap-1 px-3 py-1 rounded-full bg-slate-800 text-xs font-semibold text-slate-300">
                   <Clock className="h-3 w-3" /> {lesson.duration}
@@ -248,10 +246,8 @@ export default function PalletBuildingLessonPage() {
           </>
         )}
 
-        {/* ════ LESSON ═════════════════════════════════════════════════════════ */}
         {phase === "lesson" && (
           <>
-            {/* Step dots */}
             <div className="flex items-center gap-2">
               {lesson.sections.map((_, i) => (
                 <div
@@ -270,7 +266,6 @@ export default function PalletBuildingLessonPage() {
               </span>
             </div>
 
-            {/* Active section card */}
             <div className="rounded-3xl border border-yellow-400/30 bg-slate-900 p-8 shadow-lg shadow-yellow-400/5 transition-all duration-300 space-y-6">
               <div>
                 <h2 className="text-2xl font-bold text-white">{sectionData.title}</h2>
@@ -320,7 +315,6 @@ export default function PalletBuildingLessonPage() {
               </div>
             </div>
 
-            {/* Navigation */}
             <div className="flex flex-wrap gap-3">
               {currentSection > 0 && (
                 <button
@@ -349,7 +343,6 @@ export default function PalletBuildingLessonPage() {
           </>
         )}
 
-        {/* ════ QUIZ ═══════════════════════════════════════════════════════════ */}
         {phase === "quiz" && (
           <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 space-y-8">
             <div>

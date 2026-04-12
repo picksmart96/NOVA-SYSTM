@@ -16,6 +16,8 @@ import BeginnerBasicsLessonPage from "@/pages/BeginnerBasicsLessonPage";
 import WarehouseSafetyLessonPage from "@/pages/WarehouseSafetyLessonPage";
 import PalletBuildingLessonPage from "@/pages/PalletBuildingLessonPage";
 import PickPathOptimizationLessonPage from "@/pages/PickPathOptimizationLessonPage";
+import PerformancePaceLessonPage from "@/pages/PerformancePaceLessonPage";
+import RealShiftSimulationLessonPage from "@/pages/RealShiftSimulationLessonPage";
 import CommonMistakesPage from "@/pages/mistakes";
 import MistakeCoachingPage from "@/pages/mistake-coaching";
 import ProgressPage from "@/pages/progress";
@@ -191,6 +193,12 @@ function Router() {
       </Route>
       <Route path="/training/module-4">
         <GatedRoute><PickPathOptimizationLessonPage /></GatedRoute>
+      </Route>
+      <Route path="/training/module-5">
+        <GatedRoute><PerformancePaceLessonPage /></GatedRoute>
+      </Route>
+      <Route path="/training/module-6">
+        <GatedRoute><RealShiftSimulationLessonPage /></GatedRoute>
       </Route>
       <Route path="/training/lesson/:id">
         <GatedRoute><LessonSessionPage /></GatedRoute>

@@ -1,96 +1,355 @@
 export const warehouseSafetyLessonPage = {
-  id: "module-2-lesson-1",
+  id: "module-2",
   moduleId: "module-2",
   title: "Warehouse Safety Fundamentals",
   level: "Beginner",
   duration: "35 min",
   steps: 5,
   voiceEnabled: true,
+  type: "NOVA Voice Guided",
 
   hero: {
     heading: "Warehouse Safety Fundamentals",
     subheading:
-      "Learn the safety habits that protect your body, your equipment, and your performance every shift.",
+      "Learn how safe movement protects your body, your pace, and your money every shift.",
   },
 
-  introVoice:
-    "Welcome to Warehouse Safety Fundamentals. In this lesson, you will learn how strong selectors protect themselves, move safely, and build habits that prevent injuries and costly mistakes.",
+  introCard: {
+    title: "Lesson Focus",
+    text: "This lesson teaches the safety habits that protect your body, reduce fatigue, and keep your performance strong all shift.",
+    novaIntroVoice:
+      "Welcome to Warehouse Safety Fundamentals. In this lesson, you will learn how safety protects your time, your energy, and your money every shift.",
+  },
 
   sections: [
     {
-      id: "safety-matters",
-      title: "1. Why Safety Matters Every Shift",
-      body: [
-        "Safety is not separate from performance. It is part of performance.",
-        "A selector who lifts badly, turns too hard, rushes corners, or ignores safe movement will eventually lose rate, confidence, and control.",
-        "Strong safety habits protect your body and help you stay consistent over time.",
+      id: "rule-1",
+      title: "Rule 1 — Control Your Body",
+      novaLine: "Control your body. Protect your energy.",
+      whyItMatters:
+        "Bad body movement causes fatigue early, which slows your performance later.",
+      badExample:
+        "You twist while lifting, reach too far, and move your body in unstable positions.",
+      whatHappens: [
+        "You get tired faster",
+        "Your back and arms take stress",
+        "Your movement slows down",
+        "You lose control",
+        "Your pace drops later",
       ],
-      novaVoice:
-        "Safety is not extra. Safety is part of strong performance. Safe selectors work longer, build better, and move with more control.",
+      howToPrevent: [
+        "Lift with your legs",
+        "Keep weight close to your body",
+        "Avoid twisting while carrying",
+        "Stay balanced before moving",
+      ],
+      novaVoiceScript: `Let me show you how bad body movement costs you time.
+
+You rush into a pick.
+
+You twist your body while lifting.
+You reach too far.
+You move without balance.
+
+At first, it feels fast.
+
+But after a few aisles…
+
+Your body starts to feel it.
+
+Your arms get tired.
+Your back gets tight.
+Your movement slows down.
+
+Now your pace drops.
+
+Now every pick feels heavier.
+
+And now you are losing time.
+
+And your time is your money.
+
+Now watch the right way.
+
+You move under control.
+
+You bend with your legs.
+You keep the case close.
+You stay balanced before lifting.
+
+Now your body works with you.
+
+You stay strong longer.
+
+Your movement stays clean.
+
+And your pace stays consistent.
+
+Remember this:
+
+When your body breaks down…
+
+Your performance breaks down.
+
+Protect your body.
+
+Protect your time.`,
+      coachingClose: "Strong body control keeps your pace strong.",
     },
+
     {
-      id: "body-mechanics",
-      title: "2. Safe Body Mechanics",
-      body: [
-        "Your body is one of your most important tools in the warehouse.",
-        "Use your legs when lifting. Keep loads close to your body. Avoid twisting while carrying weight.",
-        "Reset your feet before heavy movement instead of turning your back under pressure.",
+      id: "rule-2",
+      title: "Rule 2 — Control the Pallet Jack",
+      novaLine: "Control the jack. Do not let it control you.",
+      whyItMatters:
+        "Bad jack control creates unstable pallets and forces you to slow down later.",
+      badExample:
+        "You pull too hard, turn too fast, and stop suddenly with a loaded pallet.",
+      whatHappens: [
+        "Pallet shifts",
+        "Cases move or fall",
+        "You stop to fix it",
+        "You lose confidence",
+        "You lose time",
       ],
-      novaVoice:
-        "Lift with control. Keep weight close. Do not twist under load. Reset your feet and stay balanced.",
-      bullets: [
-        "Bend with your legs, not your back.",
-        "Keep heavy cases close to your center.",
-        "Avoid rushed twisting and reaching.",
-        "Stay balanced before lifting and placing.",
+      howToPrevent: [
+        "Slow down before turns",
+        "Move smoothly",
+        "Avoid sudden stops",
+        "Stay aware of your load",
       ],
+      novaVoiceScript: `Let me show you how bad jack control costs you time.
+
+You are moving fast.
+
+You pull too hard.
+You turn too fast.
+You stop suddenly.
+
+The pallet shifts.
+
+Now cases move.
+Now the pallet becomes unstable.
+
+Now you have to stop.
+
+You fix it.
+You adjust it.
+
+Now you are losing time.
+
+And your time is your money.
+
+Now watch the right way.
+
+You move under control.
+
+You slow before turns.
+You keep movement smooth.
+You protect the load.
+
+Now the pallet stays stable.
+
+Now you keep moving.
+
+No stops.
+No fixes.
+No wasted time.
+
+Remember this:
+
+If the pallet moves too much…
+
+You will stop.
+
+And stopping costs money.`,
+      coachingClose: "Smooth movement keeps you moving. Rough movement stops you.",
     },
+
     {
-      id: "jack-awareness",
-      title: "3. Equipment and Pallet Jack Awareness",
-      body: [
-        "Pallet jack control is a major safety skill. Poor handling can injure you, damage product, and slow down the shift.",
-        "Before movement, know your direction, your space, your speed, and the stability of your load.",
-        "Always slow down before turns, avoid hard stops, and protect the pallet from sudden force.",
+      id: "rule-3",
+      title: "Rule 3 — Watch Your Environment",
+      novaLine: "See problems early. Fix them early.",
+      whyItMatters:
+        "Ignoring hazards creates bigger problems that slow you down later.",
+      badExample:
+        "You ignore a blocked path or unstable pallet and keep moving.",
+      whatHappens: [
+        "You get stuck later",
+        "You have to stop",
+        "You lose time fixing it",
+        "You break your rhythm",
       ],
-      novaVoice:
-        "Control the jack before the jack controls you. Slow down before turns. Avoid sudden stops. Keep the load stable.",
-      bullets: [
-        "Check your path before moving.",
-        "Slow down before turning.",
-        "Do not jerk the pallet.",
-        "Keep movement smooth and controlled.",
+      howToPrevent: [
+        "Watch your path",
+        "Notice unstable pallets early",
+        "Clear your space when needed",
+        "Stay aware of your surroundings",
       ],
+      novaVoiceScript: `Let me show you how ignoring problems costs you time.
+
+You see something off.
+
+A blocked path.
+An unstable pallet.
+
+But you ignore it.
+
+You keep moving.
+
+Later…
+
+It stops you.
+
+Now you are stuck.
+
+Now you fix it.
+
+Now you lose time.
+
+And your time is your money.
+
+Now watch the right way.
+
+You see the problem early.
+
+You adjust early.
+
+You clear your path.
+
+Now nothing stops you later.
+
+Remember this:
+
+Small problems early…
+
+Become big delays later.`,
+      coachingClose: "See it early. Fix it early. Keep moving.",
     },
+
     {
-      id: "hazard-awareness",
-      title: "4. Hazard Awareness and Safe Decisions",
-      body: [
-        "Selectors must constantly notice hazards around them.",
-        "Look for unstable pallets, damaged cases, floor debris, blocked aisles, poor visibility, and rushed traffic.",
-        "If something creates risk, deal with it early instead of hoping it fixes itself.",
+      id: "rule-4",
+      title: "Rule 4 — Stay Balanced and In Control",
+      novaLine: "Balance creates control. Control protects pace.",
+      whyItMatters:
+        "Losing balance leads to mistakes, extra movement, and slower pace.",
+      badExample:
+        "You rush into position and lose balance while lifting or turning.",
+      whatHappens: [
+        "You adjust your body",
+        "You take extra steps",
+        "You lose time",
+        "You risk injury",
       ],
-      novaVoice:
-        "See the problem early. Unsafe pallets, blocked paths, damaged product, and floor hazards must be handled before they become bigger problems.",
-      bullets: [
-        "Watch for blocked walkways.",
-        "Do not ignore damaged cases.",
-        "Check unstable loads early.",
-        "Protect your path and your workspace.",
+      howToPrevent: [
+        "Set your feet before lifting",
+        "Stay stable before moving",
+        "Control your turns",
+        "Avoid rushing into position",
       ],
+      novaVoiceScript: `Let me show you how losing balance costs you time.
+
+You rush into position.
+
+You are not set.
+
+You lift while off balance.
+
+Now you adjust.
+
+Now you take extra steps.
+
+Now you lose time.
+
+Now watch the right way.
+
+You set your position first.
+
+You stay balanced.
+
+Then you move.
+
+Now everything is clean.
+
+No extra movement.
+
+No wasted time.
+
+Remember this:
+
+Balance first.
+
+Then movement.`,
+      coachingClose: "Stay balanced. Stay in control. Stay efficient.",
     },
+
     {
-      id: "safe-performance",
-      title: "5. Safe Work Creates Strong Work",
-      body: [
-        "New selectors sometimes think safety slows them down. In reality, unsafe habits create more wasted motion, more hesitation, more mistakes, and more fatigue.",
-        "When your movement is controlled, your lifting is clean, and your pallet is stable, your pace improves naturally.",
-        "The goal is not careless speed. The goal is safe rhythm and repeatable performance.",
+      id: "rule-5",
+      title: "Rule 5 — Safe Work = Strong Performance",
+      novaLine: "Safe work is strong work.",
+      whyItMatters:
+        "Unsafe habits slow you down over time and reduce your performance.",
+      badExample: "You rush everything and ignore safe movement.",
+      whatHappens: [
+        "Fatigue builds faster",
+        "Control drops",
+        "Mistakes increase",
+        "Pace slows down",
       ],
-      novaVoice:
-        "Safe work creates strong work. Controlled movement leads to better pace, better quality, and more confidence.",
+      howToPrevent: [
+        "Stay controlled",
+        "Protect your body",
+        "Protect the load",
+        "Stay consistent all shift",
+      ],
+      novaVoiceScript: `Let me show you the truth about safety.
+
+You think rushing makes you faster.
+
+But it does not.
+
+You rush.
+
+You lose control.
+
+You get tired faster.
+
+Now your pace drops.
+
+Now you are working harder…
+
+But producing less.
+
+And you are losing money.
+
+Now watch the right way.
+
+You stay controlled.
+
+You move clean.
+
+You protect your body.
+
+Now your pace stays strong longer.
+
+Now you win over the full shift.
+
+Remember this:
+
+Safe work is not slow.
+
+Safe work lasts.
+
+And lasting performance makes money.`,
+      coachingClose: "Control creates consistency. Consistency creates money.",
     },
   ],
+
+  lessonClose: {
+    title: "Lesson Close",
+    novaVoice:
+      "Safety is not separate from performance. Safety protects your body. Your body protects your pace. And your pace protects your money. Stay controlled. Stay aware. And keep moving strong.",
+  },
 
   quiz: {
     passingScore: 80,
@@ -156,8 +415,8 @@ export const warehouseSafetyLessonPage = {
   completion: {
     title: "Warehouse Safety Fundamentals Completed",
     message:
-      "Lesson complete. You now understand the safety habits that protect your body, improve control, and support long-term warehouse performance.",
+      "Lesson complete. You now understand how safety protects your body, your pace, and your money.",
     novaVoice:
-      "Lesson complete. Strong work starts with safe work. Keep using these safety habits every shift.",
+      "Lesson complete. Strong work starts with safe work. Keep building.",
   },
 };

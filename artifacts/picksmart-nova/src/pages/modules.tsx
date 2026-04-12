@@ -149,6 +149,10 @@ export default function ModulesPage() {
                               ? "/training/module-3"
                               : lesson.moduleId === "mod-4"
                               ? "/training/module-4"
+                              : lesson.moduleId === "mod-5"
+                              ? "/training/module-5"
+                              : lesson.moduleId === "mod-6"
+                              ? "/training/module-6"
                               : `/training/lesson/${lesson.moduleId}`
                           )
                         }
