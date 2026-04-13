@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon, FlaskConical, DollarSign, Building2, CreditCard, Plus, Send, AlertCircle, Phone, FileText, X, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Clock } from "lucide-react";
+import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon, FlaskConical, DollarSign, Building2, CreditCard, Plus, Send, AlertCircle, Phone, FileText, X, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Clock, Youtube } from "lucide-react";
 import { Link } from "wouter";
 import { OWNER_TOKEN } from "./owner-access";
 import { useAuthStore, AuthAccount, AuthRole } from "@/lib/authStore";
@@ -8,6 +8,8 @@ import { useWarehouseStore } from "@/lib/warehouseStore";
 import { DEFAULT_WAREHOUSES, SYSTEM_TYPE_LABEL } from "@/data/warehouses";
 import { useCompanyRequestStore, CompanyRequest } from "@/lib/companyRequestStore";
 import { useTalkRequestStore, TalkRequest } from "@/lib/talkRequestStore";
+import { useLessonVideoStore, extractYoutubeId } from "@/lib/lessonVideoStore";
+import { LESSON_VIDEO_MAP } from "@/data/lessonVideoMap";
 
 // ── Mock data for demo sections ───────────────────────────────────────────────
 const ADMIN_STATS = {
@@ -2073,8 +2075,176 @@ function TalkRequestsSection() {
   );
 }
 
+// ── Lesson Videos Manager ─────────────────────────────────────────────────────
+const MODULE_META: { id: string; label: string; icon: string; searchQuery: string }[] = [
+  { id: "mod-1", label: "Mod 1 — Beginner Basics", icon: "📦", searchQuery: "warehouse order picking training beginner" },
+  { id: "mod-2", label: "Mod 2 — Warehouse Safety", icon: "🦺", searchQuery: "warehouse safety training injury prevention" },
+  { id: "mod-3", label: "Mod 3 — Pallet Building", icon: "🏗️", searchQuery: "pallet building stacking warehouse tutorial" },
+  { id: "mod-4", label: "Mod 4 — Pick Path Optimization", icon: "🗺️", searchQuery: "warehouse pick path efficiency speed" },
+  { id: "mod-5", label: "Mod 5 — Performance & Pace", icon: "⚡", searchQuery: "warehouse performance rate tracking selector" },
+  { id: "mod-6", label: "Mod 6 — Real Shift Simulation", icon: "🎧", searchQuery: "voice picking warehouse headset simulation" },
+];
+
+function LessonVideosSection() {
+  const { overrides, setOverride, removeOverride } = useLessonVideoStore();
+  const [inputs, setInputs] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saved, setSaved] = useState<Record<string, boolean>>({});
+
+  function handleSave(moduleId: string) {
+    const raw = (inputs[moduleId] ?? "").trim();
+    if (!raw) {
+      removeOverride(moduleId);
+      setSaved((s) => ({ ...s, [moduleId]: true }));
+      setTimeout(() => setSaved((s) => ({ ...s, [moduleId]: false })), 2000);
+      return;
+    }
+    const id = extractYoutubeId(raw);
+    if (!id) {
+      setErrors((e) => ({ ...e, [moduleId]: "Not a valid YouTube URL or video ID." }));
+      return;
+    }
+    setErrors((e) => ({ ...e, [moduleId]: "" }));
+    setOverride(moduleId, id);
+    setInputs((v) => ({ ...v, [moduleId]: "" }));
+    setSaved((s) => ({ ...s, [moduleId]: true }));
+    setTimeout(() => setSaved((s) => ({ ...s, [moduleId]: false })), 2500);
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-black flex items-center gap-2">
+          <Youtube className="h-6 w-6 text-red-400" />
+          Lesson Demo Videos
+        </h2>
+        <p className="text-slate-400 text-sm mt-1">
+          Paste a YouTube video URL or ID for each module. The video will appear at the bottom of that lesson page. Leave blank to show the search fallback.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        {MODULE_META.map((mod) => {
+          const override = overrides[mod.id];
+          const currentId = override?.youtubeId ?? LESSON_VIDEO_MAP[mod.id]?.youtubeId ?? "";
+          const hasVideo = !!currentId;
+          const isOwnerSet = !!override?.youtubeId;
+
+          return (
+            <div key={mod.id} className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+                <div>
+                  <p className="text-lg font-black">
+                    {mod.icon} {mod.label}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    {hasVideo ? (
+                      <span className="rounded-full bg-green-500/20 px-2.5 py-0.5 text-xs font-bold text-green-300">
+                        Video assigned {isOwnerSet ? "(custom)" : "(default)"}
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-slate-700 px-2.5 py-0.5 text-xs font-bold text-slate-400">
+                        No video — shows search link
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {hasVideo && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <a
+                      href={`https://www.youtube.com/watch?v=${currentId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 rounded-xl border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-400 hover:border-red-500/50 hover:text-red-300 transition"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Preview
+                    </a>
+                    {isOwnerSet && (
+                      <button
+                        onClick={() => removeOverride(mod.id)}
+                        className="text-slate-600 hover:text-red-400 transition p-1.5"
+                        title="Remove video"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Current video thumbnail */}
+              {hasVideo && (
+                <div className="mb-4 rounded-2xl overflow-hidden border border-slate-800">
+                  <img
+                    src={`https://img.youtube.com/vi/${currentId}/mqdefault.jpg`}
+                    alt="Video thumbnail"
+                    className="w-full h-40 object-cover"
+                  />
+                </div>
+              )}
+
+              {/* Input */}
+              <div className="flex gap-2">
+                <input
+                  value={inputs[mod.id] ?? ""}
+                  onChange={(e) => {
+                    setInputs((v) => ({ ...v, [mod.id]: e.target.value }));
+                    setErrors((err) => ({ ...err, [mod.id]: "" }));
+                  }}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleSave(mod.id); }}
+                  placeholder={hasVideo ? `Current: ${currentId} — paste new URL to change` : "Paste YouTube URL or video ID…"}
+                  className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition"
+                />
+                <button
+                  onClick={() => handleSave(mod.id)}
+                  className={`rounded-xl px-4 py-2.5 text-sm font-bold transition shrink-0 ${
+                    saved[mod.id]
+                      ? "bg-green-500 text-white"
+                      : "bg-yellow-400 text-slate-950 hover:bg-yellow-300"
+                  }`}
+                >
+                  {saved[mod.id] ? "Saved!" : hasVideo ? "Update" : "Set Video"}
+                </button>
+              </div>
+              {errors[mod.id] && (
+                <p className="text-red-400 text-xs mt-2">{errors[mod.id]}</p>
+              )}
+
+              {/* Search helper */}
+              {!hasVideo && (
+                <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                  <a
+                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(mod.searchQuery)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-red-400 hover:text-red-300 transition"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Search YouTube for this lesson
+                  </a>
+                  <span>— copy the URL from the video page and paste it above</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5 text-xs text-slate-500 space-y-1.5">
+        <p className="font-bold text-slate-400">How to add a video:</p>
+        <p>1. Find a relevant warehouse training video on YouTube</p>
+        <p>2. Copy the full URL from your browser (e.g. <span className="text-slate-400 font-mono">https://www.youtube.com/watch?v=abc123</span>)</p>
+        <p>3. Paste it into the field above and click Set Video — the 11-character ID is extracted automatically</p>
+        <p>4. The video thumbnail and player will appear at the bottom of the lesson page immediately</p>
+        <p className="text-slate-600 italic">Note: Videos must be set to public or unlisted on YouTube to embed correctly.</p>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
-const TABS = ["Dashboard", "Revenue", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests"] as const;
+const TABS = ["Dashboard", "Revenue", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests", "Lesson Videos"] as const;
 type Tab = typeof TABS[number];
 
 export default function OwnerPage() {
@@ -2094,6 +2264,7 @@ export default function OwnerPage() {
     if (tab === "Handbook")       return "📖 Handbook";
     if (tab === "Users & Access") return "👥 Users & Access";
     if (tab === "Talk Requests")  return "💬 Talk Requests";
+    if (tab === "Lesson Videos")  return "🎬 Lesson Videos";
     return "🏢 Subscriptions";
   }
 
@@ -2164,6 +2335,7 @@ export default function OwnerPage() {
         {activeTab === "Users & Access" && <UsersAccessSection />}
         {activeTab === "Subscriptions" && <SubscriptionsTab />}
         {activeTab === "Talk Requests" && <TalkRequestsSection />}
+        {activeTab === "Lesson Videos" && <LessonVideosSection />}
 
       </div>
     </div>

@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { warehouseSafetyLessonPage as lesson } from "@/data/warehouseSafetyLessonPage";
 import { useProgressStore } from "@/lib/progressStore";
 import { NovaLessonGuide } from "@/components/training/NovaLessonGuide";
+import { LessonVideoPlayer } from "@/components/training/LessonVideoPlayer";
 import {
   ArrowLeft, Volume2, VolumeX, CheckCircle2, XCircle, ChevronLeft,
   ChevronRight, Clock, BookOpen, Headphones, Award, ShieldCheck,
@@ -532,6 +533,11 @@ export default function WarehouseSafetyLessonPage() {
             )}
           </div>
         )}
+      </div>
+
+      {/* ── Demo Video ── */}
+      <div className="max-w-3xl mx-auto px-4 pb-14 pt-6">
+        <LessonVideoPlayer moduleId="mod-2" />
       </div>
     </div>
   );
