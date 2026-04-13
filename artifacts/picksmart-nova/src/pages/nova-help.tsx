@@ -4,6 +4,8 @@ import { askNovaHelp } from "@/lib/novaHelpApi";
 import { detectStopWord } from "@/lib/novaModeRouter";
 import { NovaVoiceStatus, type VoiceStateKey } from "@/components/nova/NovaVoiceStatus";
 import LockedAction from "@/components/paywall/LockedAction";
+import { useTalkRequestStore } from "@/lib/talkRequestStore";
+import { MessageCircle, X, CheckCircle2, Send } from "lucide-react";
 
 // ─── Safety check items ──────────────────────────────────────────────────────
 const SAFETY_ITEMS_EN = [
@@ -64,6 +66,24 @@ function speakText(text: string, lang: string, onEnd?: () => void) {
     voices.find((v) => v.lang.startsWith(root));
   if (preferred) u.voice = preferred;
   window.speechSynthesis.speak(u);
+}
+
+// ─── Helper: detect when NOVA can't fully answer ──────────────────────────────
+function isNovaUnsure(response: string): boolean {
+  const r = response.toLowerCase();
+  return (
+    r.includes("i focus on warehouse") ||
+    r.includes("ask me something in that area") ||
+    r.includes("outside my knowledge") ||
+    r.includes("i don't have specific") ||
+    r.includes("i'm not sure") ||
+    r.includes("not sure about that") ||
+    r.includes("can't answer that") ||
+    r.includes("don't have information") ||
+    r.includes("contact your supervisor") ||
+    r.includes("consult your") ||
+    r.includes("speak to someone")
+  );
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -137,6 +157,17 @@ export default function NovaHelpPage() {
   const { i18n } = useTranslation();
   const isSpanish = i18n.language?.startsWith("es");
   const ttsLang   = isSpanish ? "es-ES" : "en-US";
+
+  // ── Talk-to-human state ───────────────────────────────────────────────────
+  const { addRequest: addTalkRequest } = useTalkRequestStore();
+  const [showTalkCard, setShowTalkCard]     = useState(false);
+  const [talkSuggested, setTalkSuggested]  = useState(false);
+  const [talkName, setTalkName]            = useState("");
+  const [talkEmail, setTalkEmail]          = useState("");
+  const [talkCompany, setTalkCompany]      = useState("");
+  const [talkPhone, setTalkPhone]          = useState("");
+  const [talkTopic, setTalkTopic]          = useState("");
+  const [talkSubmitted, setTalkSubmitted]  = useState(false);
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [phase, setPhase]               = useState<Phase>("idle");
@@ -366,17 +397,29 @@ export default function NovaHelpPage() {
     setLastQuestion(q);
     setAnswer("");
     setErrorMsg("");
+    setTalkSuggested(false);
     setPhase("thinking");
 
     try {
       const response = await askNovaHelp(q, isSpanish ? "es" : "en");
       if (!sessionActiveRef.current) return;
+
+      const unsure = isNovaUnsure(response);
+
+      // If NOVA isn't sure, append a human-help offer to the spoken response
+      const spoken = unsure
+        ? (isSpanish
+            ? response + " Si necesitas más ayuda, puedes solicitar hablar con alguien de nuestro equipo."
+            : response + " If you need more help, you can request to speak with someone from our team.")
+        : response;
+
       setAnswer(response);
       setPhase("speaking");
       addLog("NOVA", response);
-      speakText(response, ttsLang, () => {
+
+      speakText(spoken, ttsLang, () => {
         if (sessionActiveRef.current) {
-          // After answering, go straight to question mode (no need to say NOVA again)
+          if (unsure) setTalkSuggested(true);
           setPhase("listening");
           startQuestionListenRef.current?.();
         }
@@ -729,6 +772,27 @@ export default function NovaHelpPage() {
                 <p className="text-white text-base leading-relaxed">{answer}</p>
               </div>
             )}
+
+            {/* Talk suggestion banner (shown when NOVA can't fully answer) */}
+            {talkSuggested && !showTalkCard && !talkSubmitted && (
+              <div className="rounded-2xl border border-yellow-400/40 bg-yellow-500/10 px-5 py-4">
+                <p className="text-yellow-200 font-bold text-sm mb-1">
+                  {isSpanish ? "¿Quieres hablar con alguien?" : "Want to talk to someone?"}
+                </p>
+                <p className="text-slate-400 text-xs mb-3">
+                  {isSpanish
+                    ? "NOVA no pudo responder completamente. Puedes solicitar una llamada con nuestro equipo."
+                    : "NOVA couldn't fully answer that. You can request a conversation with our team."}
+                </p>
+                <button
+                  onClick={() => setShowTalkCard(true)}
+                  className="flex items-center gap-2 rounded-xl bg-yellow-400 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-yellow-300 transition"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  {isSpanish ? "Solicitar conversación" : "Request a conversation"}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -764,6 +828,109 @@ export default function NovaHelpPage() {
               </p>
             </div>
           </div>
+        )}
+
+        {/* Talk request form */}
+        {showTalkCard && !talkSubmitted && (
+          <div className="w-full rounded-2xl border border-yellow-400/30 bg-[#1a1a2e] p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="h-4 w-4 text-yellow-400" />
+                <p className="text-yellow-300 font-bold text-sm">
+                  {isSpanish ? "Habla con nuestro equipo" : "Talk to our team"}
+                </p>
+              </div>
+              <button onClick={() => setShowTalkCard(false)} className="text-slate-500 hover:text-slate-300">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="text-slate-400 text-xs mb-4">
+              {isSpanish
+                ? "Déjanos tu información y te contactaremos pronto."
+                : "Leave your info and we'll reach out to you."}
+            </p>
+            <div className="space-y-2.5">
+              <input
+                value={talkName}
+                onChange={(e) => setTalkName(e.target.value)}
+                placeholder={isSpanish ? "Nombre completo *" : "Full name *"}
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400 transition"
+              />
+              <input
+                value={talkEmail}
+                onChange={(e) => setTalkEmail(e.target.value)}
+                placeholder={isSpanish ? "Correo electrónico *" : "Email address *"}
+                type="email"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400 transition"
+              />
+              <input
+                value={talkCompany}
+                onChange={(e) => setTalkCompany(e.target.value)}
+                placeholder={isSpanish ? "Empresa / almacén" : "Company / warehouse"}
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400 transition"
+              />
+              <input
+                value={talkPhone}
+                onChange={(e) => setTalkPhone(e.target.value)}
+                placeholder={isSpanish ? "Teléfono" : "Phone number"}
+                type="tel"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400 transition"
+              />
+              <textarea
+                value={talkTopic}
+                onChange={(e) => setTalkTopic(e.target.value)}
+                placeholder={isSpanish ? "¿De qué quieres hablar? *" : "What do you want to talk about? *"}
+                rows={3}
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400 transition resize-none"
+              />
+              <button
+                disabled={!talkName.trim() || !talkEmail.trim() || !talkTopic.trim()}
+                onClick={() => {
+                  addTalkRequest({
+                    name: talkName.trim(),
+                    email: talkEmail.trim(),
+                    company: talkCompany.trim(),
+                    phone: talkPhone.trim(),
+                    topic: talkTopic.trim(),
+                  });
+                  setTalkSubmitted(true);
+                  setShowTalkCard(false);
+                }}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-yellow-400 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Send className="h-4 w-4" />
+                {isSpanish ? "Enviar solicitud" : "Send request"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Talk request submitted confirmation */}
+        {talkSubmitted && (
+          <div className="w-full rounded-2xl border border-green-500/30 bg-green-500/10 px-5 py-4 flex items-start gap-3">
+            <CheckCircle2 className="h-5 w-5 text-green-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-green-300 font-bold text-sm">
+                {isSpanish ? "¡Solicitud enviada!" : "Request sent!"}
+              </p>
+              <p className="text-slate-400 text-xs mt-1">
+                {isSpanish
+                  ? "Nos pondremos en contacto contigo pronto."
+                  : "We'll reach out to you soon."}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Persistent "Talk to a person" button */}
+        {sessionActive && !showTalkCard && !talkSubmitted && (
+          <button
+            onClick={() => { setShowTalkCard(true); setTalkSuggested(false); }}
+            className="w-full flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/3 py-2.5 text-xs font-semibold text-slate-400 hover:border-yellow-400/40 hover:text-yellow-300 transition"
+          >
+            <MessageCircle className="h-3.5 w-3.5" />
+            {isSpanish ? "Hablar con alguien de nuestro equipo" : "Talk to someone on our team"}
+          </button>
         )}
 
         {/* Start / text input */}

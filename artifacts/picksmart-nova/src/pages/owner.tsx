@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon, FlaskConical, DollarSign, Building2, CreditCard, Plus, Send, AlertCircle, Phone, FileText, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon, FlaskConical, DollarSign, Building2, CreditCard, Plus, Send, AlertCircle, Phone, FileText, X, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Clock } from "lucide-react";
 import { Link } from "wouter";
 import { OWNER_TOKEN } from "./owner-access";
 import { useAuthStore, AuthAccount, AuthRole } from "@/lib/authStore";
@@ -7,6 +7,7 @@ import { useAccessStore } from "@/lib/accessStore";
 import { useWarehouseStore } from "@/lib/warehouseStore";
 import { DEFAULT_WAREHOUSES, SYSTEM_TYPE_LABEL } from "@/data/warehouses";
 import { useCompanyRequestStore, CompanyRequest } from "@/lib/companyRequestStore";
+import { useTalkRequestStore, TalkRequest } from "@/lib/talkRequestStore";
 
 // ── Mock data for demo sections ───────────────────────────────────────────────
 const ADMIN_STATS = {
@@ -1891,8 +1892,189 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
   );
 }
 
+// ── Talk Requests Inbox ───────────────────────────────────────────────────────
+function TalkRequestsSection() {
+  const { requests, markRead, markResolved, deleteRequest } = useTalkRequestStore();
+  const [filter, setFilter] = useState<"all" | "unread" | "read" | "resolved">("all");
+
+  const filtered = requests.filter((r) => filter === "all" || r.status === filter);
+  const unreadCount = requests.filter((r) => r.status === "unread").length;
+
+  function formatDate(iso: string) {
+    try {
+      return new Date(iso).toLocaleString("en-US", {
+        month: "short", day: "numeric", year: "numeric",
+        hour: "numeric", minute: "2-digit", hour12: true,
+      });
+    } catch {
+      return iso;
+    }
+  }
+
+  const STATUS_COLORS: Record<string, string> = {
+    unread: "bg-yellow-400/20 text-yellow-300",
+    read: "bg-slate-700 text-slate-300",
+    resolved: "bg-green-500/20 text-green-300",
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-black flex items-center gap-2">
+            <MessageCircle className="h-6 w-6 text-yellow-400" />
+            Talk Requests Inbox
+          </h2>
+          <p className="text-slate-400 text-sm mt-1">
+            Visitors and customers who requested to speak with you from the NOVA Help page.
+          </p>
+        </div>
+        {unreadCount > 0 && (
+          <span className="rounded-full bg-yellow-400 px-3 py-1 text-sm font-black text-slate-950">
+            {unreadCount} unread
+          </span>
+        )}
+      </div>
+
+      {/* Filter bar */}
+      <div className="flex flex-wrap gap-2">
+        {(["all", "unread", "read", "resolved"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`rounded-full px-4 py-1.5 text-sm font-bold transition capitalize ${
+              filter === f
+                ? "bg-yellow-400 text-slate-950"
+                : "border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white"
+            }`}
+          >
+            {f === "all" ? `All (${requests.length})` : f === "unread" ? `Unread (${unreadCount})` : f.charAt(0).toUpperCase() + f.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* Empty state */}
+      {filtered.length === 0 && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-12 text-center text-slate-500">
+          <MessageCircle className="h-10 w-10 mx-auto mb-3 opacity-30" />
+          <p className="font-semibold">No requests yet</p>
+          <p className="text-sm mt-1">
+            {filter === "all"
+              ? "Talk requests from NOVA Help will appear here."
+              : `No ${filter} requests.`}
+          </p>
+        </div>
+      )}
+
+      {/* Request cards */}
+      <div className="space-y-4">
+        {filtered.map((req) => (
+          <div
+            key={req.id}
+            className={`rounded-3xl border bg-slate-900 p-6 transition-all ${
+              req.status === "unread"
+                ? "border-yellow-400/40"
+                : req.status === "resolved"
+                ? "border-green-500/20 opacity-75"
+                : "border-slate-800"
+            }`}
+          >
+            {/* Card header */}
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <p className="text-lg font-black text-white">{req.name}</p>
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${STATUS_COLORS[req.status]}`}>
+                    {req.status}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <Clock className="h-3 w-3" />
+                  {formatDate(req.createdAt)}
+                </div>
+              </div>
+              <button
+                onClick={() => { if (confirm("Delete this request?")) deleteRequest(req.id); }}
+                className="text-slate-600 hover:text-red-400 transition p-1"
+                title="Delete request"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Contact details */}
+            <div className="grid sm:grid-cols-2 gap-3 mb-4">
+              <div className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3">
+                <p className="text-xs text-slate-500 mb-1">Email</p>
+                <a
+                  href={`mailto:${req.email}`}
+                  className="text-sm font-semibold text-yellow-400 hover:underline"
+                >
+                  {req.email}
+                </a>
+              </div>
+              {req.phone && (
+                <div className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3">
+                  <p className="text-xs text-slate-500 mb-1">Phone</p>
+                  <a
+                    href={`tel:${req.phone}`}
+                    className="text-sm font-semibold text-white hover:text-yellow-400 transition"
+                  >
+                    {req.phone}
+                  </a>
+                </div>
+              )}
+              {req.company && (
+                <div className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3">
+                  <p className="text-xs text-slate-500 mb-1">Company / Warehouse</p>
+                  <p className="text-sm font-semibold text-white">{req.company}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Topic */}
+            <div className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-4 mb-5">
+              <p className="text-xs text-slate-500 mb-1.5 uppercase tracking-wider">What they want to discuss</p>
+              <p className="text-slate-200 text-sm leading-relaxed">{req.topic}</p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-wrap gap-2">
+              {req.status === "unread" && (
+                <button
+                  onClick={() => markRead(req.id)}
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 hover:border-slate-500 hover:text-white transition"
+                >
+                  Mark as Read
+                </button>
+              )}
+              {req.status !== "resolved" && (
+                <button
+                  onClick={() => markResolved(req.id)}
+                  className="flex items-center gap-1.5 rounded-xl bg-green-500/20 border border-green-500/30 px-4 py-2 text-sm font-semibold text-green-300 hover:bg-green-500/30 transition"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  Mark as Resolved
+                </button>
+              )}
+              <a
+                href={`mailto:${req.email}?subject=PickSmart Academy - Following up on your request`}
+                className="flex items-center gap-1.5 rounded-xl bg-yellow-400/10 border border-yellow-400/30 px-4 py-2 text-sm font-semibold text-yellow-300 hover:bg-yellow-400/20 transition"
+              >
+                <Mail className="h-4 w-4" />
+                Reply via Email
+              </a>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
-const TABS = ["Dashboard", "Revenue", "Links", "Handbook", "Users & Access", "Subscriptions"] as const;
+const TABS = ["Dashboard", "Revenue", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests"] as const;
 type Tab = typeof TABS[number];
 
 export default function OwnerPage() {
@@ -1901,13 +2083,17 @@ export default function OwnerPage() {
   const pendingCount = useCompanyRequestStore((s) =>
     s.requests.filter((r) => r.status === "pending_approval" || r.status === "pending_onboarding").length
   );
+  const talkUnreadCount = useTalkRequestStore((s) =>
+    s.requests.filter((r) => r.status === "unread").length
+  );
 
   function tabLabel(tab: Tab) {
-    if (tab === "Dashboard")     return "📊 Dashboard";
-    if (tab === "Revenue")       return "💰 Revenue";
-    if (tab === "Links")         return "🔗 Links";
-    if (tab === "Handbook")      return "📖 Handbook";
+    if (tab === "Dashboard")      return "📊 Dashboard";
+    if (tab === "Revenue")        return "💰 Revenue";
+    if (tab === "Links")          return "🔗 Links";
+    if (tab === "Handbook")       return "📖 Handbook";
     if (tab === "Users & Access") return "👥 Users & Access";
+    if (tab === "Talk Requests")  return "💬 Talk Requests";
     return "🏢 Subscriptions";
   }
 
@@ -1942,6 +2128,11 @@ export default function OwnerPage() {
                   {pendingCount}
                 </span>
               )}
+              {tab === "Talk Requests" && talkUnreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-yellow-400 text-slate-950 text-xs font-black flex items-center justify-center">
+                  {talkUnreadCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -1972,6 +2163,7 @@ export default function OwnerPage() {
         {activeTab === "Handbook" && <HandbookSection />}
         {activeTab === "Users & Access" && <UsersAccessSection />}
         {activeTab === "Subscriptions" && <SubscriptionsTab />}
+        {activeTab === "Talk Requests" && <TalkRequestsSection />}
 
       </div>
     </div>
