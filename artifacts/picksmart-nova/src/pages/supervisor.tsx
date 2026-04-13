@@ -5,11 +5,12 @@ import { useTrainerStore } from "@/lib/trainerStore";
 import { useAuthStore } from "@/lib/authStore";
 import { AssignAssignmentModal } from "@/components/nova/AssignAssignmentModal";
 import { useTranslation } from "react-i18next";
+import { useSupervisorPostStore } from "@/lib/supervisorPostStore";
 import {
   Activity, Users, Zap, BookOpen, TrendingUp, Radio,
   MapPin, LogOut, Copy, Send, UserPlus, Check,
   ClipboardList, CheckCircle2, AlertCircle, DoorOpen, KeyRound,
-  Trash2, UserCheck, ShieldAlert
+  Trash2, UserCheck, ShieldAlert, Megaphone, Star, X as XIcon,
 } from "lucide-react";
 
 function formatDate(date: string) {
@@ -19,19 +20,29 @@ function formatDate(date: string) {
   });
 }
 
-const TABS = ["Overview", "Assignments", "Activate NOVA", "Selectors", "Trainers", "Sessions"] as const;
+const TABS = ["Overview", "Assignments", "Activate NOVA", "Selectors", "Trainers", "Sessions", "Shift Post"] as const;
 type Tab = typeof TABS[number];
 
 export default function SupervisorPage() {
   const { t } = useTranslation();
   const [, navigate] = useLocation();
-  const { logout, accounts, removeAccount, addInvite } = useAuthStore();
+  const { logout, accounts, removeAccount, addInvite, currentUser } = useAuthStore();
   const { trainerInviteRequests, novaSessions, stopNovaSession } = useAccessStore();
   const { selectors, sessions, assignments, removeSelector } = useTrainerStore();
+  const { posts: supervisorPosts, addPost, deletePost } = useSupervisorPostStore();
 
   const [tab, setTab] = useState<Tab>("Overview");
   const [trainerName, setTrainerName] = useState("");
   const [trainerEmail, setTrainerEmail] = useState("");
+
+  // Shift Post form state
+  const [postShiftSummary, setPostShiftSummary] = useState("");
+  const [postSafetyTopic, setPostSafetyTopic] = useState("");
+  const [postWorkload, setPostWorkload] = useState("");
+  const [postTopSelector, setPostTopSelector] = useState("");
+  const [postTopRate, setPostTopRate] = useState("");
+  const [postMessage, setPostMessage] = useState("");
+  const [postSent, setPostSent] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [preselectedAssignmentId, setPreselectedAssignmentId] = useState<string | null>(null);
   const [confirmSelector, setConfirmSelector] = useState<number | null>(null);
@@ -441,6 +452,165 @@ export default function SupervisorPage() {
         {tab === "Activate NOVA" && (
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-400">
             Use the <Link href="/trainer-portal"><span className="text-yellow-400 font-bold cursor-pointer hover:underline">Trainer Dashboard</span></Link> to activate NOVA for individual selectors.
+          </div>
+        )}
+
+        {tab === "Shift Post" && (
+          <div className="space-y-6">
+            {/* Header */}
+            <div>
+              <h2 className="text-2xl font-black flex items-center gap-2">
+                <Megaphone className="h-6 w-6 text-yellow-400" />
+                Post Today's Shift Briefing
+              </h2>
+              <p className="text-slate-400 text-sm mt-1">
+                Selectors will hear this update when they tap "🎧 Ask NOVA" on their portal.
+              </p>
+            </div>
+
+            {/* Form */}
+            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-4">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Shift Summary</label>
+                  <textarea
+                    value={postShiftSummary}
+                    onChange={(e) => setPostShiftSummary(e.target.value)}
+                    placeholder="e.g. Big volume day, 480 slots assigned. Stay focused."
+                    rows={3}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition resize-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Safety Topic</label>
+                  <textarea
+                    value={postSafetyTopic}
+                    onChange={(e) => setPostSafetyTopic(e.target.value)}
+                    placeholder="e.g. Watch your step at dock doors 12–15 — floor is wet."
+                    rows={3}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition resize-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Workload Update</label>
+                  <input
+                    value={postWorkload}
+                    onChange={(e) => setPostWorkload(e.target.value)}
+                    placeholder="e.g. Freezer section is heavy — plan extra time."
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Message to Selectors</label>
+                  <input
+                    value={postMessage}
+                    onChange={(e) => setPostMessage(e.target.value)}
+                    placeholder="e.g. Let's hit 100% accuracy today. You've got this."
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition"
+                  />
+                </div>
+              </div>
+
+              {/* Top selector */}
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Top Selector (optional)</label>
+                <div className="flex gap-3">
+                  <input
+                    value={postTopSelector}
+                    onChange={(e) => setPostTopSelector(e.target.value)}
+                    placeholder="Name"
+                    className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition"
+                  />
+                  <input
+                    value={postTopRate}
+                    onChange={(e) => setPostTopRate(e.target.value)}
+                    placeholder="Rate (e.g. 118%)"
+                    className="w-40 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition"
+                  />
+                </div>
+              </div>
+
+              <button
+                disabled={!postShiftSummary.trim() && !postSafetyTopic.trim() && !postMessage.trim()}
+                onClick={() => {
+                  addPost({
+                    postedBy: currentUser?.fullName ?? "Supervisor",
+                    shiftSummary: postShiftSummary.trim(),
+                    safetyTopic: postSafetyTopic.trim(),
+                    workloadUpdate: postWorkload.trim(),
+                    topSelectorName: postTopSelector.trim(),
+                    topSelectorRate: postTopRate.trim(),
+                    selectorMessage: postMessage.trim(),
+                  });
+                  setPostShiftSummary(""); setPostSafetyTopic(""); setPostWorkload("");
+                  setPostTopSelector(""); setPostTopRate(""); setPostMessage("");
+                  setPostSent(true);
+                  setTimeout(() => setPostSent(false), 3000);
+                }}
+                className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 font-black transition ${
+                  postSent
+                    ? "bg-green-500 text-white"
+                    : "bg-yellow-400 text-slate-950 hover:bg-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                }`}
+              >
+                {postSent ? (
+                  <><CheckCircle2 className="h-4 w-4" /> Briefing posted! Selectors will hear it now.</>
+                ) : (
+                  <><Send className="h-4 w-4" /> Post Briefing</>
+                )}
+              </button>
+            </div>
+
+            {/* Post history */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-black text-slate-300">Posted Briefings</h3>
+              {supervisorPosts.length === 0 && (
+                <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-500">
+                  <Megaphone className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                  No briefings posted yet.
+                </div>
+              )}
+              {supervisorPosts.map((post) => (
+                <div key={post.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <p className="text-xs text-slate-500">{formatDate(post.createdAt)} · by {post.postedBy}</p>
+                      {post.shiftSummary && (
+                        <p className="text-white font-semibold text-sm mt-1">{post.shiftSummary}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => { if (confirm("Delete this briefing?")) deletePost(post.id); }}
+                      className="text-slate-600 hover:text-red-400 transition p-1 shrink-0"
+                    >
+                      <XIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {post.safetyTopic && (
+                      <span className="rounded-lg bg-red-500/10 border border-red-500/20 px-2.5 py-1 text-red-300">
+                        🦺 {post.safetyTopic}
+                      </span>
+                    )}
+                    {post.workloadUpdate && (
+                      <span className="rounded-lg bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 text-blue-300">
+                        ⚡ {post.workloadUpdate}
+                      </span>
+                    )}
+                    {post.topSelectorName && (
+                      <span className="rounded-lg bg-yellow-500/10 border border-yellow-400/20 px-2.5 py-1 text-yellow-300">
+                        ⭐ {post.topSelectorName} {post.topSelectorRate}
+                      </span>
+                    )}
+                    {post.selectorMessage && (
+                      <span className="rounded-lg bg-slate-800 px-2.5 py-1 text-slate-300">
+                        💬 {post.selectorMessage}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
