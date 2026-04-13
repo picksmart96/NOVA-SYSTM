@@ -1,0 +1,166 @@
+// 🔥 OWNER CONTROL CRM + GLOBAL ALERT DASHBOARD + AGREEMENT LINK SYSTEM
+
+import React, { useEffect, useMemo, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
+
+const today = () => new Date().toISOString().slice(0,10);
+const diffDays = (a,b)=>{
+  if(!a||!b) return null;
+  return Math.floor((new Date(b)-new Date(a))/(1000*60*60*24));
+};
+
+export default function OwnerControlCRM(){
+  const [leads,setLeads]=useState([]);
+  const [alerts,setAlerts]=useState({followups:[],closing:[],renewals:[]});
+
+  useEffect(()=>{load();},[]);
+
+  const load = async ()=>{
+    const {data}=await supabase.from('owner_leads').select('*');
+    setLeads(data||[]);
+    computeAlerts(data||[]);
+  }
+
+  const computeAlerts = (data)=>{
+    const followups=[];
+    const closing=[];
+    const renewals=[];
+
+    data.forEach(d=>{
+      if(d.next_action_date===today()) followups.push(d);
+
+      if(d.trial_end && diffDays(today(),d.trial_end)<=3 && diffDays(today(),d.trial_end)>=0){
+        closing.push(d);
+      }
+
+      if(d.renewal_date && diffDays(today(),d.renewal_date)<=14 && diffDays(today(),d.renewal_date)>=0){
+        renewals.push(d);
+      }
+    });
+
+    setAlerts({followups,closing,renewals});
+  }
+
+  // =====================
+  // 💰 AGREEMENT + PAYMENT LINK
+  // =====================
+  const generateDealLink = (deal)=>{
+    const baseUrl = window.location.origin;
+
+    return `${baseUrl}/deal-sign/${deal.id}`;
+  }
+
+  return(
+    <div className="p-6 bg-slate-950 text-white min-h-screen">
+
+      <h1 className="text-3xl font-bold mb-6">🔥 Owner Command Center</h1>
+
+      {/* 🔔 ALERT DASHBOARD */}
+      <div className="grid md:grid-cols-3 gap-4 mb-8">
+
+        <AlertCard title="🔔 Follow Up Today" list={alerts.followups} />
+        <AlertCard title="📅 Closing Soon" list={alerts.closing} />
+        <AlertCard title="💰 Renewals" list={alerts.renewals} />
+
+      </div>
+
+      {/* 📊 DEAL LIST */}
+      <div className="space-y-4">
+        {leads.map(d=>(
+          <div key={d.id} className="p-5 bg-slate-900 rounded-2xl border border-slate-700">
+
+            <div className="flex justify-between">
+              <h2 className="text-xl font-bold">{d.company_name}</h2>
+              <a href={`/deal/${d.id}`} className="text-yellow-400">Open</a>
+            </div>
+
+            <p className="text-sm text-slate-400">{d.contact_name}</p>
+
+            {/* 💰 AGREEMENT LINK */}
+            <div className="mt-3">
+              <p className="text-xs text-slate-400">Client Link:</p>
+              <input
+                value={generateDealLink(d)}
+                readOnly
+                className="w-full p-2 bg-black mt-1"
+              />
+            </div>
+
+          </div>
+        ))}
+      </div>
+
+    </div>
+  )
+}
+
+function AlertCard({title,list}){
+  return(
+    <div className="bg-slate-900 p-4 rounded-2xl border border-slate-700">
+      <h3 className="font-bold mb-2">{title}</h3>
+      {list.length===0 && <p className="text-sm text-slate-400">No alerts</p>}
+      {list.map(l=>(
+        <div key={l.id} className="text-sm mb-1">{l.company_name}</div>
+      ))}
+    </div>
+  )
+}
+
+/*
+====================================
+🔥 NEW PAGE YOU MUST BUILD NEXT
+====================================
+Route: /deal-sign/:id
+
+This page will:
+
+1. Show Agreement
+2. Show Pricing
+3. Button → Stripe Checkout
+4. Capture signature (simple checkbox + name)
+
+====================================
+🔥 BACKEND IDEA (IMPORTANT)
+====================================
+
+POST /create-checkout
+
+Stripe:
+- create checkout session
+- pass deal_id
+- return url
+
+====================================
+🔥 RESULT
+====================================
+
+Client flow:
+
+You send ONE link →
+
+They:
+1. Read agreement
+2. Click agree
+3. Pay
+
+DONE ✅
+
+====================================
+🔥 THIS IS BIG
+====================================
+
+You now have:
+
+- Lead system
+- Deal pipeline
+- Alert engine
+- Closing system
+- Payment system
+
+👉 This is a REAL SaaS business system
+*/

@@ -11,6 +11,7 @@ import createCheckoutRouter from "./createCheckout";
 import novaDemoAgentRouter from "./novaDemoAgent";
 import invitesRouter from "./invites";
 import authCodesRouter from "./authCodes";
+import leadsRouter from "./leads";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(requestAccessRouter);
 router.use(createCheckoutRouter);
 router.use(invitesRouter);
 router.use(authCodesRouter);
+router.use(leadsRouter);
 
 export default router;

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon, FlaskConical, DollarSign, Building2, CreditCard, Plus, Send, AlertCircle, Phone, FileText, X, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Clock, Youtube, TrendingUp, BarChart3, Briefcase, ChevronRight, Edit3, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import { OWNER_TOKEN } from "./owner-access";
@@ -2077,75 +2077,132 @@ function TalkRequestsSection() {
 }
 
 // ── CRM Section ───────────────────────────────────────────────────────────────
-const EMPTY_LEAD = {
+const EMPTY_LEAD_FORM = {
   companyName: "", contactName: "", contactRole: "", email: "", phone: "",
   city: "", state: "", warehouseType: "", status: "new_lead" as LeadStatus,
-  nextAction: "", notes: "", contractValue: null as number | null,
+  nextAction: "", nextActionDate: "", notes: "",
+  contractValue: "", weeklyPrice: "",
+  demoDate: "", proposalDate: "", trialStart: "", trialEnd: "",
+  contractSigned: "", renewalDate: "",
+};
+
+const today = () => new Date().toISOString().slice(0, 10);
+const diffDays = (a: string | null, b: string | null) => {
+  if (!a || !b) return null;
+  return Math.floor((new Date(b).getTime() - new Date(a).getTime()) / (1000 * 60 * 60 * 24));
 };
 
 function CRMSection() {
-  const { leads, addLead, updateStatus, deleteLead, updateLead } = useLeadStore();
-  const [form, setForm] = useState({ ...EMPTY_LEAD, contractValueStr: "" });
+  const { leads, loading, fetchLeads, addLead, updateStatus, deleteLead, updateLead } = useLeadStore();
+  const [form, setForm] = useState({ ...EMPTY_LEAD_FORM });
   const [filter, setFilter] = useState<"all" | LeadStatus>("all");
   const [saveMsg, setSaveMsg] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  function field(key: string, value: string | LeadStatus) {
+  useEffect(() => { fetchLeads(); }, []);
+
+  function field(key: string, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
   const filtered = filter === "all" ? leads : leads.filter((l) => l.status === filter);
 
   const metrics = useMemo(() => {
-    const won   = leads.filter((l) => l.status === "closed_won").length;
-    const demos = leads.filter((l) => l.status === "demo_booked").length;
-    const trial = leads.filter((l) => l.status === "trial_live").length;
-    const pipeline = leads.reduce((s, l) => s + (l.contractValue ?? 0), 0);
+    const won    = leads.filter((l) => l.status === "closed_won" || l.status === "active_client").length;
+    const demos  = leads.filter((l) => l.status === "demo_booked").length;
+    const trial  = leads.filter((l) => l.status === "trial_live").length;
+    const pipeline = leads.reduce((s, l) => s + (l.contractValue ? Number(l.contractValue) : 0), 0);
     return { total: leads.length, demos, trial, won, pipeline };
   }, [leads]);
 
-  function handleSave() {
+  const alerts = useMemo(() => {
+    const td = today();
+    const followups = leads.filter((l) => l.nextActionDate === td);
+    const closing   = leads.filter((l) => {
+      const d = diffDays(td, l.trialEnd);
+      return d !== null && d >= 0 && d <= 3;
+    });
+    const renewals  = leads.filter((l) => {
+      const d = diffDays(td, l.renewalDate);
+      return d !== null && d >= 0 && d <= 14;
+    });
+    return { followups, closing, renewals };
+  }, [leads]);
+
+  async function handleSave() {
     if (!form.companyName.trim()) { setSaveMsg("Company name is required."); return; }
-    const cv = form.contractValueStr ? Number(form.contractValueStr.replace(/[^0-9.]/g, "")) : null;
-    if (editId) {
-      updateLead(editId, { ...form, contractValue: cv ?? null });
-      setEditId(null);
-    } else {
-      addLead({ ...form, contractValue: cv ?? null });
+    try {
+      const payload = {
+        ...form,
+        contractValue: form.contractValue ? form.contractValue : null,
+        weeklyPrice:   form.weeklyPrice   ? form.weeklyPrice   : null,
+        nextActionDate: form.nextActionDate || null,
+        demoDate:       form.demoDate       || null,
+        proposalDate:   form.proposalDate   || null,
+        trialStart:     form.trialStart     || null,
+        trialEnd:       form.trialEnd       || null,
+        contractSigned: form.contractSigned || null,
+        renewalDate:    form.renewalDate    || null,
+      };
+      if (editId) {
+        await updateLead(editId, payload as Parameters<typeof updateLead>[1]);
+        setEditId(null);
+        setSaveMsg("Lead updated.");
+      } else {
+        await addLead(payload as Parameters<typeof addLead>[0]);
+        setSaveMsg("Lead saved.");
+      }
+      setForm({ ...EMPTY_LEAD_FORM });
+    } catch {
+      setSaveMsg("Error saving lead.");
     }
-    setForm({ ...EMPTY_LEAD, contractValueStr: "" });
-    setSaveMsg(editId ? "Lead updated." : "Lead saved.");
     setTimeout(() => setSaveMsg(""), 3000);
   }
 
   function startEdit(lead: Lead) {
     setForm({
-      companyName: lead.companyName, contactName: lead.contactName,
-      contactRole: lead.contactRole, email: lead.email, phone: lead.phone,
-      city: lead.city, state: lead.state, warehouseType: lead.warehouseType,
-      status: lead.status, nextAction: lead.nextAction, notes: lead.notes,
-      contractValue: lead.contractValue, contractValueStr: lead.contractValue?.toString() ?? "",
+      companyName:    lead.companyName,
+      contactName:    lead.contactName,
+      contactRole:    lead.contactRole,
+      email:          lead.email,
+      phone:          lead.phone,
+      city:           lead.city,
+      state:          lead.state,
+      warehouseType:  lead.warehouseType,
+      status:         lead.status,
+      nextAction:     lead.nextAction,
+      nextActionDate: lead.nextActionDate ?? "",
+      notes:          lead.notes,
+      contractValue:  lead.contractValue ?? "",
+      weeklyPrice:    lead.weeklyPrice ?? "",
+      demoDate:       lead.demoDate ?? "",
+      proposalDate:   lead.proposalDate ?? "",
+      trialStart:     lead.trialStart ?? "",
+      trialEnd:       lead.trialEnd ?? "",
+      contractSigned: lead.contractSigned ?? "",
+      renewalDate:    lead.renewalDate ?? "",
     });
     setEditId(lead.id);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  const statusBadge = (status: LeadStatus) => {
-    const opt = STATUS_OPTIONS.find((o) => o.value === status);
-    return (
-      <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${opt?.color ?? "bg-slate-700 text-slate-300"}`}>
-        {opt?.label ?? status}
-      </span>
-    );
-  };
+  function copyDealLink(id: string) {
+    const url = `${window.location.origin}/deal-sign/${id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
+  }
 
-  const InputField = ({ label, value, onChange, placeholder = "" }: {
-    label: string; value: string; onChange: (v: string) => void; placeholder?: string;
+  const InputField = ({ label, value, onChange, placeholder = "", type = "text" }: {
+    label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
   }) => (
     <div>
       <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">{label}</label>
       <input
+        type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
@@ -2172,13 +2229,31 @@ function CRMSection() {
   return (
     <div className="space-y-8">
 
+      {/* ── Alert Dashboard ── */}
+      {(alerts.followups.length > 0 || alerts.closing.length > 0 || alerts.renewals.length > 0) && (
+        <div className="grid sm:grid-cols-3 gap-3">
+          {[
+            { title: "🔔 Follow Up Today", list: alerts.followups, border: "border-blue-500/30 bg-blue-500/5" },
+            { title: "📅 Closing Soon (≤3 days)", list: alerts.closing, border: "border-orange-500/30 bg-orange-500/5" },
+            { title: "💰 Renewals (≤14 days)", list: alerts.renewals, border: "border-yellow-400/30 bg-yellow-400/5" },
+          ].map((card) => card.list.length > 0 && (
+            <div key={card.title} className={`rounded-2xl border p-4 ${card.border}`}>
+              <p className="font-black text-sm mb-2">{card.title}</p>
+              {card.list.map((l) => (
+                <div key={l.id} className="text-sm text-slate-300 py-0.5">{l.companyName}</div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ── Pipeline Metrics ── */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
-          { label: "Total Leads",    value: metrics.total,                    icon: <Briefcase className="h-4 w-4 text-slate-400" /> },
-          { label: "Demos Booked",   value: metrics.demos,                    icon: <BarChart3 className="h-4 w-4 text-violet-400" /> },
-          { label: "Trials Live",    value: metrics.trial,                    icon: <Activity className="h-4 w-4 text-yellow-400" /> },
-          { label: "Closed Won",     value: metrics.won,                      icon: <CheckCircle2 className="h-4 w-4 text-green-400" /> },
+          { label: "Total Leads",    value: metrics.total,                         icon: <Briefcase className="h-4 w-4 text-slate-400" /> },
+          { label: "Demos Booked",   value: metrics.demos,                         icon: <BarChart3 className="h-4 w-4 text-violet-400" /> },
+          { label: "Trials Live",    value: metrics.trial,                         icon: <Activity className="h-4 w-4 text-yellow-400" /> },
+          { label: "Won/Active",     value: metrics.won,                           icon: <CheckCircle2 className="h-4 w-4 text-green-400" /> },
           { label: "Pipeline Value", value: `$${metrics.pipeline.toLocaleString()}`, icon: <DollarSign className="h-4 w-4 text-green-300" /> },
         ].map((m) => (
           <div key={m.label} className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
@@ -2209,7 +2284,7 @@ function CRMSection() {
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Status</label>
               <select
                 value={form.status}
-                onChange={(e) => field("status", e.target.value as LeadStatus)}
+                onChange={(e) => field("status", e.target.value)}
                 className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-yellow-400 transition"
               >
                 {STATUS_OPTIONS.map((o) => (
@@ -2217,15 +2292,25 @@ function CRMSection() {
                 ))}
               </select>
             </div>
-            <InputField label="Contract Value ($)" value={form.contractValueStr} onChange={(v) => field("contractValueStr", v)} placeholder="69000" />
+            <InputField label="Weekly Price ($)" value={form.weeklyPrice} onChange={(v) => field("weeklyPrice", v)} placeholder="1660" />
+            <InputField label="Contract Value ($)" value={form.contractValue} onChange={(v) => field("contractValue", v)} placeholder="69000" />
+            <InputField label="Next Action Date" value={form.nextActionDate} onChange={(v) => field("nextActionDate", v)} type="date" />
           </div>
 
-          <TextAreaField label="Next Action" value={form.nextAction} onChange={(v) => field("nextAction", v)} placeholder="Call Thursday, send demo PDF, visit in person, follow up after trial." />
+          <p className="text-xs font-black text-slate-500 uppercase tracking-widest pt-2">Deal Timeline</p>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <InputField label="Demo Date" value={form.demoDate} onChange={(v) => field("demoDate", v)} type="date" />
+            <InputField label="Proposal Date" value={form.proposalDate} onChange={(v) => field("proposalDate", v)} type="date" />
+            <InputField label="Trial Start" value={form.trialStart} onChange={(v) => field("trialStart", v)} type="date" />
+            <InputField label="Trial End" value={form.trialEnd} onChange={(v) => field("trialEnd", v)} type="date" />
+            <InputField label="Contract Signed" value={form.contractSigned} onChange={(v) => field("contractSigned", v)} type="date" />
+            <InputField label="Renewal Date" value={form.renewalDate} onChange={(v) => field("renewalDate", v)} type="date" />
+          </div>
+
+          <TextAreaField label="Next Action" value={form.nextAction} onChange={(v) => field("nextAction", v)} placeholder="Call Thursday, send demo PDF, follow up after trial." />
           <TextAreaField label="Notes" value={form.notes} onChange={(v) => field("notes", v)} placeholder="Pain points, objections, what happened in the visit." />
 
-          {saveMsg && (
-            <p className="text-sm text-yellow-300">{saveMsg}</p>
-          )}
+          {saveMsg && <p className="text-sm text-yellow-300">{saveMsg}</p>}
 
           <div className="flex gap-3 pt-1">
             <button
@@ -2236,7 +2321,7 @@ function CRMSection() {
               {editId ? "Update Lead" : "Save Lead"}
             </button>
             <button
-              onClick={() => { setForm({ ...EMPTY_LEAD, contractValueStr: "" }); setEditId(null); }}
+              onClick={() => { setForm({ ...EMPTY_LEAD_FORM }); setEditId(null); }}
               className="rounded-xl border border-slate-700 px-5 py-2.5 font-semibold text-slate-300 hover:border-slate-500 hover:text-white transition"
             >
               Clear
@@ -2265,6 +2350,7 @@ function CRMSection() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-xl font-black flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-yellow-400" /> Pipeline ({filtered.length})
+            {loading && <span className="text-xs text-slate-500 font-normal ml-1">loading…</span>}
           </h2>
           <div className="flex flex-wrap gap-2">
             <button
@@ -2285,7 +2371,7 @@ function CRMSection() {
           </div>
         </div>
 
-        {filtered.length === 0 && (
+        {filtered.length === 0 && !loading && (
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-10 text-center text-slate-500">
             <Briefcase className="h-10 w-10 mx-auto mb-3 opacity-30" />
             <p className="font-semibold">No leads yet</p>
@@ -2296,6 +2382,7 @@ function CRMSection() {
         <div className="space-y-3">
           {filtered.map((lead) => {
             const isExpanded = expandedId === lead.id;
+            const dealUrl = `${window.location.origin}/deal-sign/${lead.id}`;
             return (
               <div key={lead.id} className="rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden">
                 {/* Row header */}
@@ -2316,8 +2403,11 @@ function CRMSection() {
 
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
                     {lead.contractValue ? (
-                      <span className="text-sm font-black text-green-300">${lead.contractValue.toLocaleString()}</span>
+                      <span className="text-sm font-black text-green-300">${Number(lead.contractValue).toLocaleString()}</span>
                     ) : null}
+                    {lead.status === "active_client" && (
+                      <span className="rounded-full bg-green-400/20 px-2.5 py-0.5 text-xs font-black text-green-300">✅ Active</span>
+                    )}
                     <select
                       value={lead.status}
                       onChange={(e) => updateStatus(lead.id, e.target.value as LeadStatus)}
@@ -2327,6 +2417,12 @@ function CRMSection() {
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
                     </select>
+                    <a
+                      href={`/deal/${lead.id}`}
+                      className="rounded-xl border border-slate-700 px-2.5 py-1.5 text-xs font-bold text-slate-300 hover:border-yellow-400/50 hover:text-yellow-300 transition"
+                    >
+                      Deal
+                    </a>
                     <button
                       onClick={() => startEdit(lead)}
                       className="rounded-xl border border-slate-700 p-1.5 text-slate-400 hover:border-yellow-400/50 hover:text-yellow-300 transition"
@@ -2366,10 +2462,49 @@ function CRMSection() {
                           <p className="text-white font-semibold">{lead.warehouseType}</p>
                         </div>
                       )}
+                      {lead.weeklyPrice && (
+                        <div>
+                          <p className="text-xs text-slate-500 mb-0.5">Weekly Price</p>
+                          <p className="text-green-300 font-black">${Number(lead.weeklyPrice).toLocaleString()}/wk</p>
+                        </div>
+                      )}
                     </div>
+
+                    {/* Timeline badges */}
+                    <div className="flex flex-wrap gap-2">
+                      {lead.demoDate       && <span className="rounded-lg bg-violet-500/10 border border-violet-500/20 px-2 py-1 text-xs text-violet-300">Demo: {lead.demoDate}</span>}
+                      {lead.trialStart     && <span className="rounded-lg bg-yellow-400/10 border border-yellow-400/20 px-2 py-1 text-xs text-yellow-300">Trial: {lead.trialStart} → {lead.trialEnd ?? "?"}</span>}
+                      {lead.contractSigned && <span className="rounded-lg bg-green-500/10 border border-green-500/20 px-2 py-1 text-xs text-green-300">Signed: {lead.contractSigned}</span>}
+                      {lead.renewalDate    && <span className="rounded-lg bg-orange-500/10 border border-orange-500/20 px-2 py-1 text-xs text-orange-300">Renewal: {lead.renewalDate}</span>}
+                      {lead.signedBy       && <span className="rounded-lg bg-green-400/10 border border-green-400/20 px-2 py-1 text-xs text-green-200">✍ {lead.signedBy}</span>}
+                    </div>
+
+                    {/* Deal link */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={dealUrl}
+                        readOnly
+                        className="flex-1 rounded-xl border border-slate-700 bg-black px-3 py-2 text-xs text-slate-400 focus:outline-none"
+                      />
+                      <button
+                        onClick={() => copyDealLink(lead.id)}
+                        className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold text-slate-300 hover:border-yellow-400/50 hover:text-yellow-300 transition"
+                      >
+                        {copiedId === lead.id ? "Copied!" : "Copy Link"}
+                      </button>
+                      <a
+                        href={`/deal-sign/${lead.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-xl border border-yellow-400/30 px-3 py-2 text-xs font-bold text-yellow-300 hover:bg-yellow-400/10 transition"
+                      >
+                        Preview
+                      </a>
+                    </div>
+
                     {lead.nextAction && (
                       <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3">
-                        <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Next Action</p>
+                        <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Next Action {lead.nextActionDate ? `· ${lead.nextActionDate}` : ""}</p>
                         <p className="text-sm text-slate-200">{lead.nextAction}</p>
                       </div>
                     )}

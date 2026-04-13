@@ -70,6 +70,8 @@ import DemoNovaTrainerPage from "@/pages/demo/DemoNovaTrainerPage";
 import DemoNovaGatePage from "@/pages/demo/DemoNovaGatePage";
 import DemoNovaHelpPage from "@/pages/demo/DemoNovaHelpPage";
 import RequestAccessPage from "@/pages/RequestAccessPage";
+import DealDetailPage from "@/pages/deal-detail";
+import DealSignPage from "@/pages/deal-sign";
 
 function RedirectToOwner() {
   const [, navigate] = useLocation();
@@ -176,6 +178,12 @@ function Router() {
       </Route>
       <Route path="/checkout/company/onboard">
         <CompanyOnboardPage />
+      </Route>
+      <Route path="/deal/:id">
+        <DealDetailPage />
+      </Route>
+      <Route path="/deal-sign/:id">
+        <DealSignPage />
       </Route>
 
       {/* ── Gated — requires active subscription to view any content ── */}

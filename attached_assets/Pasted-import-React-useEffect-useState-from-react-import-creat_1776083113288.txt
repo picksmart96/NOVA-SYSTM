@@ -1,0 +1,116 @@
+import React, { useEffect, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import { useParams } from 'react-router-dom';
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
+
+export default function DealDetailPage() {
+  const { id } = useParams();
+
+  const [deal, setDeal] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    loadDeal();
+  }, []);
+
+  const loadDeal = async () => {
+    const { data } = await supabase
+      .from('owner_leads')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    setDeal(data);
+    setLoading(false);
+  };
+
+  const updateField = (key, value) => {
+    setDeal((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const saveDeal = async () => {
+    setSaving(true);
+
+    await supabase
+      .from('owner_leads')
+      .update(deal)
+      .eq('id', id);
+
+    setSaving(false);
+    alert('Deal Updated');
+  };
+
+  if (loading) return <div className="p-6 text-white">Loading...</div>;
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white p-6">
+      <h1 className="text-3xl font-bold mb-6">Deal Details</h1>
+
+      <div className="grid grid-cols-2 gap-4">
+
+        <Input label="Company" value={deal.company_name} onChange={(v)=>updateField('company_name',v)} />
+        <Input label="Contact" value={deal.contact_name} onChange={(v)=>updateField('contact_name',v)} />
+
+        <Input label="Demo Date" value={deal.demo_date || ''} onChange={(v)=>updateField('demo_date',v)} type="date" />
+        <Input label="Proposal Date" value={deal.proposal_date || ''} onChange={(v)=>updateField('proposal_date',v)} type="date" />
+
+        <Input label="Trial Start" value={deal.trial_start || ''} onChange={(v)=>updateField('trial_start',v)} type="date" />
+        <Input label="Trial End" value={deal.trial_end || ''} onChange={(v)=>updateField('trial_end',v)} type="date" />
+
+        <Input label="Contract Signed" value={deal.contract_signed || ''} onChange={(v)=>updateField('contract_signed',v)} type="date" />
+        <Input label="Renewal Date" value={deal.renewal_date || ''} onChange={(v)=>updateField('renewal_date',v)} type="date" />
+
+        <Input label="Weekly Price" value={deal.weekly_price || ''} onChange={(v)=>updateField('weekly_price',v)} />
+        <Input label="Yearly Value" value={deal.contract_value || ''} onChange={(v)=>updateField('contract_value',v)} />
+
+      </div>
+
+      <div className="mt-6">
+        <textarea
+          value={deal.notes || ''}
+          onChange={(e)=>updateField('notes', e.target.value)}
+          placeholder="Notes"
+          className="w-full p-4 bg-slate-900 rounded"
+        />
+      </div>
+
+      <button
+        onClick={saveDeal}
+        className="mt-6 bg-yellow-400 text-black px-6 py-3 rounded"
+      >
+        {saving ? 'Saving...' : 'Save Deal'}
+      </button>
+    </div>
+  );
+}
+
+function Input({ label, value, onChange, type='text' }){
+  return (
+    <div>
+      <label className="block text-sm text-yellow-300 mb-1">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e)=>onChange(e.target.value)}
+        className="w-full p-3 bg-slate-900 rounded"
+      />
+    </div>
+  );
+}
+
+/*
+ADD THESE COLUMNS IN SUPABASE:
+
+ALTER TABLE owner_leads ADD COLUMN demo_date date;
+ALTER TABLE owner_leads ADD COLUMN proposal_date date;
+ALTER TABLE owner_leads ADD COLUMN trial_start date;
+ALTER TABLE owner_leads ADD COLUMN trial_end date;
+ALTER TABLE owner_leads ADD COLUMN contract_signed date;
+ALTER TABLE owner_leads ADD COLUMN renewal_date date;
+ALTER TABLE owner_leads ADD COLUMN weekly_price numeric;
+*/

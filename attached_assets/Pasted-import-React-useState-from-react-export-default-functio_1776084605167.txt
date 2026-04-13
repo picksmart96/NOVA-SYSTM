@@ -1,0 +1,112 @@
+import React, { useState } from 'react';
+
+export default function ClientOnboardingDashboard(){
+
+  const [step,setStep] = useState(1);
+  const [company,setCompany] = useState({
+    name:'',
+    location:'',
+    selectors:[]
+  });
+
+  const [selectorName,setSelectorName] = useState('');
+
+  const next = ()=> setStep(step+1);
+
+  const addSelector = ()=>{
+    if(!selectorName) return;
+    setCompany(prev=>({
+      ...prev,
+      selectors:[...prev.selectors, selectorName]
+    }));
+    setSelectorName('');
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white p-6">
+
+      <h1 className="text-3xl font-bold mb-6">🚀 Welcome to NOVA System</h1>
+
+      {/* STEP 1 */}
+      {step===1 && (
+        <div className="bg-slate-900 p-6 rounded-2xl">
+          <h2 className="text-xl font-bold mb-4">Step 1: Setup Company</h2>
+
+          <input
+            placeholder="Company Name"
+            value={company.name}
+            onChange={(e)=>setCompany({...company,name:e.target.value})}
+            className="w-full p-3 mb-4 bg-slate-800 rounded"
+          />
+
+          <input
+            placeholder="Warehouse Location"
+            value={company.location}
+            onChange={(e)=>setCompany({...company,location:e.target.value})}
+            className="w-full p-3 mb-4 bg-slate-800 rounded"
+          />
+
+          <button onClick={next} className="bg-yellow-400 text-black px-5 py-3 rounded">
+            Continue
+          </button>
+        </div>
+      )}
+
+      {/* STEP 2 */}
+      {step===2 && (
+        <div className="bg-slate-900 p-6 rounded-2xl">
+          <h2 className="text-xl font-bold mb-4">Step 2: Add Selectors</h2>
+
+          <div className="flex gap-2 mb-4">
+            <input
+              placeholder="Selector Name"
+              value={selectorName}
+              onChange={(e)=>setSelectorName(e.target.value)}
+              className="w-full p-3 bg-slate-800 rounded"
+            />
+            <button onClick={addSelector} className="bg-yellow-400 text-black px-4 rounded">
+              Add
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {company.selectors.map((s,i)=>(
+              <div key={i} className="bg-slate-800 p-2 rounded">{s}</div>
+            ))}
+          </div>
+
+          <button onClick={next} className="mt-4 bg-yellow-400 text-black px-5 py-3 rounded">
+            Continue
+          </button>
+        </div>
+      )}
+
+      {/* STEP 3 */}
+      {step===3 && (
+        <div className="bg-slate-900 p-6 rounded-2xl">
+          <h2 className="text-xl font-bold mb-4">Step 3: Start NOVA</h2>
+
+          <p className="mb-4">Your system is ready.</p>
+
+          <button className="bg-green-400 text-black px-6 py-3 rounded font-bold">
+            🎧 Start NOVA Training
+          </button>
+
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+/*
+🔥 FLOW
+
+Login → Onboarding → Company Setup → Add Selectors → Start NOVA
+
+🔥 NEXT LEVEL
+- Save to Supabase
+- Invite selectors by email
+- Assign roles
+- Auto create NOVA IDs
+*/
