@@ -1,0 +1,138 @@
+import React, { useEffect, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
+
+export default function SelectorDashboard() {
+  const [posts, setPosts] = useState([]);
+  const [latestPost, setLatestPost] = useState(null);
+  const [companyId, setCompanyId] = useState(null);
+  const [notification, setNotification] = useState("");
+
+  // =====================
+  // LOAD DATA
+  // =====================
+  useEffect(() => {
+    const load = async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) return;
+
+      const { data: profile } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", userData.user.id)
+        .single();
+
+      if (!profile) return;
+
+      setCompanyId(profile.company_id);
+
+      const { data } = await supabase
+        .from("supervisor_posts")
+        .select("*")
+        .eq("company_id", profile.company_id)
+        .order("created_at", { ascending: false });
+
+      setPosts(data || []);
+      setLatestPost(data?.[0]);
+    };
+
+    load();
+  }, []);
+
+  // =====================
+  // 🔔 REAL-TIME SUBSCRIPTION
+  // =====================
+  useEffect(() => {
+    if (!companyId) return;
+
+    const channel = supabase
+      .channel("realtime-posts")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "supervisor_posts",
+          filter: `company_id=eq.${companyId}`,
+        },
+        (payload) => {
+          const newPost = payload.new;
+
+          setPosts((prev) => [newPost, ...prev]);
+          setLatestPost(newPost);
+
+          // 🔔 Notification
+          setNotification("📢 New supervisor update just dropped!");
+
+          setTimeout(() => setNotification(""), 5000);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [companyId]);
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white p-6">
+      
+      {/* 🔔 NOTIFICATION */}
+      {notification && (
+        <div className="mb-4 bg-yellow-400 text-black p-3 rounded text-center font-bold">
+          {notification}
+        </div>
+      )}
+
+      <h1 className="text-3xl font-bold mb-6">Selector Dashboard</h1>
+
+      {/* 🎯 TODAY'S FOCUS */}
+      {latestPost && (
+        <div className="bg-yellow-500/10 border border-yellow-400 p-5 rounded-2xl mb-6">
+          <h2 className="text-xl font-bold text-yellow-300 mb-2">
+            🎯 Today’s Focus
+          </h2>
+
+          {latestPost.safety_topic && (
+            <p><b>Safety:</b> {latestPost.safety_topic}</p>
+          )}
+
+          {latestPost.workload_update && (
+            <p><b>Workload:</b> {latestPost.workload_update}</p>
+          )}
+
+          {latestPost.selector_message && (
+            <p className="mt-2 text-blue-300">
+              {latestPost.selector_message}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* 📢 FULL FEED */}
+      <div className="space-y-4">
+        {posts.map((p) => (
+          <div key={p.id} className="bg-slate-900 p-5 rounded-2xl border border-slate-700">
+            <p className="text-yellow-300 text-sm">
+              {new Date(p.created_at).toLocaleString()}
+            </p>
+
+            {p.shift_summary && <p><b>Shift:</b> {p.shift_summary}</p>}
+            {p.safety_topic && <p><b>Safety:</b> {p.safety_topic}</p>}
+            {p.workload_update && <p><b>Workload:</b> {p.workload_update}</p>}
+            {p.top_selector_name && (
+              <p><b>Top Selector:</b> {p.top_selector_name} ({p.top_selector_rate})</p>
+            )}
+            {p.selector_message && (
+              <p className="mt-2 text-blue-300">{p.selector_message}</p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

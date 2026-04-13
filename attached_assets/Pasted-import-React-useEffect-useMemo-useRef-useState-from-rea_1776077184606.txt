@@ -1,0 +1,474 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+// =====================
+// ENV
+// =====================
+const getEnv = (key) => {
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
+    return import.meta.env[key];
+  }
+  if (typeof window !== 'undefined' && window.__ENV && window.__ENV[key]) {
+    return window.__ENV[key];
+  }
+  return undefined;
+};
+
+const SUPABASE_URL = getEnv('VITE_SUPABASE_URL');
+const SUPABASE_ANON_KEY = getEnv('VITE_SUPABASE_ANON_KEY');
+const supabase = createClient(SUPABASE_URL || '', SUPABASE_ANON_KEY || '');
+
+const WAREHOUSE_KEYWORDS = [
+  'aisle',
+  'slot',
+  'door',
+  'dock',
+  'printer',
+  'label',
+  'assignment',
+  'zone',
+  'warehouse',
+  'check code',
+  'staging',
+  'selector',
+  'pallet',
+  'pick path',
+  'freezer',
+  'cooler',
+];
+
+const QUICK_PROMPTS = [
+  'How do I build a stable pallet?',
+  'How do I avoid a mispick?',
+  'What should I do if I fall behind pace?',
+  'Where is aisle 17 in my warehouse?',
+];
+
+function isWarehouseSpecificQuestion(text) {
+  const lower = text.toLowerCase();
+  return WAREHOUSE_KEYWORDS.some((k) => lower.includes(k));
+}
+
+function formatTime(date) {
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
+export default function NovaHelpUI() {
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [warehouseData, setWarehouseData] = useState(null);
+  const [input, setInput] = useState('');
+  const [messages, setMessages] = useState([
+    {
+      id: 'welcome',
+      role: 'assistant',
+      text:
+        "Hi, I'm NOVA Help. Ask me anything about warehouse work, pallet building, safety, pace, or your warehouse setup. For warehouse-specific questions, I use your logged-in account to identify your company access.",
+      createdAt: new Date(),
+    },
+  ]);
+  const [isSending, setIsSending] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [error, setError] = useState('');
+
+  const recognitionRef = useRef(null);
+  const messagesEndRef = useRef(null);
+
+  const canUseVoiceRecognition = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  }, []);
+
+  const canUseSpeech = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return 'speechSynthesis' in window;
+  }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const { data, error: authError } = await supabase.auth.getUser();
+        if (authError) throw authError;
+        if (!data?.user) return;
+
+        setUser(data.user);
+
+        const { data: userProfile, error: profileError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profileError && profileError.code !== 'PGRST116') throw profileError;
+        setProfile(userProfile || null);
+
+        if (userProfile?.company_id) {
+          const { data: warehouse, error: warehouseError } = await supabase
+            .from('warehouse_data')
+            .select('*')
+            .eq('company_id', userProfile.company_id)
+            .single();
+
+          if (warehouseError && warehouseError.code !== 'PGRST116') throw warehouseError;
+          setWarehouseData(warehouse || null);
+        }
+      } catch (e) {
+        console.error(e);
+        setError('Unable to load account or warehouse data.');
+      }
+    };
+
+    loadUser();
+  }, []);
+
+  useEffect(() => {
+    if (!canUseVoiceRecognition) return;
+
+    const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognitionClass();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      setError('');
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+      setError('Voice input did not work. Try again in a quieter area.');
+    };
+
+    recognition.onresult = (event) => {
+      const text = event.results?.[0]?.[0]?.transcript || '';
+      if (text.trim()) {
+        setInput(text.trim());
+      }
+    };
+
+    recognitionRef.current = recognition;
+  }, [canUseVoiceRecognition]);
+
+  const speakText = (text) => {
+    if (!canUseSpeech || !voiceEnabled) return;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const startListening = () => {
+    if (!recognitionRef.current) return;
+    recognitionRef.current.start();
+  };
+
+  const stopListening = () => {
+    recognitionRef.current?.stop();
+  };
+
+  const addMessage = (role, text) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        role,
+        text,
+        createdAt: new Date(),
+      },
+    ]);
+  };
+
+  const handleQuickPrompt = (prompt) => {
+    setInput(prompt);
+  };
+
+  const sendMessage = async () => {
+    const trimmed = input.trim();
+    if (!trimmed || isSending) return;
+
+    setError('');
+    addMessage('user', trimmed);
+    setInput('');
+    setIsSending(true);
+
+    try {
+      const warehouseSpecific = isWarehouseSpecificQuestion(trimmed);
+
+      if (warehouseSpecific && (!user || !profile)) {
+        const reply =
+          'Please sign in to ask questions about your warehouse setup, aisles, slots, doors, or assignments. I can still answer general warehouse training questions without login.';
+        addMessage('assistant', reply);
+        speakText(reply);
+        return;
+      }
+
+      const payload = {
+        message: trimmed,
+        userId: user?.id || null,
+        companyId: profile?.company_id || null,
+        role: profile?.role || null,
+        warehouseSpecific,
+        warehouseData: warehouseSpecific ? warehouseData : null,
+        conversation: messages.slice(-8).map((m) => ({ role: m.role, text: m.text })),
+      };
+
+      const response = await fetch('/api/nova-help', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error('Backend request failed');
+      }
+
+      const data = await response.json();
+      const reply = data?.reply || 'I could not generate a reply right now.';
+      addMessage('assistant', reply);
+      speakText(reply);
+    } catch (e) {
+      console.error(e);
+      const fallback =
+        'NOVA Help could not reach the server right now. Check your backend route, Supabase keys, and network connection.';
+      addMessage('assistant', fallback);
+      setError('Server connection issue.');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const onSubmit = (e) => {
+    e.preventDefault();
+    sendMessage();
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white p-4 md:p-6">
+      <div className="mx-auto max-w-6xl grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <aside className="rounded-3xl border border-slate-800 bg-slate-900 p-6 h-fit">
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-yellow-300">NOVA Help</p>
+          <h1 className="mt-3 text-3xl font-black">Warehouse AI Brain</h1>
+          <p className="mt-4 text-slate-300 leading-7">
+            Ask NOVA about selecting, pallet building, pace, safety, ergonomics, or your warehouse setup.
+          </p>
+
+          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+            <p className="text-sm font-bold text-yellow-300">Account Status</p>
+            <div className="mt-3 space-y-2 text-sm text-slate-300">
+              <p>User: {user?.email || 'Not signed in'}</p>
+              <p>Role: {profile?.role || 'Guest'}</p>
+              <p>Warehouse Access: {warehouseData ? 'Connected' : 'General only'}</p>
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+            <p className="text-sm font-bold text-yellow-300">Quick Questions</p>
+            <div className="mt-3 space-y-2">
+              {QUICK_PROMPTS.map((prompt) => (
+                <button
+                  key={prompt}
+                  onClick={() => handleQuickPrompt(prompt)}
+                  className="w-full rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3 text-left text-sm text-slate-200 hover:border-yellow-400"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+            <p className="text-sm font-bold text-yellow-300">Voice Controls</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={isListening ? stopListening : startListening}
+                disabled={!canUseVoiceRecognition}
+                className="rounded-xl bg-yellow-400 px-4 py-2 font-bold text-slate-950 disabled:opacity-40"
+              >
+                {isListening ? 'Stop Listening' : 'Start Voice'}
+              </button>
+              <button
+                onClick={() => setVoiceEnabled((v) => !v)}
+                className="rounded-xl border border-slate-700 px-4 py-2 font-semibold"
+              >
+                {voiceEnabled ? 'Voice On' : 'Voice Off'}
+              </button>
+            </div>
+            {!canUseVoiceRecognition ? (
+              <p className="mt-3 text-xs text-slate-400">Voice input is not supported in this browser.</p>
+            ) : null}
+          </div>
+        </aside>
+
+        <main className="rounded-3xl border border-slate-800 bg-slate-900 p-4 md:p-6 flex flex-col min-h-[80vh]">
+          <div className="border-b border-slate-800 pb-4 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-black">Chat with NOVA</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                General questions work for everyone. Warehouse-specific questions use your logged-in company access.
+              </p>
+            </div>
+            <div className="rounded-2xl bg-slate-950 border border-slate-800 px-4 py-2 text-sm text-slate-300">
+              {isSending ? 'NOVA is thinking...' : 'Ready'}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto py-6 space-y-4">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-[85%] rounded-3xl px-5 py-4 shadow-lg ${
+                    message.role === 'user'
+                      ? 'bg-yellow-400 text-slate-950'
+                      : 'bg-slate-950 border border-slate-800 text-slate-100'
+                  }`}
+                >
+                  <div className="whitespace-pre-wrap leading-7 text-sm md:text-base">{message.text}</div>
+                  <div
+                    className={`mt-2 text-[11px] ${
+                      message.role === 'user' ? 'text-slate-800/70' : 'text-slate-500'
+                    }`}
+                  >
+                    {formatTime(message.createdAt)}
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {error ? (
+            <div className="mb-4 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              {error}
+            </div>
+          ) : null}
+
+          <form onSubmit={onSubmit} className="border-t border-slate-800 pt-4">
+            <div className="flex gap-3 items-end">
+              <div className="flex-1">
+                <label className="sr-only" htmlFor="nova-input">
+                  Ask NOVA
+                </label>
+                <textarea
+                  id="nova-input"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Ask NOVA anything about warehouse work, picking, safety, or your warehouse setup..."
+                  rows={3}
+                  className="w-full resize-none rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={!input.trim() || isSending}
+                className="rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 disabled:opacity-50"
+              >
+                Send
+              </button>
+            </div>
+          </form>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+/*
+========================================
+REPLIT BACKEND EXAMPLE: /api/nova-help
+========================================
+
+import express from 'express';
+import OpenAI from 'openai';
+
+const router = express.Router();
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+router.post('/api/nova-help', async (req, res) => {
+  try {
+    const {
+      message,
+      warehouseSpecific,
+      warehouseData,
+      role,
+      conversation = [],
+    } = req.body;
+
+    const systemPrompt = `
+You are NOVA Help, a warehouse AI trainer and assistant.
+
+Rules:
+- Answer clearly, directly, and professionally.
+- Help with warehouse jobs, selecting, pallet building, pace, safety, ergonomics, and training.
+- If the question is warehouse-specific, only use the provided warehouseData.
+- Never invent private warehouse information.
+- If warehouse-specific information is missing, ask the user to sign in or confirm access.
+- Speak like a real warehouse trainer, not like a generic chatbot.
+- Be practical and job-focused.
+
+User role: ${role || 'guest'}
+Warehouse data: ${warehouseData ? JSON.stringify(warehouseData) : 'None provided'}
+Warehouse-specific question: ${warehouseSpecific ? 'Yes' : 'No'}
+`;
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...conversation.map((m) => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.text,
+      })),
+      { role: 'user', content: message },
+    ];
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages,
+      temperature: 0.4,
+    });
+
+    const reply = completion.choices?.[0]?.message?.content || 'I could not answer that right now.';
+    res.json({ reply });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ reply: 'NOVA Help had a server problem.' });
+  }
+});
+
+export default router;
+
+========================================
+SUPABASE TABLE IDEA
+========================================
+
+warehouse_data
+- id
+- company_id
+- warehouse_name
+- aisles_json
+- zones_json
+- doors_json
+- printers_json
+- assignment_notes
+
+users
+- id
+- email
+- role
+- company_id
+*/
