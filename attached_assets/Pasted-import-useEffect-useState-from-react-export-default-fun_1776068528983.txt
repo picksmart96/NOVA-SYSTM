@@ -1,0 +1,303 @@
+import { useEffect, useState } from 'react';
+
+export default function CommonMistakeLessonPagePreview() {
+  const lesson = {
+    risk: 'critical risk',
+    category: 'Pallet Quality',
+    title: 'Unstable Pallet — Collapse Risk',
+    heroLine: 'Build like a brick wall — interlocked, even, and solid.',
+    novaLine: 'Interlock every layer. No columns. No gaps. Keep it wide and stable.',
+    coachingScript: `A falling pallet is a liability.
+It hurts people.
+It destroys product.
+It holds up the dock.
+
+Let me show you how it happens.
+
+You stack fast.
+You build straight up in columns.
+You leave gaps in the layer.
+You let one side grow taller than the other.
+
+It looks fine for a moment.
+Nothing stops you.
+
+But during travel…
+The weight shifts.
+The gaps give way.
+The columns have no support.
+
+Now the pallet leans.
+Now it falls.
+
+Product is destroyed.
+The dock stops.
+Someone could get hurt.
+
+That is a serious incident.
+
+Now watch the right way.
+
+You slow down for a few seconds.
+You build like a bricklayer.
+
+Each case overlaps two below it.
+Each layer is filled before the next starts.
+The load stays wide and even.
+
+Now when the pallet moves…
+It stays locked together.
+
+No leaning.
+No collapse.
+No cleanup.
+
+Remember this:
+
+Five seconds of correct placement saves an hour of cleanup.` ,
+    whyItHappens:
+      'Unstable pallets happen when selectors stack in straight vertical columns, leave gaps, or build tall and narrow instead of wide and interlocked.',
+    whatGoesWrong:
+      'The pallet leans or collapses in transit or at the dock. Product is damaged, delivery is delayed, and there is risk of injury. Quality records are flagged.',
+    fixSteps: [
+      'Interlock layers like bricks — each case overlaps two below it to lock the structure.',
+      'Never stack in straight columns — columns collapse under movement.',
+      'Fill each layer completely before starting the next to remove gaps.',
+      'Keep the pallet wide and even — do not let one side grow taller.',
+      'Stay under safe height (around 60 inches) — tall and narrow pallets fall.',
+    ],
+  };
+
+  const scenario = {
+    assignment: 'Assignment 251740',
+    location: 'Aisle 23 · Mixed Load',
+    issue: 'Stacked in columns with gaps',
+  };
+
+  // 🔊 NOVA VOICE (simple TTS)
+  const speak = (text) => {
+    if (!('speechSynthesis' in window)) return;
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 1;
+    utter.pitch = 1;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utter);
+  };
+
+  // 🎮 SIMULATION MODE
+  const [mode, setMode] = useState('learn'); // learn | simulate
+  const [step, setStep] = useState(0);
+  const simulationSteps = [
+    {
+      prompt: 'Build your first layer. What do you do?',
+      options: ['Stack in columns', 'Interlock cases'],
+      correct: 1,
+    },
+    {
+      prompt: 'You see a gap in the pallet. What do you do?',
+      options: ['Leave it', 'Fill the gap before next layer'],
+      correct: 1,
+    },
+    {
+      prompt: 'One side is getting taller. What now?',
+      options: ['Keep stacking same side', 'Balance the pallet evenly'],
+      correct: 1,
+    },
+  ];
+
+  const [simResult, setSimResult] = useState(null);
+
+  const handleSimAnswer = (index) => {
+    if (index === simulationSteps[step].correct) {
+      if (step + 1 < simulationSteps.length) {
+        setStep(step + 1);
+      } else {
+        setSimResult('success');
+      }
+    } else {
+      setSimResult('fail');
+    }
+  };
+
+  // 🧱 SIMPLE ANIMATION STATE
+  const [animate, setAnimate] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setAnimate(true), 600);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white p-6">
+      <div className="mx-auto max-w-6xl space-y-10">
+
+        {/* HEADER */}
+        <div className="rounded-3xl bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 p-10 shadow-2xl">
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-300">{lesson.risk}</span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-300">{lesson.category}</span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-700 text-slate-300">NOVA Coaching</span>
+          </div>
+
+          <h1 className="mt-5 text-5xl font-black tracking-tight">{lesson.title}</h1>
+          <p className="mt-4 text-xl text-slate-300 max-w-3xl">{lesson.heroLine}</p>
+
+          <div className="mt-6 bg-yellow-400/10 border border-yellow-400/30 rounded-2xl p-6">
+            <p className="text-xs uppercase tracking-wide text-yellow-300 font-bold">NOVA Coaching Line</p>
+            <p className="mt-2 text-lg text-yellow-100 font-semibold">{lesson.novaLine}</p>
+          </div>
+        </div>
+
+        {/* SCRIPT */}
+        <div className="rounded-3xl bg-slate-900 border border-slate-800 p-10 shadow-xl">
+          <h2 className="text-3xl font-black">Coaching Breakdown</h2>
+          <p className="mt-6 text-slate-300 leading-8 text-lg whitespace-pre-line">{lesson.coachingScript}</p>
+        </div>
+
+        {/* SCENARIO */}
+        <div className="rounded-3xl bg-gradient-to-r from-red-500/10 to-yellow-500/10 border border-yellow-400/30 p-10">
+          <h2 className="text-3xl font-black text-yellow-200">Real Shift Scenario</h2>
+
+          <div className="mt-4 text-slate-300">
+            <p>{scenario.assignment}</p>
+            <p>{scenario.location}</p>
+            <p className="mt-2 text-red-300 font-semibold">Issue: {scenario.issue}</p>
+          </div>
+
+          <div className="mt-8 grid md:grid-cols-2 gap-6">
+            <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-6">
+              <h3 className="text-red-300 font-bold">Wrong Flow</h3>
+              <ul className="mt-4 space-y-2 text-slate-300">
+                <li>Gaps in layers</li>
+                <li>Vertical columns</li>
+                <li>Pallet leans in motion</li>
+                <li>Collapse risk / cleanup delay</li>
+              </ul>
+            </div>
+
+            <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-6">
+              <h3 className="text-green-300 font-bold">Correct Flow</h3>
+              <ul className="mt-4 space-y-2 text-slate-300">
+                <li>Interlocked layers</li>
+                <li>Filled base each level</li>
+                <li>Even, wide structure</li>
+                <li>Stable pallet in transit</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* VISUAL MENTAL CUE BOX + ANIMATION + VOICE + TEST */}
+        <div className="rounded-3xl border border-yellow-400/30 bg-yellow-500/10 p-10 shadow-xl">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-3xl font-black text-yellow-200">STACK LIKE THIS</h2>
+            <button
+              onClick={() => speak('Notice the difference. Columns collapse. Interlock holds.')}
+              className="bg-yellow-400 text-black px-4 py-2 rounded-xl font-bold"
+            >
+              🔊 Play NOVA
+            </button>
+          </div>
+
+          <div className="mt-8 grid md:grid-cols-2 gap-8 items-start">
+            {/* WRONG */}
+            <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-6">
+              <h3 className="text-red-300 font-bold mb-4">❌ Columns (Unstable)</h3>
+              <div className="space-y-2 text-center text-slate-300">
+                <div className={`${animate ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'} transition-all duration-500`}>⬜ ⬜</div>
+                <div className={`${animate ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'} transition-all duration-700`}>⬜ ⬜</div>
+                <div className={`${animate ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'} transition-all duration-900`}>⬜ ⬜</div>
+              </div>
+              <p className="mt-4 text-sm text-slate-400">No overlap. No support. Collapses under movement.</p>
+            </div>
+
+            {/* CORRECT */}
+            <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-6">
+              <h3 className="text-green-300 font-bold mb-4">✅ Interlocked (Stable)</h3>
+              <div className="space-y-2 text-center text-slate-300">
+                <div className={`${animate ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'} transition-all duration-500`}>⬜⬜</div>
+                <div className={`pl-4 ${animate ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'} transition-all duration-700`}>⬜⬜</div>
+                <div className={`${animate ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'} transition-all duration-900`}>⬜⬜</div>
+              </div>
+              <p className="mt-4 text-sm text-slate-400">Each layer overlaps. Locked structure. Stable in motion.</p>
+            </div>
+          </div>
+
+          {/* MODE SWITCH */}
+          <div className="mt-10 flex gap-4">
+            <button onClick={() => {setMode('learn'); setStep(0); setSimResult(null);}} className="px-4 py-2 border rounded-xl">Learn Mode</button>
+            <button onClick={() => {setMode('simulate'); setStep(0); setSimResult(null);}} className="px-4 py-2 bg-yellow-400 text-black rounded-xl font-bold">Simulation Mode</button>
+          </div>
+
+          {/* SIMULATION */}
+          {mode === 'simulate' && (
+            <div className="mt-8 bg-slate-900 border border-yellow-400/30 rounded-2xl p-6">
+              {!simResult ? (
+                <>
+                  <h3 className="text-xl font-bold text-yellow-200">{simulationSteps[step].prompt}</h3>
+                  <div className="mt-4 space-y-3">
+                    {simulationSteps[step].options.map((opt, i) => (
+                      <button key={i} onClick={() => handleSimAnswer(i)} className="w-full text-left px-4 py-3 border border-slate-700 rounded-xl hover:border-yellow-400">
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : simResult === 'success' ? (
+                <p className="text-green-300 font-bold">Simulation Complete — Pallet built correctly.</p>
+              ) : (
+                <p className="text-red-300 font-bold">Mistake made — pallet became unstable.</p>
+              )}
+            </div>
+          )}
+
+          <div className="mt-6 text-slate-300">
+            <p>
+              Think like a bricklayer: every case supports the next. No gaps. No columns. Every layer locks the pallet together.
+            </p>
+          </div>
+        </div>
+
+        {/* DETAILS */} */}
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8">
+            <h3 className="text-xl font-bold">Why It Happens</h3>
+            <p className="mt-4 text-slate-300 leading-7">{lesson.whyItHappens}</p>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8">
+            <h3 className="text-xl font-bold">What Goes Wrong</h3>
+            <p className="mt-4 text-slate-300 leading-7">{lesson.whatGoesWrong}</p>
+          </div>
+        </div>
+
+        {/* FIX STEPS */}
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-10">
+          <h2 className="text-3xl font-black">Fix It — Step by Step</h2>
+
+          <div className="mt-6 grid gap-4">
+            {lesson.fixSteps.map((step, i) => (
+              <div key={i} className="flex gap-4 items-start bg-slate-950 border border-slate-800 rounded-2xl p-5">
+                <div className="h-10 w-10 rounded-full bg-yellow-400 text-black font-black flex items-center justify-center">
+                  {i + 1}
+                </div>
+                <p className="text-slate-200 leading-7">{step}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* FOOTER */}
+        <div className="bg-gradient-to-r from-yellow-500/10 to-yellow-400/10 border border-yellow-400/30 rounded-3xl p-10">
+          <h2 className="text-2xl font-black text-yellow-200">Lesson Complete</h2>
+          <p className="mt-4 text-slate-300">Interlocked pallets move safely, protect product, and keep the dock running. Five seconds now saves an hour later.</p>
+
+          <div className="mt-6 flex gap-4">
+            <button className="bg-yellow-400 text-black px-6 py-3 rounded-xl font-bold">Replay NOVA</button>
+            <button className="border border-slate-600 px-6 py-3 rounded-xl">Next Lesson</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}

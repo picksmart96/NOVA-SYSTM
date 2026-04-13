@@ -1,0 +1,134 @@
+import { useEffect, useState } from 'react';
+
+// 🔐 MOCK USER (replace with real auth later)
+const USER_ID = 'demo-user-001';
+
+// 💾 SIMPLE STORAGE LAYER (replace with API/Supabase later)
+const loadProgress = () => {
+  try {
+    const data = localStorage.getItem(`nova_progress_${USER_ID}`);
+    return data ? JSON.parse(data) : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveProgress = (data) => {
+  localStorage.setItem(`nova_progress_${USER_ID}`, JSON.stringify(data));
+};
+
+export default function CommonMistakeLessonPagePreview() {
+  const lesson = {
+    risk: 'medium risk',
+    category: 'Mindset',
+    title: 'Giving Up Too Early',
+    heroLine: 'The job gets easier — but only if you stay long enough to see it.',
+    novaLine: 'Week two is hard. Week four is different. Stay through it.',
+  };
+
+  // 📊 STATE
+  const [day, setDay] = useState(1);
+  const [completed, setCompleted] = useState(false);
+
+  // 🔄 LOAD USER DATA
+  useEffect(() => {
+    const saved = loadProgress();
+    if (saved) {
+      setDay(saved.day || 1);
+      setCompleted(saved.completed || false);
+    }
+  }, []);
+
+  // 💾 SAVE USER DATA
+  useEffect(() => {
+    saveProgress({ day, completed });
+  }, [day, completed]);
+
+  const progressPercent = Math.min(100, Math.round((day / 30) * 100));
+
+  // 🔊 NOVA VOICE
+  const speak = (text) => {
+    if (!('speechSynthesis' in window)) return;
+    const utter = new SpeechSynthesisUtterance(text);
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utter);
+  };
+
+  const playMotivation = () => {
+    const msg = day <= 14
+      ? 'You are in week two. Stay with it.'
+      : day <= 28
+      ? 'Your body is adapting. Keep going.'
+      : 'You made it to day 30. The job gets easier from here.';
+    speak(msg);
+  };
+
+  const getPhase = () => {
+    if (day <= 7) return 'Learning Phase';
+    if (day <= 14) return 'Hard Phase (Most Quit Here)';
+    if (day <= 21) return 'Adaptation Phase';
+    if (day <= 28) return 'Confidence Phase';
+    return 'Breakthrough Phase';
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white p-6">
+      <div className="mx-auto max-w-4xl space-y-8">
+
+        {/* HEADER */}
+        <div className="bg-slate-900 p-8 rounded-3xl">
+          <h1 className="text-3xl font-black">{lesson.title}</h1>
+          <p className="mt-2 text-slate-300">{lesson.heroLine}</p>
+        </div>
+
+        {/* 🚀 PROGRESS SYSTEM */}
+        <div className="bg-yellow-500/10 border border-yellow-400/30 p-8 rounded-3xl">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-bold text-yellow-200">30-Day Progress</h2>
+            <button onClick={playMotivation} className="bg-yellow-400 text-black px-3 py-2 rounded-lg font-bold">
+              🔊 NOVA
+            </button>
+          </div>
+
+          {/* BAR */}
+          <div className="mt-6">
+            <div className="w-full bg-slate-800 h-3 rounded-full">
+              <div
+                className="bg-yellow-400 h-3 rounded-full"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <p className="mt-2 text-sm text-slate-300">Day {day}/30 ({progressPercent}%)</p>
+          </div>
+
+          {/* CONTROLS */}
+          <div className="mt-4 flex gap-2">
+            <button onClick={() => setDay(Math.max(1, day - 1))} className="px-3 py-2 border rounded">-</button>
+            <button onClick={() => setDay(Math.min(30, day + 1))} className="px-3 py-2 bg-yellow-400 text-black rounded">+</button>
+            <button onClick={() => setCompleted(true)} className="px-3 py-2 bg-green-500 text-black rounded">
+              Mark Complete
+            </button>
+          </div>
+
+          {/* PHASE */}
+          <div className="mt-6 bg-slate-900 p-4 rounded-xl">
+            <p className="font-bold text-yellow-200">{getPhase()}</p>
+            <p className="text-sm text-slate-300 mt-1">
+              {day <= 14 && 'Hard phase — stay with it.'}
+              {day > 14 && day <= 21 && 'Your body is adapting.'}
+              {day > 21 && day <= 28 && 'Confidence building.'}
+              {day > 28 && 'Breakthrough achieved.'}
+            </p>
+          </div>
+        </div>
+
+        {/* STATUS */}
+        <div className="bg-slate-900 p-6 rounded-2xl">
+          <p className="text-slate-300">Progress is saved automatically for this user.</p>
+          {completed && <p className="text-green-400 font-bold mt-2">Lesson Completed ✔</p>}
+        </div>
+
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,168 @@
+import { useEffect, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+// 🔑 SUPABASE SETUP (REPLACE WITH YOUR KEYS IN REPLIT ENV)
+const supabase = createClient(
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_ANON_KEY
+);
+
+export default function CommonMistakeLessonPagePreview() {
+  const lesson = {
+    title: 'Giving Up Too Early',
+    heroLine: 'The job gets easier — but only if you stay long enough to see it.',
+  };
+
+  // 📊 STATE
+  const [user, setUser] = useState(null);
+  const [day, setDay] = useState(1);
+  const [completed, setCompleted] = useState(false);
+
+  // 🔐 LOGIN (AUTO SESSION)
+  useEffect(() => {
+    const getUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (data?.user) setUser(data.user);
+    };
+    getUser();
+  }, []);
+
+  // 🔄 LOAD PROGRESS FROM DATABASE
+  useEffect(() => {
+    if (!user) return;
+
+    const load = async () => {
+      const { data } = await supabase
+        .from('user_progress')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (data) {
+        setDay(data.day || 1);
+        setCompleted(data.completed || false);
+      }
+    };
+
+    load();
+  }, [user]);
+
+  // 💾 SAVE PROGRESS TO DATABASE
+  useEffect(() => {
+    if (!user) return;
+
+    const save = async () => {
+      await supabase.from('user_progress').upsert({
+        user_id: user.id,
+        day,
+        completed,
+      });
+    };
+
+    save();
+  }, [day, completed, user]);
+
+  const progressPercent = Math.min(100, Math.round((day / 30) * 100));
+
+  // 🔊 NOVA VOICE
+  const speak = (text) => {
+    const utter = new SpeechSynthesisUtterance(text);
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utter);
+  };
+
+  const playMotivation = () => {
+    const msg = day <= 14
+      ? 'You are in week two. Stay with it.'
+      : day <= 28
+      ? 'Your body is adapting. Keep going.'
+      : 'You made it to day 30. The job gets easier from here.';
+    speak(msg);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white p-6">
+      <div className="mx-auto max-w-4xl space-y-8">
+
+        {/* HEADER */}
+        <div className="bg-slate-900 p-8 rounded-3xl">
+          <h1 className="text-3xl font-black">{lesson.title}</h1>
+          <p className="mt-2 text-slate-300">{lesson.heroLine}</p>
+        </div>
+
+        {/* 🚀 PROGRESS SYSTEM */}
+        <div className="bg-yellow-500/10 border border-yellow-400/30 p-8 rounded-3xl">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-bold text-yellow-200">30-Day Progress</h2>
+            <button onClick={playMotivation} className="bg-yellow-400 text-black px-3 py-2 rounded-lg font-bold">
+              🔊 NOVA
+            </button>
+          </div>
+
+          {/* BAR */}
+          <div className="mt-6">
+            <div className="w-full bg-slate-800 h-3 rounded-full">
+              <div
+                className="bg-yellow-400 h-3 rounded-full"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <p className="mt-2 text-sm text-slate-300">Day {day}/30 ({progressPercent}%)</p>
+          </div>
+
+          {/* CONTROLS */}
+          <div className="mt-4 flex gap-2">
+            <button onClick={() => setDay(Math.max(1, day - 1))} className="px-3 py-2 border rounded">-</button>
+            <button onClick={() => setDay(Math.min(30, day + 1))} className="px-3 py-2 bg-yellow-400 text-black rounded">+</button>
+            <button onClick={() => setCompleted(true)} className="px-3 py-2 bg-green-500 text-black rounded">
+              Mark Complete
+            </button>
+          </div>
+        </div>
+
+        {/* STATUS */}
+        <div className="bg-slate-900 p-6 rounded-2xl">
+          <p className="text-slate-300">Progress is saved to your account.</p>
+          {completed && <p className="text-green-400 font-bold mt-2">Lesson Completed ✔</p>}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+// ==========================
+// 🧠 SUPABASE DATABASE SETUP (PUT IN OWNER CONTROL PAGE / ADMIN DOC)
+// ==========================
+
+/*
+CREATE TABLE companies (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name text
+);
+
+CREATE TABLE users (
+  id uuid PRIMARY KEY,
+  email text,
+  company_id uuid REFERENCES companies(id),
+  role text
+);
+
+CREATE TABLE user_progress (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id uuid REFERENCES users(id),
+  day int,
+  completed boolean
+);
+
+// 🔐 ROW LEVEL SECURITY (VERY IMPORTANT)
+ALTER TABLE user_progress ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can only see their progress"
+ON user_progress
+FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their progress"
+ON user_progress
+FOR INSERT WITH CHECK (auth.uid() = user_id);
+*/

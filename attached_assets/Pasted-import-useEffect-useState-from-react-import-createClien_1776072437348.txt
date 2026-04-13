@@ -1,0 +1,247 @@
+import { useEffect, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_ANON_KEY
+);
+
+// =====================
+// 🔗 HELPERS
+// =====================
+const genCode = () => Math.random().toString(36).substring(2, 8);
+
+export default function App() {
+  // =====================
+  // 🔐 AUTH + PROFILE
+  // =====================
+  const [user, setUser] = useState(null);
+  const [role, setRole] = useState(null);
+  const [companyId, setCompanyId] = useState(null);
+
+  // =====================
+  // 📊 PROGRESS
+  // =====================
+  const [day, setDay] = useState(1);
+  const progressPercent = Math.round((day / 30) * 100);
+
+  // =====================
+  // 🔗 INVITES
+  // =====================
+  const [inviteCode, setInviteCode] = useState('');
+  const [inviteLink, setInviteLink] = useState('');
+
+  // =====================
+  // 🔐 LOAD USER
+  // =====================
+  useEffect(() => {
+    const load = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (!data?.user) return;
+      setUser(data.user);
+
+      const { data: profile } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profile) {
+        setRole(profile.role);
+        setCompanyId(profile.company_id);
+      }
+    };
+    load();
+  }, []);
+
+  // =====================
+  // 💾 LOAD/SAVE PROGRESS
+  // =====================
+  useEffect(() => {
+    if (!user) return;
+    const load = async () => {
+      const { data } = await supabase
+        .from('user_progress')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+      if (data) setDay(data.day || 1);
+    };
+    load();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('user_progress').upsert({ user_id: user.id, day });
+  }, [day, user]);
+
+  // =====================
+  // 🔊 NOVA VOICE
+  // =====================
+  const speak = (t) => {
+    const u = new SpeechSynthesisUtterance(t);
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  };
+
+  // =====================
+  // 🏢 OWNER: CREATE INVITE + EMAIL + QR
+  // =====================
+  const createInvite = async (roleType) => {
+    const code = genCode();
+    await supabase.from('invites').insert({ code, role: roleType, company_id: companyId });
+
+    const link = `${window.location.origin}/join/${code}`;
+    setInviteLink(link);
+
+    // 📧 SIMPLE EMAIL TRIGGER (use Supabase Edge/Resend later)
+    await supabase.from('email_queue').insert({
+      to_email: user?.email,
+      subject: 'Invite Link',
+      body: link,
+    });
+  };
+
+  // =====================
+  // 🔓 JOIN WITH CODE
+  // =====================
+  const joinWithCode = async () => {
+    const { data } = await supabase
+      .from('invites')
+      .select('*')
+      .eq('code', inviteCode)
+      .single();
+
+    if (!data) return alert('Invalid code');
+
+    await supabase.from('users').upsert({
+      id: user.id,
+      email: user.email,
+      role: data.role,
+      company_id: data.company_id,
+    });
+
+    window.location.reload();
+  };
+
+  // =====================
+  // 🧭 ROLE DASHBOARDS
+  // =====================
+  const SelectorDashboard = () => (
+    <div className="p-6 bg-yellow-500/10 rounded-2xl">
+      <h2 className="text-xl font-bold">Selector Dashboard</h2>
+      <p>Training, Progress, Leaderboard</p>
+    </div>
+  );
+
+  const TrainerDashboard = () => (
+    <div className="p-6 bg-green-500/10 rounded-2xl">
+      <h2 className="text-xl font-bold">Trainer Dashboard</h2>
+      <p>Manage sessions, assign training</p>
+    </div>
+  );
+
+  const SupervisorDashboard = () => (
+    <div className="p-6 bg-blue-500/10 rounded-2xl">
+      <h2 className="text-xl font-bold">Supervisor Dashboard</h2>
+      <p>Performance overview, analytics</p>
+    </div>
+  );
+
+  const OwnerDashboard = () => (
+    <div className="p-6 bg-purple-500/10 rounded-2xl space-y-4">
+      <h2 className="text-xl font-bold">Owner Control Panel</h2>
+
+      <div className="flex gap-3">
+        <button onClick={() => createInvite('supervisor')} className="bg-blue-400 px-3 py-2 rounded">Invite Supervisor</button>
+        <button onClick={() => createInvite('trainer')} className="bg-green-400 px-3 py-2 rounded">Invite Trainer</button>
+        <button onClick={() => createInvite('selector')} className="bg-yellow-400 px-3 py-2 rounded">Invite Selector</button>
+      </div>
+
+      {inviteLink && (
+        <div className="mt-4">
+          <p className="text-sm">Invite Link:</p>
+          <p className="text-yellow-300 break-all">{inviteLink}</p>
+
+          {/* QR CODE */}
+          <img
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${inviteLink}`}
+            alt="QR"
+            className="mt-3"
+          />
+        </div>
+      )}
+    </div>
+  );
+
+  const renderDashboard = () => {
+    if (role === 'owner') return <OwnerDashboard />;
+    if (role === 'supervisor') return <SupervisorDashboard />;
+    if (role === 'trainer') return <TrainerDashboard />;
+    if (role === 'selector') return <SelectorDashboard />;
+    return null;
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white p-6">
+      <div className="mx-auto max-w-4xl space-y-8">
+
+        {/* HEADER */}
+        <div className="bg-slate-900 p-6 rounded-2xl">
+          <h1 className="text-2xl font-black">PickSmart NOVA</h1>
+        </div>
+
+        {/* JOIN */}
+        {!role && (
+          <div className="bg-yellow-500/10 p-6 rounded-2xl">
+            <input
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value)}
+              placeholder="Enter Code"
+              className="p-2 text-black rounded"
+            />
+            <button onClick={joinWithCode} className="ml-2 bg-yellow-400 px-4 py-2 rounded">Join</button>
+          </div>
+        )}
+
+        {/* DASHBOARD */}
+        {role && renderDashboard()}
+
+        {/* PROGRESS */}
+        {role === 'selector' && (
+          <div className="bg-yellow-500/10 p-6 rounded-2xl">
+            <h3>Progress</h3>
+            <div className="w-full bg-slate-800 h-3 rounded">
+              <div className="bg-yellow-400 h-3" style={{ width: `${progressPercent}%` }} />
+            </div>
+            <div className="mt-2 flex gap-2">
+              <button onClick={() => setDay(day - 1)}>-</button>
+              <button onClick={() => setDay(day + 1)}>+</button>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+/*
+// =====================
+// 🧠 DATABASE ADD
+// =====================
+
+CREATE TABLE invites (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  code text,
+  role text,
+  company_id uuid
+);
+
+CREATE TABLE email_queue (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  to_email text,
+  subject text,
+  body text
+);
+*/

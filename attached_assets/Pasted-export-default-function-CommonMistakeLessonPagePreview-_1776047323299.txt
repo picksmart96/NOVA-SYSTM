@@ -1,0 +1,237 @@
+export default function CommonMistakeLessonPagePreview() {
+  const lesson = {
+    risk: 'high risk',
+    category: 'Accuracy',
+    title: 'Over Pick — Extra Quantity',
+    heroLine: 'An over-pick feels helpful — but it breaks the order.',
+    novaLine: 'Be exact. NOVA gives the number for a reason. Your job is precision, not generosity.',
+    coachingScript:
+      `An over-pick seems harmless — you gave them more. But it throws off inventory, receipts, and store ordering for every item that store tracks.
+
+Let me show you what really happens.
+
+You hear: pick 8.
+
+The slot looks almost empty.
+You think: I’ll just take the rest.
+
+So you grab 10.
+
+Nothing stops you.
+The system keeps moving.
+
+But now the store receives more than it ordered.
+
+Inventory counts go off.
+Receiving has to stop and figure it out.
+Extra cases get returned or reshipped.
+
+That is real time lost for the company.
+
+And your accuracy gets hit the same as a mispick.
+
+Now imagine this across multiple stops.
+
+Extra cases here.
+Extra cases there.
+
+Now the entire order is harder to receive and track.
+
+That costs time.
+That costs money.
+
+Now watch the right way.
+
+You hear: pick 8.
+
+You count clean.
+
+One… two… three… four… five… six… seven… eight.
+
+You stop exactly at eight.
+
+Even if the slot has more left.
+
+Now the order is correct.
+The store receives exactly what it expects.
+The system stays clean.
+
+And you keep moving without correction.
+
+Remember this:
+
+Extra is not helpful.
+Exact is professional.
+
+And professional work protects money.`,
+    whyItHappens:
+      'Over picks happen when a selector assumes more is better, does not stop counting at the correct number, or tries to empty a nearly empty slot instead of following the system.',
+    whatGoesWrong:
+      'The store receives more than ordered. Inventory counts become inaccurate. Receiving gets delayed. Extra product must be returned or corrected. The selector loses accuracy points.',
+    fixSteps: [
+      'Stop exactly at the quantity NOVA gave you — not one more. Your stop point is part of the job.',
+      'Do not empty a slot just because it is almost empty. The system controls inventory, not your judgment.',
+      'Re-count after placing — if you have too many, remove the extra before moving or saying ready.',
+      'Never round up to save time later. That creates more work for the operation.',
+      "If the quantity sounds wrong, say 'repeat' and confirm. Do not change the number yourself.",
+    ],
+    quiz: [
+      {
+        question: 'Why is over picking a problem?',
+        options: ['It helps the store', 'It breaks inventory and creates extra work', 'It makes you faster', 'Nothing happens'],
+      },
+      {
+        question: 'What should you do if the slot has more product left?',
+        options: ['Take it all', 'Ignore it and pick exact quantity', 'Guess', 'Add extra to help'],
+      },
+      {
+        question: 'What is the correct mindset for picking?',
+        options: ['Generosity', 'Speed only', 'Precision', 'Guessing'],
+      },
+    ],
+  };
+
+  // 🔥 ADD THIS COMPONENT FOR REAL SHIFT SCENARIO
+  const scenario = {
+    title: "REAL SHIFT SCENARIO",
+    assignment: "Assignment 251737",
+    location: "Aisle 22 Slot 104",
+    pick: "Pick 8",
+    mistake: "Selector takes 10",
+    wrongFlow: [
+      "Inventory off",
+      "Receiving delayed",
+      "Extra product flagged",
+      "Accuracy hit",
+    ],
+    correctFlow: [
+      "Count 1–8",
+      "Stop exactly at 8",
+      "Leave remaining product",
+      "Clean order, no correction",
+    ],
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white p-6">
+      <div className="mx-auto max-w-5xl space-y-8">
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
+          <div className="flex flex-wrap gap-3 items-center">
+            <span className="rounded-full bg-red-500/20 px-3 py-1 text-xs font-bold text-red-300">
+              {lesson.risk}
+            </span>
+            <span className="rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-bold text-yellow-300">
+              {lesson.category}
+            </span>
+            <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-bold text-slate-300">
+              NOVA coached
+            </span>
+          </div>
+
+          <h1 className="mt-4 text-4xl font-black">{lesson.title}</h1>
+          <p className="mt-4 text-xl text-slate-200">{lesson.heroLine}</p>
+
+          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-5">
+            <p className="text-sm font-bold uppercase tracking-wide text-yellow-300">NOVA Coaching Line</p>
+            <p className="mt-3 text-lg text-slate-100">{lesson.novaLine}</p>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
+          <h2 className="text-2xl font-black">NOVA Coaching Script</h2>
+          <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950 p-6">
+            <p className="leading-8 text-slate-200">{lesson.coachingScript}</p>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-yellow-400 bg-yellow-500/10 p-8 shadow-xl">
+          <h2 className="text-2xl font-black text-yellow-200">REAL SHIFT SCENARIO</h2>
+          <div className="mt-4 text-slate-200 space-y-2">
+            <p>{scenario.assignment}</p>
+            <p>{scenario.location}</p>
+            <p>{scenario.pick}</p>
+          </div>
+
+          <div className="mt-6">
+            <p className="font-bold text-red-300">❌ Wrong Flow</p>
+            <ul className="mt-2 space-y-1 text-slate-300">
+              {scenario.wrongFlow.map((item, i) => (
+                <li key={i}>→ {item}</li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="mt-6">
+            <p className="font-bold text-green-300">✅ Correct Flow</p>
+            <ul className="mt-2 space-y-1 text-slate-300">
+              {scenario.correctFlow.map((item, i) => (
+                <li key={i}>→ {item}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
+            <h2 className="text-2xl font-black">Why It Happens</h2>
+            <p className="mt-4 text-slate-300 leading-7">{lesson.whyItHappens}</p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
+            <h2 className="text-2xl font-black">What Goes Wrong</h2>
+            <p className="mt-4 text-slate-300 leading-7">{lesson.whatGoesWrong}</p>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
+          <h2 className="text-2xl font-black">5 Fix Steps</h2>
+          <div className="mt-6 space-y-4">
+            {lesson.fixSteps.map((step, index) => (
+              <div key={index} className="flex gap-4 items-start rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                <div className="h-9 w-9 rounded-full bg-yellow-400 text-slate-950 font-black flex items-center justify-center shrink-0">
+                  {index + 1}
+                </div>
+                <p className="text-slate-200 leading-7">{step}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
+          <h2 className="text-2xl font-black">Quick Quiz</h2>
+          <div className="mt-6 space-y-5">
+            {lesson.quiz.map((q, qIndex) => (
+              <div key={qIndex} className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                <p className="font-bold text-white">{qIndex + 1}. {q.question}</p>
+                <div className="mt-4 space-y-3">
+                  {q.options.map((option, oIndex) => (
+                    <div
+                      key={oIndex}
+                      className="rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3 text-slate-200"
+                    >
+                      {option}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-yellow-400 bg-yellow-500/10 p-8 shadow-xl">
+          <h2 className="text-2xl font-black text-yellow-200">Lesson Footer / Completion Area</h2>
+          <p className="mt-4 text-slate-100 leading-7">
+            This is where you can show: coaching complete, pass score, next mistake button,
+            previous mistake button, replay NOVA, or mark as coached.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button className="rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950">Replay NOVA</button>
+            <button className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold text-white">Previous</button>
+            <button className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold text-white">Next Mistake</button>
+            <button className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold text-white">Mark Coached</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
