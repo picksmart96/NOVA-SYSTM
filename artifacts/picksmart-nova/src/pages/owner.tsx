@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon, FlaskConical, DollarSign, Building2, CreditCard, Plus, Send, AlertCircle, Phone, FileText, X, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Clock, Youtube } from "lucide-react";
+import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon, FlaskConical, DollarSign, Building2, CreditCard, Plus, Send, AlertCircle, Phone, FileText, X, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Clock, Youtube, TrendingUp, BarChart3, Briefcase, ChevronRight, Edit3, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import { OWNER_TOKEN } from "./owner-access";
 import { useAuthStore, AuthAccount, AuthRole } from "@/lib/authStore";
@@ -10,6 +10,7 @@ import { useCompanyRequestStore, CompanyRequest } from "@/lib/companyRequestStor
 import { useTalkRequestStore, TalkRequest } from "@/lib/talkRequestStore";
 import { useLessonVideoStore, extractYoutubeId } from "@/lib/lessonVideoStore";
 import { LESSON_VIDEO_MAP } from "@/data/lessonVideoMap";
+import { useLeadStore, Lead, LeadStatus, STATUS_OPTIONS, HANDBOOK_SECTIONS } from "@/lib/leadStore";
 
 // ── Mock data for demo sections ───────────────────────────────────────────────
 const ADMIN_STATS = {
@@ -2075,6 +2076,323 @@ function TalkRequestsSection() {
   );
 }
 
+// ── CRM Section ───────────────────────────────────────────────────────────────
+const EMPTY_LEAD = {
+  companyName: "", contactName: "", contactRole: "", email: "", phone: "",
+  city: "", state: "", warehouseType: "", status: "new_lead" as LeadStatus,
+  nextAction: "", notes: "", contractValue: null as number | null,
+};
+
+function CRMSection() {
+  const { leads, addLead, updateStatus, deleteLead, updateLead } = useLeadStore();
+  const [form, setForm] = useState({ ...EMPTY_LEAD, contractValueStr: "" });
+  const [filter, setFilter] = useState<"all" | LeadStatus>("all");
+  const [saveMsg, setSaveMsg] = useState("");
+  const [editId, setEditId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  function field(key: string, value: string | LeadStatus) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  const filtered = filter === "all" ? leads : leads.filter((l) => l.status === filter);
+
+  const metrics = useMemo(() => {
+    const won   = leads.filter((l) => l.status === "closed_won").length;
+    const demos = leads.filter((l) => l.status === "demo_booked").length;
+    const trial = leads.filter((l) => l.status === "trial_live").length;
+    const pipeline = leads.reduce((s, l) => s + (l.contractValue ?? 0), 0);
+    return { total: leads.length, demos, trial, won, pipeline };
+  }, [leads]);
+
+  function handleSave() {
+    if (!form.companyName.trim()) { setSaveMsg("Company name is required."); return; }
+    const cv = form.contractValueStr ? Number(form.contractValueStr.replace(/[^0-9.]/g, "")) : null;
+    if (editId) {
+      updateLead(editId, { ...form, contractValue: cv ?? null });
+      setEditId(null);
+    } else {
+      addLead({ ...form, contractValue: cv ?? null });
+    }
+    setForm({ ...EMPTY_LEAD, contractValueStr: "" });
+    setSaveMsg(editId ? "Lead updated." : "Lead saved.");
+    setTimeout(() => setSaveMsg(""), 3000);
+  }
+
+  function startEdit(lead: Lead) {
+    setForm({
+      companyName: lead.companyName, contactName: lead.contactName,
+      contactRole: lead.contactRole, email: lead.email, phone: lead.phone,
+      city: lead.city, state: lead.state, warehouseType: lead.warehouseType,
+      status: lead.status, nextAction: lead.nextAction, notes: lead.notes,
+      contractValue: lead.contractValue, contractValueStr: lead.contractValue?.toString() ?? "",
+    });
+    setEditId(lead.id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  const statusBadge = (status: LeadStatus) => {
+    const opt = STATUS_OPTIONS.find((o) => o.value === status);
+    return (
+      <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${opt?.color ?? "bg-slate-700 text-slate-300"}`}>
+        {opt?.label ?? status}
+      </span>
+    );
+  };
+
+  const InputField = ({ label, value, onChange, placeholder = "" }: {
+    label: string; value: string; onChange: (v: string) => void; placeholder?: string;
+  }) => (
+    <div>
+      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">{label}</label>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition"
+      />
+    </div>
+  );
+
+  const TextAreaField = ({ label, value, onChange, placeholder = "" }: {
+    label: string; value: string; onChange: (v: string) => void; placeholder?: string;
+  }) => (
+    <div>
+      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">{label}</label>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={3}
+        className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition resize-none"
+      />
+    </div>
+  );
+
+  return (
+    <div className="space-y-8">
+
+      {/* ── Pipeline Metrics ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {[
+          { label: "Total Leads",    value: metrics.total,                    icon: <Briefcase className="h-4 w-4 text-slate-400" /> },
+          { label: "Demos Booked",   value: metrics.demos,                    icon: <BarChart3 className="h-4 w-4 text-violet-400" /> },
+          { label: "Trials Live",    value: metrics.trial,                    icon: <Activity className="h-4 w-4 text-yellow-400" /> },
+          { label: "Closed Won",     value: metrics.won,                      icon: <CheckCircle2 className="h-4 w-4 text-green-400" /> },
+          { label: "Pipeline Value", value: `$${metrics.pipeline.toLocaleString()}`, icon: <DollarSign className="h-4 w-4 text-green-300" /> },
+        ].map((m) => (
+          <div key={m.label} className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <div className="flex items-center gap-2 mb-2">{m.icon}<p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">{m.label}</p></div>
+            <p className="text-2xl font-black text-white">{m.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-6">
+
+        {/* ── Add / Edit Lead Form ── */}
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-4">
+          <h2 className="text-xl font-black flex items-center gap-2">
+            {editId ? <><Edit3 className="h-5 w-5 text-yellow-400" /> Edit Lead</> : <><Plus className="h-5 w-5 text-yellow-400" /> Add Lead or Deal</>}
+          </h2>
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <InputField label="Company Name *" value={form.companyName} onChange={(v) => field("companyName", v)} />
+            <InputField label="Contact Name" value={form.contactName} onChange={(v) => field("contactName", v)} />
+            <InputField label="Contact Role" value={form.contactRole} onChange={(v) => field("contactRole", v)} placeholder="Operations Manager" />
+            <InputField label="Email" value={form.email} onChange={(v) => field("email", v)} />
+            <InputField label="Phone" value={form.phone} onChange={(v) => field("phone", v)} />
+            <InputField label="City" value={form.city} onChange={(v) => field("city", v)} />
+            <InputField label="State" value={form.state} onChange={(v) => field("state", v)} />
+            <InputField label="Warehouse Type" value={form.warehouseType} onChange={(v) => field("warehouseType", v)} placeholder="Grocery DC / 3PL / Cold Storage" />
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Status</label>
+              <select
+                value={form.status}
+                onChange={(e) => field("status", e.target.value as LeadStatus)}
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-yellow-400 transition"
+              >
+                {STATUS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <InputField label="Contract Value ($)" value={form.contractValueStr} onChange={(v) => field("contractValueStr", v)} placeholder="69000" />
+          </div>
+
+          <TextAreaField label="Next Action" value={form.nextAction} onChange={(v) => field("nextAction", v)} placeholder="Call Thursday, send demo PDF, visit in person, follow up after trial." />
+          <TextAreaField label="Notes" value={form.notes} onChange={(v) => field("notes", v)} placeholder="Pain points, objections, what happened in the visit." />
+
+          {saveMsg && (
+            <p className="text-sm text-yellow-300">{saveMsg}</p>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <button
+              onClick={handleSave}
+              className="flex items-center gap-2 rounded-xl bg-yellow-400 px-5 py-2.5 font-black text-slate-950 hover:bg-yellow-300 transition"
+            >
+              <Send className="h-4 w-4" />
+              {editId ? "Update Lead" : "Save Lead"}
+            </button>
+            <button
+              onClick={() => { setForm({ ...EMPTY_LEAD, contractValueStr: "" }); setEditId(null); }}
+              className="rounded-xl border border-slate-700 px-5 py-2.5 font-semibold text-slate-300 hover:border-slate-500 hover:text-white transition"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+
+        {/* ── Sales Handbook ── */}
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-4">
+          <h2 className="text-xl font-black flex items-center gap-2">
+            <BookOpen className="h-5 w-5 text-yellow-400" /> Sales Handbook
+          </h2>
+          <div className="space-y-3">
+            {HANDBOOK_SECTIONS.map((section) => (
+              <div key={section.title} className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <p className="text-xs font-black text-yellow-400 uppercase tracking-widest mb-2">{section.title}</p>
+                <p className="text-sm text-slate-200 leading-relaxed">{section.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Lead Pipeline ── */}
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-xl font-black flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-yellow-400" /> Pipeline ({filtered.length})
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setFilter("all")}
+              className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${filter === "all" ? "bg-yellow-400 text-slate-950" : "border border-slate-700 text-slate-400 hover:text-white"}`}
+            >
+              All ({leads.length})
+            </button>
+            {STATUS_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                onClick={() => setFilter(o.value)}
+                className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${filter === o.value ? "bg-yellow-400 text-slate-950" : "border border-slate-700 text-slate-400 hover:text-white"}`}
+              >
+                {o.label} ({leads.filter((l) => l.status === o.value).length})
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {filtered.length === 0 && (
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-10 text-center text-slate-500">
+            <Briefcase className="h-10 w-10 mx-auto mb-3 opacity-30" />
+            <p className="font-semibold">No leads yet</p>
+            <p className="text-sm mt-1">Add your first lead or deal above.</p>
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {filtered.map((lead) => {
+            const isExpanded = expandedId === lead.id;
+            return (
+              <div key={lead.id} className="rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden">
+                {/* Row header */}
+                <div className="flex flex-wrap items-center gap-3 px-5 py-4">
+                  <button
+                    onClick={() => setExpandedId(isExpanded ? null : lead.id)}
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                  >
+                    <ChevronRight className={`h-4 w-4 text-slate-500 shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                    <div className="min-w-0">
+                      <p className="font-black text-white truncate">{lead.companyName}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {lead.contactName}{lead.contactRole ? ` · ${lead.contactRole}` : ""}
+                        {lead.city ? ` · ${lead.city}${lead.state ? `, ${lead.state}` : ""}` : ""}
+                      </p>
+                    </div>
+                  </button>
+
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    {lead.contractValue ? (
+                      <span className="text-sm font-black text-green-300">${lead.contractValue.toLocaleString()}</span>
+                    ) : null}
+                    <select
+                      value={lead.status}
+                      onChange={(e) => updateStatus(lead.id, e.target.value as LeadStatus)}
+                      className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-yellow-400 transition"
+                    >
+                      {STATUS_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => startEdit(lead)}
+                      className="rounded-xl border border-slate-700 p-1.5 text-slate-400 hover:border-yellow-400/50 hover:text-yellow-300 transition"
+                      title="Edit"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => { if (confirm(`Delete ${lead.companyName}?`)) deleteLead(lead.id); }}
+                      className="rounded-xl border border-slate-700 p-1.5 text-slate-500 hover:border-red-500/50 hover:text-red-400 transition"
+                      title="Delete"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Expanded detail */}
+                {isExpanded && (
+                  <div className="border-t border-slate-800 px-5 py-4 space-y-3 bg-slate-950/50">
+                    <div className="grid sm:grid-cols-3 gap-3 text-sm">
+                      {lead.email && (
+                        <div>
+                          <p className="text-xs text-slate-500 mb-0.5">Email</p>
+                          <a href={`mailto:${lead.email}`} className="text-yellow-400 hover:underline font-semibold">{lead.email}</a>
+                        </div>
+                      )}
+                      {lead.phone && (
+                        <div>
+                          <p className="text-xs text-slate-500 mb-0.5">Phone</p>
+                          <a href={`tel:${lead.phone}`} className="text-white font-semibold hover:text-yellow-400 transition">{lead.phone}</a>
+                        </div>
+                      )}
+                      {lead.warehouseType && (
+                        <div>
+                          <p className="text-xs text-slate-500 mb-0.5">Warehouse Type</p>
+                          <p className="text-white font-semibold">{lead.warehouseType}</p>
+                        </div>
+                      )}
+                    </div>
+                    {lead.nextAction && (
+                      <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3">
+                        <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">Next Action</p>
+                        <p className="text-sm text-slate-200">{lead.nextAction}</p>
+                      </div>
+                    )}
+                    {lead.notes && (
+                      <div className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Notes</p>
+                        <p className="text-sm text-slate-300 leading-relaxed">{lead.notes}</p>
+                      </div>
+                    )}
+                    <p className="text-xs text-slate-600">
+                      Added {new Date(lead.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Lesson Videos Manager ─────────────────────────────────────────────────────
 const MODULE_META: { id: string; label: string; icon: string; searchQuery: string }[] = [
   { id: "mod-1", label: "Mod 1 — Beginner Basics", icon: "📦", searchQuery: "warehouse order picking training beginner" },
@@ -2244,7 +2562,7 @@ function LessonVideosSection() {
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
-const TABS = ["Dashboard", "Revenue", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests", "Lesson Videos"] as const;
+const TABS = ["Dashboard", "Revenue", "CRM", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests", "Lesson Videos"] as const;
 type Tab = typeof TABS[number];
 
 export default function OwnerPage() {
@@ -2260,6 +2578,7 @@ export default function OwnerPage() {
   function tabLabel(tab: Tab) {
     if (tab === "Dashboard")      return "📊 Dashboard";
     if (tab === "Revenue")        return "💰 Revenue";
+    if (tab === "CRM")            return "🤝 CRM";
     if (tab === "Links")          return "🔗 Links";
     if (tab === "Handbook")       return "📖 Handbook";
     if (tab === "Users & Access") return "👥 Users & Access";
@@ -2330,6 +2649,7 @@ export default function OwnerPage() {
         )}
 
         {activeTab === "Revenue" && <RevenueTab />}
+        {activeTab === "CRM" && <CRMSection />}
         {activeTab === "Links" && <LinkLibrary />}
         {activeTab === "Handbook" && <HandbookSection />}
         {activeTab === "Users & Access" && <UsersAccessSection />}

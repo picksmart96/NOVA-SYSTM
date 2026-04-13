@@ -1,0 +1,474 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+const getEnv = (key) => {
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
+    return import.meta.env[key];
+  }
+  if (typeof window !== 'undefined' && window.__ENV && window.__ENV[key]) {
+    return window.__ENV[key];
+  }
+  return undefined;
+};
+
+const supabase = createClient(
+  getEnv('VITE_SUPABASE_URL') || '',
+  getEnv('VITE_SUPABASE_ANON_KEY') || ''
+);
+
+const OWNER_USERNAME = getEnv('VITE_OWNER_USERNAME') || 'Draogo96';
+const OWNER_PASSWORD = getEnv('VITE_OWNER_PASSWORD') || 'Draogo1996#nova#';
+
+const emptyLead = {
+  company_name: '',
+  contact_name: '',
+  contact_role: '',
+  email: '',
+  phone: '',
+  city: '',
+  state: '',
+  warehouse_type: '',
+  status: 'new_lead',
+  next_action: '',
+  notes: '',
+  contract_value: '',
+};
+
+const statusOptions = [
+  { value: 'new_lead', label: 'New Lead' },
+  { value: 'contacted', label: 'Contacted' },
+  { value: 'demo_booked', label: 'Demo Booked' },
+  { value: 'trial_live', label: 'Trial Live' },
+  { value: 'proposal_sent', label: 'Proposal Sent' },
+  { value: 'closed_won', label: 'Closed Won' },
+  { value: 'closed_lost', label: 'Closed Lost' },
+];
+
+const handbookSections = [
+  {
+    title: 'Walk-In Opening Script',
+    body:
+      'Hey, I will be quick. I built a system that helps selectors move faster, make fewer mistakes, and helps supervisors run shifts better.',
+  },
+  {
+    title: 'Pain Question',
+    body:
+      'Quick question. What is the biggest issue right now — slow picks or mistakes?',
+  },
+  {
+    title: 'Demo Close Line',
+    body:
+      'This is like giving every selector a trainer in their ear while they work.',
+  },
+  {
+    title: 'Free Trial Close',
+    body:
+      'I will set it up for your team free for 30 days. If it improves performance, we keep it. If not, you do not pay.',
+  },
+  {
+    title: 'Objection Handling',
+    body:
+      'We already have a system → This improves performance inside it. We do not have time → It runs during the shift. How much is it → After the free trial, full enterprise rollout is $1,600 per week with a one-year agreement.',
+  },
+];
+
+export default function OwnerControlCRM() {
+  const [authOpen, setAuthOpen] = useState(true);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+
+  const [leadForm, setLeadForm] = useState(emptyLead);
+  const [leads, setLeads] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+  const [filter, setFilter] = useState('all');
+
+  const isAuthed = !authOpen;
+
+  const loadLeads = async () => {
+    const { data, error } = await supabase
+      .from('owner_leads')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+    setLeads(data || []);
+  };
+
+  useEffect(() => {
+    if (!isAuthed) return;
+    loadLeads();
+  }, [isAuthed]);
+
+  const filteredLeads = useMemo(() => {
+    if (filter === 'all') return leads;
+    return leads.filter((lead) => lead.status === filter);
+  }, [leads, filter]);
+
+  const metrics = useMemo(() => {
+    const won = leads.filter((l) => l.status === 'closed_won').length;
+    const demos = leads.filter((l) => l.status === 'demo_booked').length;
+    const trials = leads.filter((l) => l.status === 'trial_live').length;
+    const pipelineValue = leads.reduce((sum, lead) => {
+      const value = Number(lead.contract_value || 0);
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
+
+    return {
+      total: leads.length,
+      demos,
+      trials,
+      won,
+      pipelineValue,
+    };
+  }, [leads]);
+
+  const login = (e) => {
+    e.preventDefault();
+    setAuthError('');
+    if (username === OWNER_USERNAME && password === OWNER_PASSWORD) {
+      setAuthOpen(false);
+      return;
+    }
+    setAuthError('Wrong owner username or password.');
+  };
+
+  const updateLeadForm = (key, value) => {
+    setLeadForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const saveLead = async () => {
+    if (!leadForm.company_name.trim()) {
+      setSaveMessage('Company name is required.');
+      return;
+    }
+
+    setSaving(true);
+    setSaveMessage('');
+
+    const payload = {
+      ...leadForm,
+      contract_value: leadForm.contract_value ? Number(leadForm.contract_value) : null,
+    };
+
+    const { error } = await supabase.from('owner_leads').insert(payload);
+    if (error) {
+      console.error(error);
+      setSaveMessage('Could not save lead. Check the owner_leads table.');
+      setSaving(false);
+      return;
+    }
+
+    setLeadForm(emptyLead);
+    setSaveMessage('Lead saved.');
+    setSaving(false);
+    loadLeads();
+  };
+
+  const updateLeadStatus = async (leadId, status) => {
+    const { error } = await supabase.from('owner_leads').update({ status }).eq('id', leadId);
+    if (error) {
+      console.error(error);
+      return;
+    }
+    loadLeads();
+  };
+
+  const openHandbookPdf = () => {
+    window.open('/NOVA_Sales_Kit.pdf', '_blank');
+  };
+
+  const printHandbook = () => {
+    window.print();
+  };
+
+  if (authOpen) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl">
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-yellow-300">Owner Access</p>
+          <h1 className="mt-3 text-3xl font-black">NOVA Owner Control</h1>
+          <p className="mt-3 text-slate-300">Sign in to access leads, deals, scripts, and your printable handbook.</p>
+
+          <form onSubmit={login} className="mt-6 space-y-4">
+            <div>
+              <label className="mb-2 block text-sm font-bold text-yellow-300">Username</label>
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400"
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-bold text-yellow-300">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400"
+              />
+            </div>
+            {authError ? <p className="text-sm text-red-300">{authError}</p> : null}
+            <button className="w-full rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950">Open Owner Dashboard</button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white p-4 md:p-6 print:bg-white print:text-black">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 print:border-slate-300 print:bg-white">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-yellow-300 print:text-black">Owner Command Center</p>
+              <h1 className="mt-3 text-4xl font-black">Leads, Deals, Scripts, and Handbook</h1>
+              <p className="mt-3 max-w-3xl text-slate-300 print:text-slate-700">
+                Track warehouse leads, book demos, move companies into trial, close deals, and keep your sales scripts ready anytime.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3 print:hidden">
+              <button onClick={openHandbookPdf} className="rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950">
+                Open PDF Handbook
+              </button>
+              <button onClick={printHandbook} className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold">
+                Print Scripts
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-5">
+          <MetricCard label="Total Leads" value={metrics.total} />
+          <MetricCard label="Demos Booked" value={metrics.demos} />
+          <MetricCard label="Trials Live" value={metrics.trials} />
+          <MetricCard label="Closed Won" value={metrics.won} />
+          <MetricCard label="Pipeline Value" value={`$${metrics.pipelineValue.toLocaleString()}`} />
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 print:border-slate-300 print:bg-white">
+            <h2 className="text-2xl font-black">Add Lead or Deal</h2>
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              <Input label="Company Name" value={leadForm.company_name} onChange={(v) => updateLeadForm('company_name', v)} />
+              <Input label="Contact Name" value={leadForm.contact_name} onChange={(v) => updateLeadForm('contact_name', v)} />
+              <Input label="Contact Role" value={leadForm.contact_role} onChange={(v) => updateLeadForm('contact_role', v)} />
+              <Input label="Email" value={leadForm.email} onChange={(v) => updateLeadForm('email', v)} />
+              <Input label="Phone" value={leadForm.phone} onChange={(v) => updateLeadForm('phone', v)} />
+              <Input label="City" value={leadForm.city} onChange={(v) => updateLeadForm('city', v)} />
+              <Input label="State" value={leadForm.state} onChange={(v) => updateLeadForm('state', v)} />
+              <Input label="Warehouse Type" value={leadForm.warehouse_type} onChange={(v) => updateLeadForm('warehouse_type', v)} placeholder="Grocery DC / 3PL / Cold Storage" />
+              <SelectField label="Status" value={leadForm.status} onChange={(v) => updateLeadForm('status', v)} options={statusOptions} />
+              <Input label="Contract Value" value={leadForm.contract_value} onChange={(v) => updateLeadForm('contract_value', v)} placeholder="76800" />
+            </div>
+            <div className="mt-4 grid gap-4">
+              <TextArea label="Next Action" value={leadForm.next_action} onChange={(v) => updateLeadForm('next_action', v)} placeholder="Call Thursday, send demo PDF, visit in person, follow up after trial." />
+              <TextArea label="Notes" value={leadForm.notes} onChange={(v) => updateLeadForm('notes', v)} placeholder="Pain points, objections, contact details, what happened in the visit." />
+            </div>
+            {saveMessage ? <p className="mt-4 text-sm text-yellow-200">{saveMessage}</p> : null}
+            <div className="mt-6 flex gap-3">
+              <button onClick={saveLead} disabled={saving} className="rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950 disabled:opacity-50">
+                {saving ? 'Saving...' : 'Save Lead'}
+              </button>
+              <button onClick={() => setLeadForm(emptyLead)} className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold">
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 print:border-slate-300 print:bg-white">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-2xl font-black">Sales Handbook</h2>
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-2 text-white print:hidden"
+              >
+                <option value="all">All Statuses</option>
+                {statusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              {handbookSections.map((section) => (
+                <div key={section.title} className="rounded-2xl border border-slate-800 bg-slate-950 p-5 print:border-slate-300 print:bg-white">
+                  <h3 className="font-bold text-yellow-300 print:text-black">{section.title}</h3>
+                  <p className="mt-2 text-sm leading-7 text-slate-200 print:text-slate-800">{section.body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 print:border-slate-300 print:bg-white">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-2xl font-black">Lead and Deal Tracker</h2>
+            <div className="rounded-2xl bg-slate-950 border border-slate-800 px-4 py-2 text-sm text-slate-300 print:hidden">
+              {filteredLeads.length} item{filteredLeads.length === 1 ? '' : 's'}
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-4">
+            {filteredLeads.length === 0 ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5 text-slate-400 print:border-slate-300 print:bg-white print:text-slate-700">
+                No leads yet.
+              </div>
+            ) : (
+              filteredLeads.map((lead) => (
+                <div key={lead.id} className="rounded-3xl border border-slate-800 bg-slate-950 p-5 print:border-slate-300 print:bg-white">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-xl font-bold">{lead.company_name}</h3>
+                      <p className="mt-1 text-sm text-slate-400 print:text-slate-700">
+                        {lead.contact_name || 'No contact name'} {lead.contact_role ? `· ${lead.contact_role}` : ''}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-400 print:text-slate-700">
+                        {[lead.city, lead.state].filter(Boolean).join(', ')} {lead.warehouse_type ? `· ${lead.warehouse_type}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 print:hidden">
+                      <select
+                        value={lead.status}
+                        onChange={(e) => updateLeadStatus(lead.id, e.target.value)}
+                        className="rounded-2xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"
+                      >
+                        {statusOptions.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-3 text-sm text-slate-200 print:text-slate-800">
+                    <Info label="Email" value={lead.email} />
+                    <Info label="Phone" value={lead.phone} />
+                    <Info label="Contract Value" value={lead.contract_value ? `$${Number(lead.contract_value).toLocaleString()}` : ''} />
+                  </div>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <Block title="Next Action" value={lead.next_action} />
+                    <Block title="Notes" value={lead.notes} />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ label, value }) {
+  return (
+    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 print:border-slate-300 print:bg-white">
+      <p className="text-sm text-slate-400 print:text-slate-700">{label}</p>
+      <p className="mt-2 text-3xl font-black">{value}</p>
+    </div>
+  );
+}
+
+function Input({ label, value, onChange, placeholder = '' }) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-bold text-yellow-300 print:text-black">{label}</label>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 print:border-slate-300 print:bg-white print:text-black"
+      />
+    </div>
+  );
+}
+
+function SelectField({ label, value, onChange, options }) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-bold text-yellow-300 print:text-black">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 print:border-slate-300 print:bg-white print:text-black"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function TextArea({ label, value, onChange, placeholder = '' }) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-bold text-yellow-300 print:text-black">{label}</label>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={4}
+        className="w-full resize-none rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 print:border-slate-300 print:bg-white print:text-black"
+      />
+    </div>
+  );
+}
+
+function Info({ label, value }) {
+  if (!value) return null;
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 print:border-slate-300 print:bg-white">
+      <p className="text-xs font-bold uppercase tracking-wide text-yellow-300 print:text-black">{label}</p>
+      <p className="mt-2">{value}</p>
+    </div>
+  );
+}
+
+function Block({ title, value }) {
+  if (!value) return null;
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 print:border-slate-300 print:bg-white">
+      <p className="text-xs font-bold uppercase tracking-wide text-yellow-300 print:text-black">{title}</p>
+      <p className="mt-2 text-sm leading-7 text-slate-200 print:text-slate-800">{value}</p>
+    </div>
+  );
+}
+
+/*
+========================================
+SUPABASE TABLE YOU NEED
+========================================
+
+CREATE TABLE owner_leads (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_name text,
+  contact_name text,
+  contact_role text,
+  email text,
+  phone text,
+  city text,
+  state text,
+  warehouse_type text,
+  status text,
+  next_action text,
+  notes text,
+  contract_value numeric,
+  created_at timestamp with time zone DEFAULT now()
+);
+
+========================================
+PDF HANDBOOK NOTE
+========================================
+
+Put your printable handbook PDF at:
+/public/NOVA_Sales_Kit.pdf
+
+Then the Open PDF Handbook button will work anytime from the owner page.
+*/
