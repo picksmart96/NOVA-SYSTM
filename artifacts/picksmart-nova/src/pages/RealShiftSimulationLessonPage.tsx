@@ -4,54 +4,12 @@ import { realShiftSimulationLessonPage as lesson } from "@/data/realShiftSimulat
 import { useProgressStore } from "@/lib/progressStore";
 import { NovaLessonGuide } from "@/components/training/NovaLessonGuide";
 import { LessonVideoPlayer } from "@/components/training/LessonVideoPlayer";
+import { useBilingualSpeech } from "@/hooks/useBilingualSpeech";
 import {
   ArrowLeft, Volume2, VolumeX, CheckCircle2, XCircle, ChevronLeft,
   ChevronRight, Clock, BookOpen, Headphones, Award, ShieldCheck,
 } from "lucide-react";
 
-function useSpeech() {
-  const speakingRef = useRef(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [muted, setMuted] = useState(false);
-  const mutedRef = useRef(false);
-
-  const toggleMute = useCallback(() => {
-    mutedRef.current = !mutedRef.current;
-    setMuted(mutedRef.current);
-    if (mutedRef.current && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      speakingRef.current = false;
-      setIsSpeaking(false);
-    }
-  }, []);
-
-  const speak = useCallback((text: string, onDone?: () => void) => {
-    if (mutedRef.current) { onDone?.(); return; }
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = 0.95;
-      u.pitch = 1;
-      speakingRef.current = true;
-      setIsSpeaking(true);
-      u.onend = () => { speakingRef.current = false; setIsSpeaking(false); onDone?.(); };
-      u.onerror = () => { speakingRef.current = false; setIsSpeaking(false); onDone?.(); };
-      window.speechSynthesis.speak(u);
-    } else {
-      setIsSpeaking(true);
-      const ms = Math.max(1200, Math.round((text.split(/\s+/).length / 140) * 60000));
-      setTimeout(() => { setIsSpeaking(false); onDone?.(); }, ms);
-    }
-  }, []);
-
-  const stopSpeaking = useCallback(() => {
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-    speakingRef.current = false;
-    setIsSpeaking(false);
-  }, []);
-
-  return { isSpeaking, muted, toggleMute, speak, stopSpeaking };
-}
 
 type Phase = "intro" | "lesson" | "quiz";
 
@@ -67,7 +25,7 @@ export default function RealShiftSimulationLessonPage() {
   const [submitted, setSubmitted] = useState(false);
   const [scoreRecorded, setScoreRecorded] = useState(false);
 
-  const { isSpeaking, muted, toggleMute, speak, stopSpeaking } = useSpeech();
+  const { isSpeaking, muted, toggleMute, speak, stopSpeaking } = useBilingualSpeech();
 
   useEffect(() => {
     startLesson("mod-6");

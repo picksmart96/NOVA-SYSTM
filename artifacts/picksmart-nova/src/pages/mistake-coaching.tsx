@@ -1,47 +1,12 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRoute, Link } from "wouter";
 import { getMistakeById } from "@/data/mistakesData";
 import { useProgressStore } from "@/lib/progressStore";
 import { NovaLessonGuide } from "@/components/training/NovaLessonGuide";
 import { ArrowLeft, CheckCircle2, Volume2, VolumeX, RotateCcw, ChevronRight } from "lucide-react";
+import { useBilingualSpeech } from "@/hooks/useBilingualSpeech";
 
 type Phase = "welcome" | "lesson" | "test";
-
-function useSpeech() {
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [muted, setMuted] = useState(false);
-
-  const speak = useCallback(
-    (text: string, onDone?: () => void) => {
-      if (muted) { onDone?.(); return; }
-      if ("speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.95;
-        utterance.pitch = 1;
-        setIsSpeaking(true);
-        utterance.onend = () => { setIsSpeaking(false); onDone?.(); };
-        utterance.onerror = () => { setIsSpeaking(false); onDone?.(); };
-        window.speechSynthesis.speak(utterance);
-      } else {
-        setIsSpeaking(true);
-        const words = text.trim().split(/\s+/).length;
-        setTimeout(
-          () => { setIsSpeaking(false); onDone?.(); },
-          Math.max(1200, (words / 140) * 60000)
-        );
-      }
-    },
-    [muted]
-  );
-
-  const stopSpeaking = useCallback(() => {
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-    setIsSpeaking(false);
-  }, []);
-
-  return { isSpeaking, muted, setMuted, speak, stopSpeaking };
-}
 
 const RISK_COLORS: Record<string, string> = {
   critical: "bg-red-500/10 text-red-400 border-red-500/30",
@@ -58,7 +23,7 @@ export default function MistakeCoachingPage() {
 
   const [phase, setPhase] = useState<Phase>("welcome");
   const [novaMessage, setNovaMessage] = useState("");
-  const { isSpeaking, muted, setMuted, speak, stopSpeaking } = useSpeech();
+  const { isSpeaking, muted, toggleMute, speak, stopSpeaking } = useBilingualSpeech();
   const mountedRef = useRef(true);
 
   const [answers, setAnswers] = useState<Record<string, number | null>>({});
@@ -161,7 +126,7 @@ export default function MistakeCoachingPage() {
               {mistake.riskLevel} risk
             </span>
             <button
-              onClick={() => { setMuted(!muted); if (!muted) stopSpeaking(); }}
+              onClick={() => toggleMute()}
               className="p-2 rounded-xl border border-slate-700 hover:border-slate-500 text-slate-400 hover:text-white transition"
               title={muted ? "Unmute NOVA" : "Mute NOVA"}
             >

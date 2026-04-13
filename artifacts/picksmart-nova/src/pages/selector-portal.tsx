@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Link } from "wouter";
+import { useTranslation } from "react-i18next";
 import { useAuthStore } from "@/lib/authStore";
 import { useTrainerStore } from "@/lib/trainerStore";
 import { useSupervisorPostStore } from "@/lib/supervisorPostStore";
+import { novaSpeak, novaRecogLang, NOVA_TEXT, matchNovaCommand } from "@/lib/novaSpeech";
 import {
   Headphones, BookOpen, HelpCircle, TrendingUp, Star, AlertTriangle, KeyRound,
   DoorOpen, Mic, MicOff, Volume2, VolumeX, Megaphone, ShieldCheck, Zap,
@@ -38,6 +40,8 @@ function PortalCard({ href, icon, title, description, accent = false }: {
 }
 
 export default function SelectorPortalPage() {
+  const { i18n } = useTranslation();
+  const lang = i18n.language?.startsWith("es") ? "es" : "en";
   const { currentUser } = useAuthStore();
   const { selectors, assignments } = useTrainerStore();
   const latestPost = useSupervisorPostStore((s) => s.latestPost());
@@ -66,15 +70,9 @@ export default function SelectorPortalPage() {
 
   const speak = useCallback((text: string, onDone?: () => void) => {
     if (mutedRef.current || !canSpeak) { onDone?.(); return; }
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 0.97;
-    u.pitch = 1;
     setIsSpeaking(true);
-    u.onend = () => { setIsSpeaking(false); onDone?.(); };
-    u.onerror = () => { setIsSpeaking(false); onDone?.(); };
-    window.speechSynthesis.speak(u);
-  }, [canSpeak]);
+    novaSpeak(text, lang, () => { setIsSpeaking(false); onDone?.(); });
+  }, [canSpeak, lang]);
 
   const toggleMute = () => {
     const next = !mutedRef.current;
@@ -84,70 +82,65 @@ export default function SelectorPortalPage() {
   };
 
   const speakTodayFocus = useCallback(() => {
-    let message = "Today's focus. ";
+    let message = NOVA_TEXT.todayFocusHeader(lang);
     if (assignedAssignment) {
-      message += `Your assignment is number ${assignedAssignment.assignmentNumber}. `;
-      message += `Aisles ${assignedAssignment.startAisle} through ${assignedAssignment.endAisle}. `;
-      message += `${assignedAssignment.totalCases} cases, ${assignedAssignment.stops} stops. `;
-      message += `Goal time: ${assignedAssignment.goalTimeMinutes} minutes. `;
-      message += `Stage at Door ${assignedAssignment.doorNumber}. `;
+      message += NOVA_TEXT.assignmentLine(assignedAssignment, lang);
     }
     if (latestPost?.safetyTopic) {
-      message += `Safety: ${latestPost.safetyTopic}. `;
+      message += NOVA_TEXT.safetyPrefix(lang) + latestPost.safetyTopic + ". ";
     }
     if (latestPost?.workloadUpdate) {
-      message += `Workload: ${latestPost.workloadUpdate}. `;
+      message += NOVA_TEXT.workloadPrefix(lang) + latestPost.workloadUpdate + ". ";
     }
     if (latestPost?.selectorMessage) {
       message += latestPost.selectorMessage;
     }
     if (!assignedAssignment && !latestPost) {
-      message = "No assignment or briefing available right now. Check with your supervisor.";
+      message = NOVA_TEXT.noFocusAvailable(lang);
     }
-    setNovaStatus("Speaking today's focus…");
+    setNovaStatus(NOVA_TEXT.speakingFocus(lang));
     speak(message, () => setNovaStatus(""));
-  }, [assignedAssignment, latestPost, speak]);
+  }, [assignedAssignment, latestPost, speak, lang]);
 
   const speakLatestUpdate = useCallback(() => {
     if (!latestPost) {
-      speak("No supervisor update posted yet. Check back at the start of your shift.");
+      speak(NOVA_TEXT.noUpdateYet(lang));
       return;
     }
-    let message = "Latest supervisor update. ";
-    if (latestPost.shiftSummary) message += `Shift: ${latestPost.shiftSummary}. `;
-    if (latestPost.safetyTopic)  message += `Safety: ${latestPost.safetyTopic}. `;
-    if (latestPost.workloadUpdate) message += `Workload: ${latestPost.workloadUpdate}. `;
+    let message = NOVA_TEXT.latestUpdateHeader(lang);
+    if (latestPost.shiftSummary)  message += NOVA_TEXT.shiftPrefix(lang) + latestPost.shiftSummary + ". ";
+    if (latestPost.safetyTopic)   message += NOVA_TEXT.safetyPrefix(lang) + latestPost.safetyTopic + ". ";
+    if (latestPost.workloadUpdate) message += NOVA_TEXT.workloadPrefix(lang) + latestPost.workloadUpdate + ". ";
     if (latestPost.topSelectorName) {
-      message += `Top selector: ${latestPost.topSelectorName} at ${latestPost.topSelectorRate}. `;
+      message += NOVA_TEXT.topSelectorLine(latestPost.topSelectorName, latestPost.topSelectorRate ?? "", lang);
     }
     if (latestPost.selectorMessage) message += latestPost.selectorMessage;
-    setNovaStatus("Speaking latest update…");
+    setNovaStatus(NOVA_TEXT.speakingUpdate(lang));
     speak(message, () => setNovaStatus(""));
-  }, [latestPost, speak]);
+  }, [latestPost, speak, lang]);
 
   const speakAssignment = useCallback(() => {
     if (!assignedAssignment) {
-      speak("You don't have an assignment yet. Ask your supervisor or trainer.");
+      speak(NOVA_TEXT.noAssignmentYet(lang));
       return;
     }
-    const msg = `Your assignment is number ${assignedAssignment.assignmentNumber}. Aisles ${assignedAssignment.startAisle} through ${assignedAssignment.endAisle}. ${assignedAssignment.totalCases} cases. ${assignedAssignment.stops} stops. Goal: ${assignedAssignment.goalTimeMinutes} minutes. Stage at Door ${assignedAssignment.doorNumber}, code ${assignedAssignment.doorCode}.`;
-    setNovaStatus("Speaking assignment…");
+    const msg = NOVA_TEXT.fullAssignment(assignedAssignment, lang);
+    setNovaStatus(NOVA_TEXT.speakingAssignment(lang));
     speak(msg, () => setNovaStatus(""));
-  }, [assignedAssignment, speak]);
+  }, [assignedAssignment, speak, lang]);
 
   // ── Auto-greeting on mount ─────────────────────────────────────────────────
   useEffect(() => {
-    const name = currentUser?.fullName?.split(" ")[0] ?? "there";
-    const time = new Date().getHours();
-    const greeting = time < 12 ? "Good morning" : time < 17 ? "Good afternoon" : "Good evening";
+    const name = currentUser?.fullName?.split(" ")[0] ?? (lang === "es" ? "amigo" : "there");
+    const hour = new Date().getHours();
     const delay = setTimeout(() => {
-      speak(`${greeting}, ${name}. I'm NOVA. Tap "Ask NOVA" to hear your assignment or today's briefing.`);
+      speak(NOVA_TEXT.greeting(name, hour, lang));
     }, 800);
     return () => {
       clearTimeout(delay);
       if (canSpeak) window.speechSynthesis.cancel();
     };
-  }, []);
+  }, [lang]);
 
   // ── Voice recognition setup ────────────────────────────────────────────────
   useEffect(() => {
@@ -156,38 +149,38 @@ export default function SelectorPortalPage() {
     const recognition = new SpeechRecognitionClass();
     recognition.continuous = false;
     recognition.interimResults = false;
-    recognition.lang = "en-US";
+    recognition.lang = novaRecogLang(lang);
 
-    recognition.onstart = () => { setIsListening(true); setNovaStatus("Listening…"); };
+    recognition.onstart = () => { setIsListening(true); setNovaStatus(NOVA_TEXT.listeningStatus(lang)); };
     recognition.onend   = () => { setIsListening(false); };
     recognition.onerror = () => {
       setIsListening(false);
-      setNovaStatus("Couldn't hear that. Try again.");
+      setNovaStatus(NOVA_TEXT.cantHear(lang));
       setTimeout(() => setNovaStatus(""), 3000);
     };
 
     recognition.onresult = (event: any) => {
       const text = (event.results?.[0]?.[0]?.transcript ?? "").toLowerCase();
-      setNovaStatus(`Heard: "${text}"`);
+      setNovaStatus(`${NOVA_TEXT.heardCommand(lang)}"${text}"`);
 
-      if (text.includes("today") || text.includes("focus")) {
+      const cmd = matchNovaCommand(text, lang);
+      if (cmd === "focus") {
         speakTodayFocus();
-      } else if (text.includes("supervisor") || text.includes("update") || text.includes("briefing")) {
+      } else if (cmd === "update") {
         speakLatestUpdate();
-      } else if (text.includes("assignment") || text.includes("door") || text.includes("aisle")) {
+      } else if (cmd === "assignment") {
         speakAssignment();
       } else {
-        const reply = "I didn't catch a command. Try saying: today's focus, assignment, or latest update.";
-        speak(reply, () => setNovaStatus(""));
+        speak(NOVA_TEXT.unknownCommand(lang), () => setNovaStatus(""));
       }
     };
 
     recognitionRef.current = recognition;
-  }, [speakTodayFocus, speakLatestUpdate, speakAssignment]);
+  }, [speakTodayFocus, speakLatestUpdate, speakAssignment, lang]);
 
   const startVoiceCommand = () => {
     if (!recognitionRef.current) {
-      speak("Voice commands are not supported in this browser.");
+      speak(NOVA_TEXT.noVoiceSupport(lang));
       return;
     }
     if (isListening) {

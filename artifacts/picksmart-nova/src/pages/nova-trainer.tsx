@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { novaSpeak, novaRecogLang } from "@/lib/novaSpeech";
 import { ASSIGNMENTS } from "@/data/assignments";
 import { ASSIGNMENT_STOPS } from "@/data/assignmentStops";
 import { voiceCommands } from "@/data/voiceCommands";
@@ -54,37 +56,8 @@ const SAFETY_ITEMS = [
 
 // ─── TTS helper ─────────────────────────────────────────────────────────────
 
-function speakText(text: string, onEnd?: () => void) {
-  if (!("speechSynthesis" in window)) {
-    onEnd?.();
-    return;
-  }
-  window.speechSynthesis.cancel();
-
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1;
-  utterance.pitch = 1;
-  utterance.lang = "en-US";
-
-  const load = () => {
-    const voices = window.speechSynthesis.getVoices();
-    const pref =
-      voices.find((v) => /samantha|zira|karen|female|aria|ava/i.test(v.name)) ||
-      voices[0];
-    if (pref) utterance.voice = pref;
-    utterance.onend = () => onEnd?.();
-    utterance.onerror = () => onEnd?.();
-    window.speechSynthesis.speak(utterance);
-  };
-
-  if (window.speechSynthesis.getVoices().length > 0) {
-    load();
-  } else {
-    window.speechSynthesis.onvoiceschanged = () => {
-      window.speechSynthesis.onvoiceschanged = null;
-      load();
-    };
-  }
+function speakText(text: string, lang: string, onEnd?: () => void) {
+  novaSpeak(text, lang, onEnd, { rate: 1, pitch: 1 });
 }
 
 // ─── Phase label map ─────────────────────────────────────────────────────────
@@ -126,6 +99,8 @@ const PHASE_COLOR: Record<Phase, string> = {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function NovaTrainerPage() {
+  const { i18n } = useTranslation();
+  const lang = i18n.language?.startsWith("es") ? "es" : "en";
   const { selectors } = useTrainerStore();
   const { currentUser } = useAuthStore();
 
@@ -203,9 +178,9 @@ export default function NovaTrainerPage() {
       setPromptText(text);
       setSpeaking(true);
       addLog("NOVA", text);
-      speakText(text, () => setSpeaking(false));
+      speakText(text, lang, () => setSpeaking(false));
     },
-    [addLog]
+    [addLog, lang]
   );
 
   // ── Speech recognition ──────────────────────────────────────────────────
@@ -219,7 +194,7 @@ export default function NovaTrainerPage() {
       const recognition = new SpeechRecognition();
       recognition.continuous = false;
       recognition.interimResults = false;
-      recognition.lang = "en-US";
+      recognition.lang = novaRecogLang(lang);
 
       recognition.onstart = () => setListening(true);
 

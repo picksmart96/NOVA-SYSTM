@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRoute, Link } from "wouter";
 import { getLessonById } from "@/data/lessonContent";
 import { useProgressStore } from "@/lib/progressStore";
@@ -7,51 +7,9 @@ import { LessonStepCard } from "@/components/training/LessonStepCard";
 import { LessonTest } from "@/components/training/LessonTest";
 import { LessonVideoPlayer } from "@/components/training/LessonVideoPlayer";
 import { ArrowLeft, ChevronRight } from "lucide-react";
+import { useBilingualSpeech } from "@/hooks/useBilingualSpeech";
 
 type Phase = "welcome" | "lesson" | "test";
-
-function useSpeech() {
-  const speakingRef = useRef(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-
-  const speak = useCallback((text: string, onDone?: () => void) => {
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.95;
-      utterance.pitch = 1;
-      speakingRef.current = true;
-      setIsSpeaking(true);
-      utterance.onend = () => {
-        speakingRef.current = false;
-        setIsSpeaking(false);
-        if (onDone) onDone();
-      };
-      utterance.onerror = () => {
-        speakingRef.current = false;
-        setIsSpeaking(false);
-        if (onDone) onDone();
-      };
-      window.speechSynthesis.speak(utterance);
-    } else {
-      // Fallback: simulate speaking duration
-      setIsSpeaking(true);
-      const words = text.trim().split(/\s+/).length;
-      const ms = Math.max(1200, Math.round((words / 140) * 60 * 1000));
-      setTimeout(() => {
-        setIsSpeaking(false);
-        if (onDone) onDone();
-      }, ms);
-    }
-  }, []);
-
-  const stopSpeaking = useCallback(() => {
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-    setIsSpeaking(false);
-  }, []);
-
-  return { isSpeaking, speak, stopSpeaking };
-}
 
 export default function LessonSessionPage() {
   const [, params] = useRoute("/training/lesson/:id");
@@ -64,7 +22,7 @@ export default function LessonSessionPage() {
   const [currentStep, setCurrentStep] = useState(0);
   const [novaMessage, setNovaMessage] = useState("");
 
-  const { isSpeaking, speak, stopSpeaking } = useSpeech();
+  const { isSpeaking, speak, stopSpeaking } = useBilingualSpeech();
 
   // On mount: welcome message
   useEffect(() => {
