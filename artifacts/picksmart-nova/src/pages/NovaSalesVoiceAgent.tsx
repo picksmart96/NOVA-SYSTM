@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Mic, MicOff, Volume2, VolumeX, Send, BarChart3, TrendingUp } from "lucide-react";
+import { Mic, MicOff, Volume2, VolumeX, Send, BarChart3, TrendingUp, UserRound, CheckCircle2 } from "lucide-react";
 import { novaSpeak, pickNovaVoice } from "@/lib/novaSpeech";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -31,7 +31,18 @@ const QUICK_REPLIES = [
   "Show me how NOVA works",
   "How much does it cost?",
   "Start free trial",
+  "I want to talk to a real person",
 ];
+
+function isRealPersonTrigger(text: string) {
+  const t = text.toLowerCase();
+  return (
+    t.includes("real person") || t.includes("human") || t.includes("call me") ||
+    t.includes("speak to someone") || t.includes("talk to someone") ||
+    t.includes("call us") || t.includes("contact us") || t.includes("speak with") ||
+    t.includes("talk with") || t.includes("reach out") || t.includes("phone call")
+  );
+}
 
 const HUMOR_LINES = [
   "Some selectors move fast… but the pallet looks like a puzzle gone wrong 😄 We balance both.",
@@ -254,6 +265,10 @@ export default function NovaSalesVoiceAgent() {
   const [voiceOn, setVoiceOn] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   const [trialCreated, setTrialCreated] = useState(false);
+  const [showHumanForm, setShowHumanForm] = useState(false);
+  const [humanForm, setHumanForm] = useState({ name: "", email: "", company: "", phone: "", topic: "" });
+  const [humanSubmitted, setHumanSubmitted] = useState(false);
+  const [humanSubmitting, setHumanSubmitting] = useState(false);
   const [lead, setLead] = useState<LeadState>({
     companyName: "",
     managerName: "",
@@ -384,6 +399,18 @@ export default function NovaSalesVoiceAgent() {
       if (pain && !updated.painPoint) updated.painPoint = pain;
       return updated;
     });
+
+    // Detect "real person" request
+    if (isRealPersonTrigger(text)) {
+      setTimeout(() => {
+        const msg = "Of course! I've pulled up our contact form right in the sidebar.\n\nFill it out and our team will reach out to you within 24 hours — usually much sooner.";
+        pushMessage("assistant", msg);
+        speak("Of course! Fill out the contact form in the sidebar and our team will reach out within 24 hours.");
+        setShowHumanForm(true);
+        setIsThinking(false);
+      }, 400);
+      return;
+    }
 
     // Build local reply quickly
     const currentLead = parseLeadDetails(text, lead);
@@ -549,6 +576,104 @@ export default function NovaSalesVoiceAgent() {
               <p className="mt-2 text-xs text-slate-500">Voice input not available in this browser.</p>
             )}
           </div>
+
+          {/* Talk to a real person */}
+          {!showHumanForm && !humanSubmitted && (
+            <button
+              onClick={() => {
+                setShowHumanForm(true);
+                sendMessage("I want to talk to a real person");
+              }}
+              className="w-full flex items-center gap-2 justify-center rounded-2xl border border-slate-700 bg-slate-900 hover:border-yellow-400 px-4 py-3 text-sm text-slate-300 hover:text-yellow-300 font-semibold transition"
+            >
+              <UserRound className="h-4 w-4" />
+              Talk to a Real Person
+            </button>
+          )}
+
+          {/* Human contact form */}
+          {showHumanForm && !humanSubmitted && (
+            <div className="rounded-2xl border border-yellow-400/40 bg-yellow-400/5 p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <UserRound className="h-4 w-4 text-yellow-400" />
+                <p className="text-xs font-bold uppercase tracking-widest text-yellow-300">Talk to Our Team</p>
+              </div>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!humanForm.name || !humanForm.email) return;
+                  setHumanSubmitting(true);
+                  try {
+                    await fetch("/api/social/talk-requests", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ ...humanForm, source: "meet_nova" }),
+                    });
+                    setHumanSubmitted(true);
+                    pushMessage("assistant", `Got it, ${humanForm.name}! Your request has been sent to our team.\n\nWe'll reach out to ${humanForm.email} within 24 hours — usually sooner. Talk soon! 👋`);
+                    speak(`Got it! Your request has been sent. We'll reach out within 24 hours.`);
+                  } catch {
+                    alert("Something went wrong. Please try again.");
+                  } finally {
+                    setHumanSubmitting(false);
+                  }
+                }}
+                className="space-y-3"
+              >
+                <input
+                  required
+                  placeholder="Your name *"
+                  value={humanForm.name}
+                  onChange={(e) => setHumanForm((f) => ({ ...f, name: e.target.value }))}
+                  className="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400"
+                />
+                <input
+                  type="email"
+                  required
+                  placeholder="Email address *"
+                  value={humanForm.email}
+                  onChange={(e) => setHumanForm((f) => ({ ...f, email: e.target.value }))}
+                  className="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400"
+                />
+                <input
+                  placeholder="Company name"
+                  value={humanForm.company}
+                  onChange={(e) => setHumanForm((f) => ({ ...f, company: e.target.value }))}
+                  className="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400"
+                />
+                <input
+                  placeholder="Phone number"
+                  value={humanForm.phone}
+                  onChange={(e) => setHumanForm((f) => ({ ...f, phone: e.target.value }))}
+                  className="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400"
+                />
+                <textarea
+                  placeholder="What do you need help with?"
+                  value={humanForm.topic}
+                  onChange={(e) => setHumanForm((f) => ({ ...f, topic: e.target.value }))}
+                  rows={2}
+                  className="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400 resize-none"
+                />
+                <button
+                  type="submit"
+                  disabled={humanSubmitting || !humanForm.name || !humanForm.email}
+                  className="w-full rounded-xl bg-yellow-400 text-slate-950 font-bold py-2.5 text-sm hover:bg-yellow-300 transition disabled:opacity-50"
+                >
+                  {humanSubmitting ? "Sending…" : "Send Request"}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {humanSubmitted && (
+            <div className="rounded-2xl border border-green-500/30 bg-green-500/10 p-5 flex items-center gap-3">
+              <CheckCircle2 className="h-5 w-5 text-green-400 shrink-0" />
+              <div>
+                <p className="text-green-300 font-bold text-sm">Request Sent!</p>
+                <p className="text-green-400/80 text-xs mt-0.5">Our team will reach out within 24 hours.</p>
+              </div>
+            </div>
+          )}
         </aside>
 
         {/* ── Chat panel ──────────────────────────────────────────────────────── */}

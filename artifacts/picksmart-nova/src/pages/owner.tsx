@@ -2071,11 +2071,33 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
 
 // ── Talk Requests Inbox ───────────────────────────────────────────────────────
 function TalkRequestsSection() {
-  const { requests, markRead, markResolved, deleteRequest } = useTalkRequestStore();
+  const { requests: localRequests, markRead, markResolved, deleteRequest } = useTalkRequestStore();
+  const [dbRequests, setDbRequests] = useState<any[]>([]);
+  const [dbLoading, setDbLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "unread" | "read" | "resolved">("all");
 
-  const filtered = requests.filter((r) => filter === "all" || r.status === filter);
-  const unreadCount = requests.filter((r) => r.status === "unread").length;
+  useEffect(() => {
+    fetch("/api/social/talk-requests")
+      .then((r) => r.json())
+      .then((data) => setDbRequests(data.requests || []))
+      .catch(() => {})
+      .finally(() => setDbLoading(false));
+  }, []);
+
+  async function patchDbStatus(id: number, status: string) {
+    await fetch(`/api/social/talk-requests/${id}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    setDbRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
+  }
+
+  async function deleteDbRequest(id: number) {
+    if (!confirm("Delete this request?")) return;
+    await fetch(`/api/social/talk-requests/${id}`, { method: "DELETE" });
+    setDbRequests((prev) => prev.filter((r) => r.id !== id));
+  }
 
   function formatDate(iso: string) {
     try {
@@ -2083,9 +2105,7 @@ function TalkRequestsSection() {
         month: "short", day: "numeric", year: "numeric",
         hour: "numeric", minute: "2-digit", hour12: true,
       });
-    } catch {
-      return iso;
-    }
+    } catch { return iso; }
   }
 
   const STATUS_COLORS: Record<string, string> = {
@@ -2093,6 +2113,43 @@ function TalkRequestsSection() {
     read: "bg-slate-700 text-slate-300",
     resolved: "bg-green-500/20 text-green-300",
   };
+
+  // Merge DB requests (normalized) + localStorage requests
+  const normalizedDb = dbRequests.map((r) => ({
+    _key: `db_${r.id}`,
+    _dbId: r.id as number,
+    isDb: true,
+    name: r.name,
+    email: r.email,
+    company: r.company || "",
+    phone: r.phone || "",
+    topic: r.topic || "",
+    source: r.source || "meet_nova",
+    createdAt: r.created_at,
+    status: r.status as "unread" | "read" | "resolved",
+  }));
+
+  const normalizedLocal = localRequests.map((r) => ({
+    _key: `ls_${r.id}`,
+    _dbId: null as null,
+    isDb: false,
+    name: r.name,
+    email: r.email,
+    company: r.company,
+    phone: r.phone,
+    topic: r.topic,
+    source: "nova_help",
+    createdAt: r.createdAt,
+    status: r.status,
+    _localId: r.id,
+  }));
+
+  const allRequests = [...normalizedDb, ...normalizedLocal].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  const filtered = allRequests.filter((r) => filter === "all" || r.status === filter);
+  const unreadCount = allRequests.filter((r) => r.status === "unread").length;
 
   return (
     <div className="space-y-6">
@@ -2104,7 +2161,7 @@ function TalkRequestsSection() {
             Talk Requests Inbox
           </h2>
           <p className="text-slate-400 text-sm mt-1">
-            Visitors and customers who requested to speak with you from the NOVA Help page.
+            Visitors who requested a real person from Meet NOVA or the NOVA Help page.
           </p>
         </div>
         {unreadCount > 0 && (
@@ -2126,19 +2183,32 @@ function TalkRequestsSection() {
                 : "border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white"
             }`}
           >
-            {f === "all" ? `All (${requests.length})` : f === "unread" ? `Unread (${unreadCount})` : f.charAt(0).toUpperCase() + f.slice(1)}
+            {f === "all" ? `All (${allRequests.length})` : f === "unread" ? `Unread (${unreadCount})` : f.charAt(0).toUpperCase() + f.slice(1)}
           </button>
         ))}
+        <button
+          onClick={() => {
+            setDbLoading(true);
+            fetch("/api/social/talk-requests")
+              .then((r) => r.json())
+              .then((data) => setDbRequests(data.requests || []))
+              .catch(() => {})
+              .finally(() => setDbLoading(false));
+          }}
+          className="rounded-full px-4 py-1.5 text-sm font-bold border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white transition ml-auto"
+        >
+          {dbLoading ? "Loading…" : "↻ Refresh"}
+        </button>
       </div>
 
       {/* Empty state */}
-      {filtered.length === 0 && (
+      {filtered.length === 0 && !dbLoading && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900 p-12 text-center text-slate-500">
           <MessageCircle className="h-10 w-10 mx-auto mb-3 opacity-30" />
           <p className="font-semibold">No requests yet</p>
           <p className="text-sm mt-1">
             {filter === "all"
-              ? "Talk requests from NOVA Help will appear here."
+              ? "Talk requests from Meet NOVA and NOVA Help will appear here."
               : `No ${filter} requests.`}
           </p>
         </div>
@@ -2148,7 +2218,7 @@ function TalkRequestsSection() {
       <div className="space-y-4">
         {filtered.map((req) => (
           <div
-            key={req.id}
+            key={req._key}
             className={`rounded-3xl border bg-slate-900 p-6 transition-all ${
               req.status === "unread"
                 ? "border-yellow-400/40"
@@ -2165,6 +2235,13 @@ function TalkRequestsSection() {
                   <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${STATUS_COLORS[req.status]}`}>
                     {req.status}
                   </span>
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                    req.source === "meet_nova"
+                      ? "bg-yellow-400/10 text-yellow-300 border border-yellow-400/30"
+                      : "bg-slate-800 text-slate-400"
+                  }`}>
+                    {req.source === "meet_nova" ? "⚡ Meet NOVA" : "NOVA Help"}
+                  </span>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-slate-500">
                   <Clock className="h-3 w-3" />
@@ -2172,7 +2249,10 @@ function TalkRequestsSection() {
                 </div>
               </div>
               <button
-                onClick={() => { if (confirm("Delete this request?")) deleteRequest(req.id); }}
+                onClick={() => {
+                  if (req.isDb && req._dbId != null) deleteDbRequest(req._dbId);
+                  else if (!req.isDb && (req as any)._localId) deleteRequest((req as any)._localId);
+                }}
                 className="text-slate-600 hover:text-red-400 transition p-1"
                 title="Delete request"
               >
@@ -2184,20 +2264,14 @@ function TalkRequestsSection() {
             <div className="grid sm:grid-cols-2 gap-3 mb-4">
               <div className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3">
                 <p className="text-xs text-slate-500 mb-1">Email</p>
-                <a
-                  href={`mailto:${req.email}`}
-                  className="text-sm font-semibold text-yellow-400 hover:underline"
-                >
+                <a href={`mailto:${req.email}`} className="text-sm font-semibold text-yellow-400 hover:underline">
                   {req.email}
                 </a>
               </div>
               {req.phone && (
                 <div className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-3">
                   <p className="text-xs text-slate-500 mb-1">Phone</p>
-                  <a
-                    href={`tel:${req.phone}`}
-                    className="text-sm font-semibold text-white hover:text-yellow-400 transition"
-                  >
+                  <a href={`tel:${req.phone}`} className="text-sm font-semibold text-white hover:text-yellow-400 transition">
                     {req.phone}
                   </a>
                 </div>
@@ -2211,16 +2285,21 @@ function TalkRequestsSection() {
             </div>
 
             {/* Topic */}
-            <div className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-4 mb-5">
-              <p className="text-xs text-slate-500 mb-1.5 uppercase tracking-wider">What they want to discuss</p>
-              <p className="text-slate-200 text-sm leading-relaxed">{req.topic}</p>
-            </div>
+            {req.topic && (
+              <div className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-4 mb-5">
+                <p className="text-xs text-slate-500 mb-1.5 uppercase tracking-wider">What they want to discuss</p>
+                <p className="text-slate-200 text-sm leading-relaxed">{req.topic}</p>
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex flex-wrap gap-2">
               {req.status === "unread" && (
                 <button
-                  onClick={() => markRead(req.id)}
+                  onClick={() => {
+                    if (req.isDb && req._dbId != null) patchDbStatus(req._dbId, "read");
+                    else if (!req.isDb && (req as any)._localId) markRead((req as any)._localId);
+                  }}
                   className="flex items-center gap-1.5 rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 hover:border-slate-500 hover:text-white transition"
                 >
                   Mark as Read
@@ -2228,7 +2307,10 @@ function TalkRequestsSection() {
               )}
               {req.status !== "resolved" && (
                 <button
-                  onClick={() => markResolved(req.id)}
+                  onClick={() => {
+                    if (req.isDb && req._dbId != null) patchDbStatus(req._dbId, "resolved");
+                    else if (!req.isDb && (req as any)._localId) markResolved((req as any)._localId);
+                  }}
                   className="flex items-center gap-1.5 rounded-xl bg-green-500/20 border border-green-500/30 px-4 py-2 text-sm font-semibold text-green-300 hover:bg-green-500/30 transition"
                 >
                   <CheckCircle2 className="h-4 w-4" />

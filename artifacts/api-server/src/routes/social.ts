@@ -771,4 +771,60 @@ router.post("/social/finance-report-email", async (req, res) => {
   }
 });
 
+// ── TALK REQUESTS (Meet NOVA → Real Person) ───────────────────────────────────
+
+router.post("/social/talk-requests", async (req, res) => {
+  try {
+    const { name, email, company, phone, topic, source } = req.body;
+    if (!name || !email) return res.status(400).json({ error: "name and email are required" });
+    const result = await db.execute(sql`
+      INSERT INTO talk_requests (name, email, company, phone, topic, source)
+      VALUES (${name || ""}, ${email || ""}, ${company || ""}, ${phone || ""}, ${topic || ""}, ${source || "meet_nova"})
+      RETURNING id, name, email, company, phone, topic, source, status, created_at
+    `);
+    res.json({ success: true, request: (result as any).rows?.[0] });
+  } catch (e) {
+    console.error("[talk-requests POST]", e);
+    res.status(500).json({ error: "Failed to save talk request" });
+  }
+});
+
+router.get("/social/talk-requests", async (req, res) => {
+  try {
+    const result = await db.execute(sql`
+      SELECT id, name, email, company, phone, topic, source, status, created_at
+      FROM talk_requests
+      ORDER BY created_at DESC
+      LIMIT 100
+    `);
+    res.json({ requests: (result as any).rows || [] });
+  } catch (e) {
+    console.error("[talk-requests GET]", e);
+    res.status(500).json({ error: "Failed to load talk requests" });
+  }
+});
+
+router.patch("/social/talk-requests/:id/status", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    await db.execute(sql`UPDATE talk_requests SET status = ${status} WHERE id = ${parseInt(id)}`);
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[talk-requests PATCH]", e);
+    res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
+router.delete("/social/talk-requests/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.execute(sql`DELETE FROM talk_requests WHERE id = ${parseInt(id)}`);
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[talk-requests DELETE]", e);
+    res.status(500).json({ error: "Failed to delete talk request" });
+  }
+});
+
 export default router;

@@ -27,22 +27,28 @@ export default function HeroSection() {
           {t("hero.subtitle")}
         </p>
 
-        <div className="mt-8 flex flex-col sm:flex-row gap-4">
+        <div className="mt-8 flex flex-col sm:flex-row gap-4 flex-wrap">
+          <Link
+            href="/meet-nova"
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-yellow-400 px-7 py-3.5 text-slate-950 font-black text-base hover:bg-yellow-300 transition shadow-lg shadow-yellow-400/20"
+          >
+            <span className="text-lg">⚡</span> Talk to NOVA
+          </Link>
           <Link
             href="/training"
-            className="inline-flex items-center justify-center rounded-2xl bg-yellow-400 px-6 py-3 text-slate-950 font-bold hover:bg-yellow-300 transition"
+            className="inline-flex items-center justify-center rounded-2xl bg-slate-800 border border-slate-700 px-6 py-3.5 text-white font-bold hover:border-yellow-400 transition"
           >
             {t("hero.startTraining")}
           </Link>
           <Link
             href="/pricing"
-            className="inline-flex items-center justify-center rounded-2xl border border-slate-700 bg-slate-900 px-6 py-3 text-white font-semibold hover:border-yellow-400 transition"
+            className="inline-flex items-center justify-center rounded-2xl border border-slate-700 bg-slate-900 px-6 py-3.5 text-white font-semibold hover:border-yellow-400 transition"
           >
             {t("hero.viewPlans")}
           </Link>
           <Link
             href="/demo"
-            className="inline-flex items-center justify-center rounded-2xl border border-yellow-400/40 bg-yellow-400/10 px-6 py-3 text-yellow-300 font-semibold hover:bg-yellow-400/20 transition"
+            className="inline-flex items-center justify-center rounded-2xl border border-yellow-400/40 bg-yellow-400/10 px-6 py-3.5 text-yellow-300 font-semibold hover:bg-yellow-400/20 transition"
           >
             View Live Demo
           </Link>

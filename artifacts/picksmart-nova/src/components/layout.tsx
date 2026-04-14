@@ -156,6 +156,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
           {/* Right: language switcher + role badge / user info + mobile menu */}
           <div className="flex items-center gap-2">
+            <Link
+              href="/meet-nova"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-xl bg-yellow-400 px-3 py-1.5 text-slate-950 text-xs font-black hover:bg-yellow-300 transition shrink-0"
+            >
+              ⚡ Meet NOVA
+            </Link>
             <LanguageSwitcher />
 
             {currentUser ? (
