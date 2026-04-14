@@ -280,6 +280,7 @@ export default function NovaSalesVoiceAgent() {
   });
 
   const recognitionRef = useRef<any>(null);
+  const sendMessageRef = useRef<((text: string) => void) | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   const canListen = useMemo(() => {
@@ -302,6 +303,14 @@ export default function NovaSalesVoiceAgent() {
     trackEvent("chat_started");
   }, []);
 
+  const autoListenRef = useRef(false); // true once user has activated voice
+
+  // ── Start mic helper ─────────────────────────────────────────────────────────
+  const startListening = useCallback(() => {
+    if (!autoListenRef.current) return;
+    try { recognitionRef.current?.start(); } catch { /* already started */ }
+  }, []);
+
   // ── Voice recognition setup ─────────────────────────────────────────────────
   useEffect(() => {
     if (!canListen) return;
@@ -311,28 +320,47 @@ export default function NovaSalesVoiceAgent() {
     rec.continuous = false;
     rec.interimResults = false;
     rec.onstart = () => { setErrorMsg(""); setIsListening(true); };
-    rec.onend = () => setIsListening(false);
-    rec.onerror = () => { setIsListening(false); setErrorMsg("Voice input didn't work. Try again."); };
+    rec.onend   = () => setIsListening(false);
+    rec.onerror = () => { setIsListening(false); };
     rec.onresult = (e: any) => {
-      const text = e.results?.[0]?.[0]?.transcript ?? "";
-      if (text.trim()) setInput(text.trim());
+      const text = e.results?.[0]?.[0]?.transcript?.trim() ?? "";
+      if (text) {
+        setInput(text);
+        // Auto-send immediately — defer so state updates first
+        setTimeout(() => {
+          sendMessageRef.current?.(text);
+        }, 50);
+      }
     };
     recognitionRef.current = rec;
   }, [canListen]);
 
-  // ── Speak ───────────────────────────────────────────────────────────────────
-  const speak = useCallback((text: string) => {
-    if (!voiceOn || !canSpeak) return;
-    novaSpeak(text, "en");
-  }, [voiceOn, canSpeak]);
+  // ── Speak — auto-restarts mic when done ─────────────────────────────────────
+  const speak = useCallback((text: string, onDone?: () => void) => {
+    if (!voiceOn || !canSpeak) { onDone?.(); return; }
+    novaSpeak(text, "en", () => {
+      onDone?.();
+      // After NOVA finishes speaking, restart mic automatically
+      setTimeout(startListening, 300);
+    });
+  }, [voiceOn, canSpeak, startListening]);
 
   // ── Activate voice (called from user-gesture tap on overlay) ─────────────────
   const handleActivate = useCallback(() => {
+    autoListenRef.current = true;
     setTtsUnlocked(true);
     const welcome =
       "Most warehouses lose 15 to 25 percent performance from small mistakes and slow transitions. I fix that. What's hurting your operation more right now — speed or accuracy?";
-    if (canSpeak) novaSpeak(welcome, "en");
-  }, [canSpeak]);
+    if (canSpeak) {
+      novaSpeak(welcome, "en", () => {
+        // After welcome, auto-start mic
+        setTimeout(startListening, 300);
+      });
+    } else {
+      // No TTS — just start listening
+      setTimeout(startListening, 300);
+    }
+  }, [canSpeak, startListening]);
 
   // ── Track event ─────────────────────────────────────────────────────────────
   async function trackEvent(event: string, dealId?: string) {
@@ -441,8 +469,17 @@ export default function NovaSalesVoiceAgent() {
     }, 400);
   }, [input, isThinking, stage, lead, trialCreated, pushMessage, speak, createTrialLead]);
 
+  // Keep ref in sync so voice onresult always has the latest sendMessage
+  useEffect(() => {
+    sendMessageRef.current = (text: string) => sendMessage(text);
+  }, [sendMessage]);
+
   const onSubmit = (e: React.FormEvent) => { e.preventDefault(); sendMessage(); };
-  const startListening = () => recognitionRef.current?.start();
+  // Manual mic tap — always starts regardless of autoListenRef
+  const manualStartListening = () => {
+    autoListenRef.current = true; // enable auto-loop once they tap mic manually
+    try { recognitionRef.current?.start(); } catch { /* already running */ }
+  };
   const stopListening = () => recognitionRef.current?.stop();
 
   // ── ROI calculator derived from lead.selectors ───────────────────────────────
@@ -609,7 +646,7 @@ export default function NovaSalesVoiceAgent() {
             <p className="text-xs font-bold uppercase tracking-widest text-yellow-300 mb-3">Voice Controls</p>
             <div className="flex flex-wrap gap-2">
               <button
-                onClick={isListening ? stopListening : startListening}
+                onClick={isListening ? stopListening : manualStartListening}
                 disabled={!canListen}
                 className={`flex items-center gap-2 rounded-xl px-4 py-2 font-bold text-sm transition disabled:opacity-40 ${isListening ? "bg-red-500 text-white" : "bg-yellow-400 text-slate-950"}`}
               >
@@ -784,7 +821,7 @@ export default function NovaSalesVoiceAgent() {
             />
             <button
               type="button"
-              onClick={isListening ? stopListening : startListening}
+              onClick={isListening ? stopListening : manualStartListening}
               disabled={!canListen}
               className={`p-2.5 rounded-xl transition disabled:opacity-40 ${isListening ? "bg-red-500 text-white" : "bg-slate-800 border border-slate-700 text-slate-400 hover:text-white hover:border-slate-500"}`}
             >
