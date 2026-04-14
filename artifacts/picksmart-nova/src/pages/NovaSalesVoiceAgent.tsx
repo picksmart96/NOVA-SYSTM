@@ -305,7 +305,18 @@ export default function NovaSalesVoiceAgent() {
     trackEvent("chat_started");
   }, []);
 
-  const autoListenRef = useRef(false); // true once user has activated voice
+  const autoListenRef  = useRef(false); // true once user has activated voice
+  const speechStartRef = useRef(false); // tracks if onstart fired for current utterance
+
+  // ── Preload voices on mount so they are available when user taps ─────────────
+  useEffect(() => {
+    if (!canSpeak) return;
+    // Trigger voice list load — browsers populate it lazily
+    window.speechSynthesis.getVoices();
+    const load = () => window.speechSynthesis.getVoices();
+    window.speechSynthesis.addEventListener("voiceschanged", load);
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", load);
+  }, [canSpeak]);
 
   // ── Start mic helper ─────────────────────────────────────────────────────────
   const startListening = useCallback(() => {
@@ -353,20 +364,48 @@ export default function NovaSalesVoiceAgent() {
   // ── Activate voice (called from user-gesture tap on overlay) ─────────────────
   const handleActivate = useCallback(() => {
     autoListenRef.current = true;
+    speechStartRef.current = false;
     setTtsUnlocked(true);
+
     const welcome =
-      "Most warehouses lose 15 to 25 percent performance from small mistakes and slow transitions. I fix that. What's hurting your operation more right now — speed or accuracy?";
-    if (canSpeak) {
-      setIsSpeaking(true);
-      setNowSpeakingText(welcome);
-      novaSpeak(welcome, "en", () => {
+      "Most warehouses lose 15 to 25 percent performance from small mistakes and slow transitions. I fix that. What's hurting your operation more right now, speed or accuracy?";
+
+    if (!canSpeak) {
+      setTimeout(startListening, 300);
+      return;
+    }
+
+    // Show the speaking UI immediately so the user sees feedback
+    setIsSpeaking(true);
+    setNowSpeakingText(welcome);
+
+    // 3-second watchdog — if onstart never fires, speech was silently blocked
+    const watchdog = setTimeout(() => {
+      if (!speechStartRef.current) {
+        // Speech never actually started — clear speaking state and move on
+        setIsSpeaking(false);
+        setNowSpeakingText("");
+        setErrorMsg("Your browser blocked audio. For full voice, open the app in a new tab or use the deployed site.");
+        setTimeout(startListening, 300);
+      }
+    }, 3000);
+
+    novaSpeak(welcome, "en",
+      // onDone
+      () => {
+        clearTimeout(watchdog);
         setIsSpeaking(false);
         setNowSpeakingText("");
         setTimeout(startListening, 300);
-      });
-    } else {
-      setTimeout(startListening, 300);
-    }
+      },
+      // opts — onStart fires when audio actually begins
+      {
+        onStart: () => {
+          speechStartRef.current = true;
+          clearTimeout(watchdog);
+        },
+      }
+    );
   }, [canSpeak, startListening]);
 
   // ── Track event ─────────────────────────────────────────────────────────────

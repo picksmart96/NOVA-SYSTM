@@ -33,26 +33,26 @@ export function pickNovaVoice(lang: string): SpeechSynthesisVoice | null {
 
 // ── Core speak function ───────────────────────────────────────────────────────
 // Chrome-hardened: fixes cancel→speak race, 15-second cutoff, and paused state.
+//
+// KEY DESIGN: Only call cancel() when something is already playing.
+// Calling cancel() then setTimeout(speak, 120) can lose Chrome's user-gesture
+// context, causing silent speech failures. When idle, speak immediately.
 
 export function novaSpeak(
   text: string,
   lang: string,
   onDone?: () => void,
-  opts?: { rate?: number; pitch?: number }
+  opts?: { rate?: number; pitch?: number; onStart?: () => void }
 ): void {
   if (!("speechSynthesis" in window)) { onDone?.(); return; }
 
-  // Cancel any current speech, then wait a tick — Chrome drops speak() if
-  // called immediately after cancel().
-  window.speechSynthesis.cancel();
-
   const doSpeak = () => {
-    // Resume in case the synthesizer is in a paused state (another Chrome quirk)
+    // Resume in case the synthesizer is in a paused state (Chrome quirk)
     window.speechSynthesis.resume();
 
     const u = new SpeechSynthesisUtterance(text);
     u.lang  = lang.startsWith("es") ? "es-US" : "en-US";
-    u.rate  = opts?.rate  ?? 0.97;
+    u.rate  = opts?.rate  ?? 0.95;
     u.pitch = opts?.pitch ?? 1;
 
     const applyVoice = () => {
@@ -69,18 +69,12 @@ export function novaSpeak(
       window.speechSynthesis.resume();
     }, 14000);
 
-    u.onend = () => {
-      clearInterval(keepAlive);
-      onDone?.();
-    };
-    u.onerror = () => {
-      clearInterval(keepAlive);
-      onDone?.();
-    };
+    u.onstart = () => { opts?.onStart?.(); };
+    u.onend   = () => { clearInterval(keepAlive); onDone?.(); };
+    u.onerror = () => { clearInterval(keepAlive); onDone?.(); };
 
     if (window.speechSynthesis.getVoices().length === 0) {
-      // Voices not ready yet — wait for them (use addEventListener so we don't
-      // clobber any other handler that may be listening).
+      // Voices not loaded yet — wait for them
       const onVoices = () => {
         applyVoice();
         window.speechSynthesis.speak(u);
@@ -92,8 +86,15 @@ export function novaSpeak(
     }
   };
 
-  // 120 ms gap gives Chrome's cancel() time to fully flush before the next speak()
-  setTimeout(doSpeak, 120);
+  if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+    // Something is playing — cancel it, then wait for the flush before speaking.
+    // The 150 ms gap gives Chrome's cancel() time to fully flush.
+    window.speechSynthesis.cancel();
+    setTimeout(doSpeak, 150);
+  } else {
+    // Synthesizer is idle — speak immediately to preserve the user-gesture context.
+    doSpeak();
+  }
 }
 
 // ── Recognition language ──────────────────────────────────────────────────────
