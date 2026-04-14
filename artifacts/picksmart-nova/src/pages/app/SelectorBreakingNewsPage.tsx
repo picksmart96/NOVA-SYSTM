@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { useSelectorBreakingNewsStore } from "@/store/selectorBreakingNewsStore";
 import type { Post, BreakingNewsUser } from "@/store/selectorBreakingNewsStore";
-import LockedAction from "@/components/paywall/LockedAction";
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -149,8 +148,8 @@ function PostCard({
         </div>
       )}
 
-      {/* Reactions — gated */}
-      <LockedAction className="mt-5 flex flex-wrap gap-2">
+      {/* Reactions */}
+      <div className="mt-5 flex flex-wrap gap-2">
         <ReactionButton emoji="👍" label="Like" count={post.reactions.like.length} active={hasReaction("like")} onClick={() => onReact(post.id, "like")} />
         <ReactionButton emoji="❤️" label="Love" count={post.reactions.love.length} active={hasReaction("love")} onClick={() => onReact(post.id, "love")} />
         <ReactionButton emoji="😂" label="Funny" count={post.reactions.funny.length} active={hasReaction("funny")} onClick={() => onReact(post.id, "funny")} />
@@ -158,7 +157,7 @@ function PostCard({
         <ReactionButton emoji="😡" label="Frustrated" count={post.reactions.frustrated.length} active={hasReaction("frustrated")} onClick={() => onReact(post.id, "frustrated")} />
         <ReactionButton emoji="🔖" label={isSaved ? "Saved" : "Save"} active={isSaved} onClick={() => onSave(post.id)} />
         <ReactionButton emoji="🚩" label="Report" onClick={() => onReport(post.id)} />
-      </LockedAction>
+      </div>
 
       {/* Comments */}
       {post.comments.length > 0 && (
@@ -175,8 +174,8 @@ function PostCard({
         </div>
       )}
 
-      {/* Comment input — gated */}
-      <LockedAction className="mt-5 flex gap-3">
+      {/* Comment input */}
+      <div className="mt-5 flex gap-3">
         <input
           value={comment}
           onChange={(e) => setComment(e.target.value)}
@@ -190,10 +189,10 @@ function PostCard({
         >
           Post
         </button>
-      </LockedAction>
+      </div>
 
-      {/* Emoji quick-add — gated */}
-      <LockedAction className="mt-4 flex flex-wrap gap-1.5 text-base">
+      {/* Emoji quick-add */}
+      <div className="mt-4 flex flex-wrap gap-1.5 text-base">
         {EMOJIS.map((emoji) => (
           <button
             key={emoji}
@@ -203,7 +202,7 @@ function PostCard({
             {emoji}
           </button>
         ))}
-      </LockedAction>
+      </div>
     </div>
   );
 }
@@ -361,14 +360,13 @@ export default function SelectorBreakingNewsPage() {
                   </div>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-3">
-                  <LockedAction onAllowedClick={postText.trim() ? handleCreatePost : undefined}>
-                    <button
-                      disabled={!postText.trim()}
-                      className="rounded-2xl bg-yellow-400 px-5 py-3 text-sm font-bold text-slate-950 hover:bg-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      Post to Breaking News
-                    </button>
-                  </LockedAction>
+                  <button
+                    onClick={postText.trim() ? handleCreatePost : undefined}
+                    disabled={!postText.trim()}
+                    className="rounded-2xl bg-yellow-400 px-5 py-3 text-sm font-bold text-slate-950 hover:bg-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Post to Breaking News
+                  </button>
                 </div>
               </div>
             )}
