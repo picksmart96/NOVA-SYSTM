@@ -396,12 +396,15 @@ router.post("/social/conversations/:id/messages", async (req, res) => {
 
 router.get("/social/weekly-reports", async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 5;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const publishedOnly = req.query.published === "true";
     const reports = await db.execute(sql`
-      SELECT r.id, r.warehouse_name, r.week, r.created_at,
+      SELECT r.id, r.warehouse_name, r.warehouse_country, r.warehouse_state,
+             r.week, r.created_at, r.is_published, r.submitted_by, r.submitted_by_name,
              json_agg(s.* ORDER BY s.rank ASC) AS top_selectors
       FROM sbn_weekly_reports r
       LEFT JOIN sbn_weekly_top_selectors s ON s.report_id = r.id
+      ${publishedOnly ? sql`WHERE r.is_published = TRUE` : sql``}
       GROUP BY r.id
       ORDER BY r.created_at DESC
       LIMIT ${limit}
@@ -415,14 +418,14 @@ router.get("/social/weekly-reports", async (req, res) => {
 
 router.post("/social/weekly-reports", async (req, res) => {
   try {
-    const { warehouseName, week, selectors, submittedBy } = req.body;
+    const { warehouseName, warehouseCountry, warehouseState, week, selectors, submittedBy, submittedByName } = req.body;
     if (!warehouseName || !week || !Array.isArray(selectors)) {
       return res.status(400).json({ error: "warehouseName, week, and selectors[] required" });
     }
     const rows = await db.execute(sql`
-      INSERT INTO sbn_weekly_reports (warehouse_name, week, submitted_by)
-      VALUES (${warehouseName}, ${week}, ${submittedBy || null})
-      RETURNING id, warehouse_name, week, created_at
+      INSERT INTO sbn_weekly_reports (warehouse_name, warehouse_country, warehouse_state, week, submitted_by, submitted_by_name)
+      VALUES (${warehouseName}, ${warehouseCountry || ""}, ${warehouseState || ""}, ${week}, ${submittedBy || null}, ${submittedByName || ""})
+      RETURNING id, warehouse_name, warehouse_country, warehouse_state, week, created_at, is_published
     `);
     const report = (rows as any).rows?.[0];
     if (!report?.id) return res.status(500).json({ error: "Failed to create report" });
@@ -439,6 +442,33 @@ router.post("/social/weekly-reports", async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "Failed to submit weekly report" });
+  }
+});
+
+router.patch("/social/weekly-reports/:id/publish", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { publish } = req.body;
+    const isPublished = publish !== false;
+    await db.execute(sql`
+      UPDATE sbn_weekly_reports SET is_published = ${isPublished} WHERE id = ${parseInt(id)}
+    `);
+    res.json({ success: true, is_published: isPublished });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to update publish status" });
+  }
+});
+
+router.delete("/social/weekly-reports/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.execute(sql`DELETE FROM sbn_weekly_top_selectors WHERE report_id = ${parseInt(id)}`);
+    await db.execute(sql`DELETE FROM sbn_weekly_reports WHERE id = ${parseInt(id)}`);
+    res.json({ success: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to delete report" });
   }
 });
 

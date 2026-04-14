@@ -3014,7 +3014,10 @@ function WeeklyReportsSection() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [actioningId, setActioningId] = useState<number | null>(null);
   const [warehouseName, setWarehouseName] = useState("");
+  const [warehouseCountry, setWarehouseCountry] = useState("");
+  const [warehouseState, setWarehouseState] = useState("");
   const [week, setWeek] = useState(new Date().toISOString().slice(0, 10));
   const [selectors, setSelectors] = useState([
     { name: "", cases: "", hours: "", rate: "" },
@@ -3026,7 +3029,7 @@ function WeeklyReportsSection() {
 
   async function load() {
     setLoading(true);
-    const r = await fetch(`${SN_REPORTS_API}/weekly-reports?limit=10`).catch(() => null);
+    const r = await fetch(`${SN_REPORTS_API}/weekly-reports?limit=50`).catch(() => null);
     if (r?.ok) { const d = await r.json(); setReports(d.reports || []); }
     setLoading(false);
   }
@@ -3038,30 +3041,62 @@ function WeeklyReportsSection() {
     await fetch(`${SN_REPORTS_API}/weekly-reports`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        warehouseName, week,
+        warehouseName, warehouseCountry, warehouseState, week,
+        submittedByName: "Owner",
         selectors: filled.map(s => ({ name: s.name, cases: parseInt(s.cases) || 0, hours: parseFloat(s.hours) || 0, rate: parseFloat(s.rate) || 0 })),
       }),
     });
     setSubmitting(false);
     setShowForm(false);
-    setWarehouseName(""); setSelectors(selectors.map(() => ({ name: "", cases: "", hours: "", rate: "" })));
+    setWarehouseName(""); setWarehouseCountry(""); setWarehouseState("");
+    setSelectors(selectors.map(() => ({ name: "", cases: "", hours: "", rate: "" })));
+    load();
+  }
+
+  async function togglePublish(id: number, currentlyPublished: boolean) {
+    setActioningId(id);
+    await fetch(`${SN_REPORTS_API}/weekly-reports/${id}/publish`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ publish: !currentlyPublished }),
+    });
+    setActioningId(null);
+    load();
+  }
+
+  async function deleteReport(id: number) {
+    if (!confirm("Delete this report permanently?")) return;
+    setActioningId(id);
+    await fetch(`${SN_REPORTS_API}/weekly-reports/${id}`, { method: "DELETE" });
+    setActioningId(null);
     load();
   }
 
   useEffect(() => { load(); }, []);
 
   const MEDALS = ["🥇", "🥈", "🥉", "4.", "5."];
+  const pending = reports.filter(r => !r.is_published);
+  const published = reports.filter(r => r.is_published);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-2xl font-black">Weekly Reports</h2>
-          <p className="text-slate-400 text-sm mt-1">Submit your Top 5 selectors each week. Reports appear publicly on Selector Nation.</p>
+          <p className="text-slate-400 text-sm mt-1">
+            Review reports from supervisors. Hit <span className="text-yellow-400 font-bold">Publish Globally</span> to make them visible worldwide on Selector Nation.
+          </p>
         </div>
-        <button onClick={() => setShowForm(v => !v)} className="px-5 py-2.5 rounded-xl bg-yellow-400 text-slate-950 font-black text-sm hover:bg-yellow-300 transition">
-          {showForm ? "Cancel" : "+ Submit Weekly Top 5"}
-        </button>
+        <div className="flex gap-3">
+          <span className="rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-1.5 text-xs font-bold text-orange-300">
+            {pending.length} Pending
+          </span>
+          <span className="rounded-xl border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-bold text-green-300">
+            {published.length} Published
+          </span>
+          <button onClick={() => setShowForm(v => !v)} className="px-5 py-2.5 rounded-xl bg-yellow-400 text-slate-950 font-black text-sm hover:bg-yellow-300 transition">
+            {showForm ? "Cancel" : "+ Submit Top 5"}
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -3077,6 +3112,16 @@ function WeeklyReportsSection() {
               <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-1.5">Week</label>
               <input type="date" value={week} onChange={e => setWeek(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-yellow-400" />
+            </div>
+            <div>
+              <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-1.5">Country</label>
+              <input value={warehouseCountry} onChange={e => setWarehouseCountry(e.target.value)} placeholder="e.g. United States"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400" />
+            </div>
+            <div>
+              <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-1.5">State / Province</label>
+              <input value={warehouseState} onChange={e => setWarehouseState(e.target.value)} placeholder="e.g. California"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400" />
             </div>
           </div>
           <div className="space-y-3">
@@ -3100,13 +3145,11 @@ function WeeklyReportsSection() {
               </div>
             ))}
           </div>
-          <div className="flex items-center gap-3 text-xs text-slate-500 mb-2">
-            <span className="font-bold">Columns:</span> Name · Cases Picked · Hours Worked · Rate %
-          </div>
+          <p className="text-xs text-slate-600">Columns: Name · Cases Picked · Hours Worked · Rate %</p>
           <button onClick={submit} disabled={submitting || !warehouseName}
             className="px-6 py-3 rounded-xl bg-yellow-400 text-slate-950 font-black text-sm hover:bg-yellow-300 transition disabled:opacity-50 flex items-center gap-2">
             {submitting && <div className="h-4 w-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />}
-            {submitting ? "Submitting…" : "Publish Weekly Top 5"}
+            {submitting ? "Submitting…" : "Submit Report"}
           </button>
         </div>
       )}
@@ -3117,34 +3160,96 @@ function WeeklyReportsSection() {
         <div className="text-center py-16 rounded-2xl border border-slate-800 bg-slate-900">
           <div className="text-4xl mb-3">📋</div>
           <p className="text-white font-black text-lg">No weekly reports yet.</p>
-          <p className="text-slate-400 text-sm mt-1">Submit your first Top 5 to appear on the Selector Nation landing page.</p>
+          <p className="text-slate-400 text-sm mt-1">Supervisors can submit reports from their dashboard. They will appear here for review.</p>
         </div>
       ) : (
-        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {reports.map((report: any) => (
-            <div key={report.id} className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <p className="font-black text-white">{report.warehouse_name}</p>
-                  <p className="text-slate-500 text-xs mt-0.5">{report.week}</p>
-                  <p className="text-slate-600 text-xs">{new Date(report.created_at).toLocaleDateString()}</p>
-                </div>
-                <span className="text-yellow-400 text-lg">🏆</span>
-              </div>
-              <div className="space-y-2">
-                {(report.top_selectors || []).map((s: any, i: number) => (
-                  <div key={i} className="flex items-center gap-2.5 text-sm">
-                    <span className="font-black w-5 text-center">{MEDALS[i] || `${i + 1}.`}</span>
-                    <span className="font-bold text-white flex-1">{s.selector_name}</span>
-                    <span className="text-slate-400 text-xs">{s.cases_picked?.toLocaleString()} cases</span>
-                    <span className="text-yellow-400 font-black">{s.rate}%</span>
-                  </div>
+        <div className="space-y-8">
+          {pending.length > 0 && (
+            <div>
+              <h3 className="text-lg font-black text-orange-300 mb-3 flex items-center gap-2">
+                ⏳ Pending Review ({pending.length})
+              </h3>
+              <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {pending.map((report: any) => (
+                  <ReportCard key={report.id} report={report} medals={MEDALS} actioningId={actioningId}
+                    onPublish={() => togglePublish(report.id, false)}
+                    onDelete={() => deleteReport(report.id)} />
                 ))}
               </div>
             </div>
-          ))}
+          )}
+          {published.length > 0 && (
+            <div>
+              <h3 className="text-lg font-black text-green-300 mb-3 flex items-center gap-2">
+                🌍 Published Globally ({published.length})
+              </h3>
+              <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {published.map((report: any) => (
+                  <ReportCard key={report.id} report={report} medals={MEDALS} actioningId={actioningId}
+                    onUnpublish={() => togglePublish(report.id, true)}
+                    onDelete={() => deleteReport(report.id)} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function ReportCard({ report, medals, actioningId, onPublish, onUnpublish, onDelete }: {
+  report: any; medals: string[]; actioningId: number | null;
+  onPublish?: () => void; onUnpublish?: () => void; onDelete: () => void;
+}) {
+  const isActioning = actioningId === report.id;
+  const location = [report.warehouse_state, report.warehouse_country].filter(Boolean).join(", ");
+  return (
+    <div className={`rounded-2xl border bg-slate-900 p-5 ${report.is_published ? "border-green-500/30" : "border-slate-700"}`}>
+      <div className="flex items-start justify-between mb-3">
+        <div className="min-w-0 flex-1">
+          <p className="font-black text-white text-sm leading-tight">{report.warehouse_name}</p>
+          {location && <p className="text-slate-400 text-xs mt-0.5 flex items-center gap-1">📍 {location}</p>}
+          <p className="text-slate-500 text-xs mt-0.5">Week of {report.week}</p>
+          {report.submitted_by_name && (
+            <p className="text-slate-600 text-xs mt-0.5">Submitted by: {report.submitted_by_name}</p>
+          )}
+          <p className="text-slate-700 text-xs">{new Date(report.created_at).toLocaleDateString()}</p>
+        </div>
+        <span className="text-yellow-400 text-xl ml-2">🏆</span>
+      </div>
+
+      <div className="space-y-1.5 mb-4">
+        {(report.top_selectors || []).filter((s: any) => s?.selector_name).map((s: any, i: number) => (
+          <div key={i} className="flex items-center gap-2 text-sm">
+            <span className="font-black w-5 text-center text-base">{medals[i] || `${i + 1}.`}</span>
+            <span className="font-bold text-white flex-1 truncate">{s.selector_name}</span>
+            <span className="text-slate-400 text-xs shrink-0">{s.cases_picked?.toLocaleString()} cases</span>
+            <span className="text-yellow-400 font-black text-xs shrink-0">{s.rate}%</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-2 flex-wrap">
+        {onPublish && (
+          <button onClick={onPublish} disabled={isActioning}
+            className="flex-1 rounded-xl bg-yellow-400 px-3 py-2 text-xs font-black text-slate-950 hover:bg-yellow-300 transition disabled:opacity-50 flex items-center justify-center gap-1">
+            {isActioning ? <div className="h-3 w-3 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" /> : "🌍"}
+            Publish Globally
+          </button>
+        )}
+        {onUnpublish && (
+          <button onClick={onUnpublish} disabled={isActioning}
+            className="flex-1 rounded-xl border border-slate-600 px-3 py-2 text-xs font-bold text-slate-300 hover:border-slate-400 transition disabled:opacity-50 flex items-center justify-center gap-1">
+            {isActioning ? <div className="h-3 w-3 border-2 border-slate-300 border-t-transparent rounded-full animate-spin" /> : null}
+            Unpublish
+          </button>
+        )}
+        <button onClick={onDelete} disabled={isActioning}
+          className="rounded-xl border border-red-500/30 px-3 py-2 text-xs font-bold text-red-400 hover:bg-red-500/10 transition disabled:opacity-50">
+          Delete
+        </button>
+      </div>
     </div>
   );
 }

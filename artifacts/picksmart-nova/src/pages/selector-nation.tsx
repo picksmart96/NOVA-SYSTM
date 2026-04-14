@@ -78,7 +78,7 @@ function PublicLanding() {
   useEffect(() => {
     fetch(`${API}/social/leaderboard?period=weekly&limit=3`)
       .then(r => r.json()).then(d => setLeaderboard(d.leaderboard || [])).catch(() => {});
-    fetch(`${API}/social/weekly-reports?limit=3`)
+    fetch(`${API}/social/weekly-reports?limit=3&published=true`)
       .then(r => r.json()).then(d => setWeeklyReports(d.reports || [])).catch(() => {});
   }, []);
 
@@ -280,26 +280,31 @@ function PublicLanding() {
               <p className="text-slate-400 mt-2">Supervisors showcase their team's best performers each week.</p>
             </div>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {weeklyReports.slice(0, 3).map((report: any) => (
-                <div key={report.id} className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <p className="font-black text-white">{report.warehouse_name}</p>
-                      <p className="text-slate-500 text-xs">{report.week}</p>
-                    </div>
-                    <Trophy className="h-5 w-5 text-yellow-400" />
-                  </div>
-                  <div className="space-y-2">
-                    {(report.top_selectors || []).slice(0, 3).map((s: any, i: number) => (
-                      <div key={i} className="flex items-center gap-2 text-sm">
-                        <span>{MEDALS[i] || `${i + 1}.`}</span>
-                        <span className="font-bold text-white flex-1">{s.selector_name}</span>
-                        <span className="text-yellow-400 font-black">{s.rate}%</span>
+              {weeklyReports.slice(0, 3).map((report: any) => {
+                const location = [report.warehouse_state, report.warehouse_country].filter(Boolean).join(", ");
+                return (
+                  <div key={report.id} className="rounded-2xl border border-yellow-400/20 bg-slate-900 p-5">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-black text-white leading-tight">{report.warehouse_name}</p>
+                        {location && <p className="text-slate-400 text-xs mt-0.5">📍 {location}</p>}
+                        <p className="text-slate-500 text-xs mt-0.5">Week of {report.week}</p>
                       </div>
-                    ))}
+                      <Trophy className="h-5 w-5 text-yellow-400 shrink-0 ml-2" />
+                    </div>
+                    <div className="space-y-2">
+                      {(report.top_selectors || []).filter((s: any) => s?.selector_name).slice(0, 5).map((s: any, i: number) => (
+                        <div key={i} className="flex items-center gap-2 text-sm">
+                          <span className="text-base">{MEDALS[i] || `${i + 1}.`}</span>
+                          <span className="font-bold text-white flex-1 truncate">{s.selector_name}</span>
+                          <span className="text-slate-400 text-xs shrink-0">{s.cases_picked?.toLocaleString()} cases</span>
+                          <span className="text-yellow-400 font-black text-xs shrink-0">{s.rate}%</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

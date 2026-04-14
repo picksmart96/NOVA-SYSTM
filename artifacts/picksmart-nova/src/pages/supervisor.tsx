@@ -20,8 +20,12 @@ function formatDate(date: string) {
   });
 }
 
-const TABS = ["Overview", "Assignments", "Activate NOVA", "Selectors", "Trainers", "Sessions", "Shift Post"] as const;
+const TABS = ["Overview", "Assignments", "Activate NOVA", "Selectors", "Trainers", "Sessions", "Shift Post", "Weekly Report"] as const;
 type Tab = typeof TABS[number];
+
+const MEDALS = ["🥇", "🥈", "🥉", "4.", "5."];
+const BASE_URL = import.meta.env.BASE_URL;
+const WEEKLY_API = `${BASE_URL}api/social/weekly-reports`;
 
 export default function SupervisorPage() {
   const { t } = useTranslation();
@@ -47,6 +51,22 @@ export default function SupervisorPage() {
   const [preselectedAssignmentId, setPreselectedAssignmentId] = useState<string | null>(null);
   const [confirmSelector, setConfirmSelector] = useState<number | null>(null);
   const [confirmTrainer, setConfirmTrainer] = useState<string | null>(null);
+
+  // Weekly Report state
+  const [wrWarehouseName, setWrWarehouseName] = useState("");
+  const [wrCountry, setWrCountry] = useState("");
+  const [wrState, setWrState] = useState("");
+  const [wrWeek, setWrWeek] = useState(new Date().toISOString().slice(0, 10));
+  const [wrSelectors, setWrSelectors] = useState([
+    { name: "", cases: "", hours: "", rate: "" },
+    { name: "", cases: "", hours: "", rate: "" },
+    { name: "", cases: "", hours: "", rate: "" },
+    { name: "", cases: "", hours: "", rate: "" },
+    { name: "", cases: "", hours: "", rate: "" },
+  ]);
+  const [wrSubmitting, setWrSubmitting] = useState(false);
+  const [wrSubmitted, setWrSubmitted] = useState(false);
+  const [wrError, setWrError] = useState("");
 
   const openAssignForAssignment = (assignmentId: string) => {
     setPreselectedAssignmentId(assignmentId);
@@ -80,6 +100,44 @@ export default function SupervisorPage() {
 
   const activeNovaCount = selectors.filter((s) => s.novaActive).length;
   const openCount = selectors.filter((s) => s.assignedAssignmentId).length;
+
+  async function submitWeeklyReport() {
+    if (!wrWarehouseName.trim() || !wrWeek) return;
+    const filled = wrSelectors.filter(s => s.name.trim());
+    if (filled.length === 0) { setWrError("Add at least one selector name."); return; }
+    setWrError("");
+    setWrSubmitting(true);
+    try {
+      const res = await fetch(WEEKLY_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          warehouseName: wrWarehouseName.trim(),
+          warehouseCountry: wrCountry.trim(),
+          warehouseState: wrState.trim(),
+          week: wrWeek,
+          submittedByName: currentUser?.fullName || "Supervisor",
+          selectors: filled.map(s => ({
+            name: s.name.trim(),
+            cases: parseInt(s.cases) || 0,
+            hours: parseFloat(s.hours) || 0,
+            rate: parseFloat(s.rate) || 0,
+          })),
+        }),
+      });
+      if (res.ok) {
+        setWrSubmitted(true);
+        setWrWarehouseName(""); setWrCountry(""); setWrState("");
+        setWrSelectors(wrSelectors.map(() => ({ name: "", cases: "", hours: "", rate: "" })));
+        setTimeout(() => setWrSubmitted(false), 5000);
+      } else {
+        setWrError("Failed to submit. Please try again.");
+      }
+    } catch {
+      setWrError("Network error. Please try again.");
+    }
+    setWrSubmitting(false);
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-white px-3 py-5 sm:px-6 sm:py-8">
@@ -610,6 +668,129 @@ export default function SupervisorPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {tab === "Weekly Report" && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-black flex items-center gap-2">
+                <Star className="h-6 w-6 text-yellow-400" />
+                Submit Weekly Top 5 Selectors
+              </h2>
+              <p className="text-slate-400 text-sm mt-1">
+                Report your warehouse's top 5 selectors for the week. Your report will be sent to the Owner Control Center for review and global publishing.
+              </p>
+            </div>
+
+            {wrSubmitted && (
+              <div className="rounded-2xl border border-green-500/30 bg-green-500/10 px-5 py-4 text-green-300 font-bold flex items-center gap-3">
+                <CheckCircle2 className="h-5 w-5 shrink-0" />
+                Report submitted successfully! The owner will review and publish it globally.
+              </div>
+            )}
+
+            {wrError && (
+              <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-red-300 text-sm font-semibold">
+                {wrError}
+              </div>
+            )}
+
+            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-5">
+              {/* Warehouse info */}
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5">Warehouse Name *</label>
+                  <input
+                    value={wrWarehouseName}
+                    onChange={e => setWrWarehouseName(e.target.value)}
+                    placeholder="e.g. ABC Distribution — Warehouse A"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5">Week *</label>
+                  <input
+                    type="date"
+                    value={wrWeek}
+                    onChange={e => setWrWeek(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white focus:outline-none focus:border-yellow-400 transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5">Country</label>
+                  <input
+                    value={wrCountry}
+                    onChange={e => setWrCountry(e.target.value)}
+                    placeholder="e.g. United States"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1.5">State / Province</label>
+                  <input
+                    value={wrState}
+                    onChange={e => setWrState(e.target.value)}
+                    placeholder="e.g. California"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition"
+                  />
+                </div>
+              </div>
+
+              {/* Top 5 selectors */}
+              <div>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Top 5 Selectors</p>
+                <div className="space-y-3">
+                  {wrSelectors.map((s, i) => (
+                    <div key={i} className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-center">
+                      <div className="col-span-2 sm:col-span-1 flex items-center gap-2">
+                        <span className="text-lg font-black w-6 shrink-0">{MEDALS[i]}</span>
+                        <input
+                          value={s.name}
+                          onChange={e => setWrSelectors(sel => sel.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
+                          placeholder="Selector name"
+                          className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition"
+                        />
+                      </div>
+                      <input
+                        value={s.cases}
+                        onChange={e => setWrSelectors(sel => sel.map((x, j) => j === i ? { ...x, cases: e.target.value } : x))}
+                        placeholder="Cases picked"
+                        type="number"
+                        className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition"
+                      />
+                      <input
+                        value={s.hours}
+                        onChange={e => setWrSelectors(sel => sel.map((x, j) => j === i ? { ...x, hours: e.target.value } : x))}
+                        placeholder="Hours worked"
+                        type="number" step="0.5"
+                        className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition"
+                      />
+                      <input
+                        value={s.rate}
+                        onChange={e => setWrSelectors(sel => sel.map((x, j) => j === i ? { ...x, rate: e.target.value } : x))}
+                        placeholder="Rate %"
+                        type="number" step="0.1"
+                        className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-600 mt-2">Columns: Name · Cases Picked · Hours Worked · Rate %</p>
+              </div>
+
+              <button
+                onClick={submitWeeklyReport}
+                disabled={wrSubmitting || !wrWarehouseName.trim()}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-yellow-400 py-3 font-black text-slate-950 hover:bg-yellow-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {wrSubmitting ? (
+                  <><div className="h-4 w-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" /> Submitting…</>
+                ) : (
+                  <><Send className="h-4 w-4" /> Send Report to Owner</>
+                )}
+              </button>
             </div>
           </div>
         )}
