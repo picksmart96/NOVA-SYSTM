@@ -2831,7 +2831,150 @@ function NovaMetricsTab() {
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
+// ── Weekly Reports (Selector Nation) ─────────────────────────────────────────
+
+const SN_REPORTS_API = import.meta.env.BASE_URL + "api/social";
+
+function WeeklyReportsSection() {
+  const [reports, setReports] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [warehouseName, setWarehouseName] = useState("");
+  const [week, setWeek] = useState(new Date().toISOString().slice(0, 10));
+  const [selectors, setSelectors] = useState([
+    { name: "", cases: "", hours: "", rate: "" },
+    { name: "", cases: "", hours: "", rate: "" },
+    { name: "", cases: "", hours: "", rate: "" },
+    { name: "", cases: "", hours: "", rate: "" },
+    { name: "", cases: "", hours: "", rate: "" },
+  ]);
+
+  async function load() {
+    setLoading(true);
+    const r = await fetch(`${SN_REPORTS_API}/weekly-reports?limit=10`).catch(() => null);
+    if (r?.ok) { const d = await r.json(); setReports(d.reports || []); }
+    setLoading(false);
+  }
+
+  async function submit() {
+    if (!warehouseName || !week) return;
+    setSubmitting(true);
+    const filled = selectors.filter(s => s.name.trim());
+    await fetch(`${SN_REPORTS_API}/weekly-reports`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        warehouseName, week,
+        selectors: filled.map(s => ({ name: s.name, cases: parseInt(s.cases) || 0, hours: parseFloat(s.hours) || 0, rate: parseFloat(s.rate) || 0 })),
+      }),
+    });
+    setSubmitting(false);
+    setShowForm(false);
+    setWarehouseName(""); setSelectors(selectors.map(() => ({ name: "", cases: "", hours: "", rate: "" })));
+    load();
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const MEDALS = ["🥇", "🥈", "🥉", "4.", "5."];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-black">Weekly Reports</h2>
+          <p className="text-slate-400 text-sm mt-1">Submit your Top 5 selectors each week. Reports appear publicly on Selector Nation.</p>
+        </div>
+        <button onClick={() => setShowForm(v => !v)} className="px-5 py-2.5 rounded-xl bg-yellow-400 text-slate-950 font-black text-sm hover:bg-yellow-300 transition">
+          {showForm ? "Cancel" : "+ Submit Weekly Top 5"}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="rounded-2xl border border-yellow-400/30 bg-yellow-400/5 p-6 space-y-5">
+          <h3 className="font-black text-white text-lg">Submit Top 5 Selectors</h3>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-1.5">Warehouse Name</label>
+              <input value={warehouseName} onChange={e => setWarehouseName(e.target.value)} placeholder="e.g. ABC Distribution — Warehouse A"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400" />
+            </div>
+            <div>
+              <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-1.5">Week</label>
+              <input type="date" value={week} onChange={e => setWeek(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-yellow-400" />
+            </div>
+          </div>
+          <div className="space-y-3">
+            {selectors.map((s, i) => (
+              <div key={i} className="grid grid-cols-4 gap-3 items-center">
+                <div className="col-span-4 sm:col-span-1 flex items-center gap-2">
+                  <span className="text-lg font-black">{MEDALS[i]}</span>
+                  <input value={s.name} onChange={e => setSelectors(sel => sel.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
+                    placeholder="Selector name"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400" />
+                </div>
+                <input value={s.cases} onChange={e => setSelectors(sel => sel.map((x, j) => j === i ? { ...x, cases: e.target.value } : x))}
+                  placeholder="Cases" type="number"
+                  className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400" />
+                <input value={s.hours} onChange={e => setSelectors(sel => sel.map((x, j) => j === i ? { ...x, hours: e.target.value } : x))}
+                  placeholder="Hours" type="number" step="0.5"
+                  className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400" />
+                <input value={s.rate} onChange={e => setSelectors(sel => sel.map((x, j) => j === i ? { ...x, rate: e.target.value } : x))}
+                  placeholder="Rate %" type="number" step="0.1"
+                  className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400" />
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 text-xs text-slate-500 mb-2">
+            <span className="font-bold">Columns:</span> Name · Cases Picked · Hours Worked · Rate %
+          </div>
+          <button onClick={submit} disabled={submitting || !warehouseName}
+            className="px-6 py-3 rounded-xl bg-yellow-400 text-slate-950 font-black text-sm hover:bg-yellow-300 transition disabled:opacity-50 flex items-center gap-2">
+            {submitting && <div className="h-4 w-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />}
+            {submitting ? "Submitting…" : "Publish Weekly Top 5"}
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex justify-center py-12"><div className="h-8 w-8 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin" /></div>
+      ) : reports.length === 0 ? (
+        <div className="text-center py-16 rounded-2xl border border-slate-800 bg-slate-900">
+          <div className="text-4xl mb-3">📋</div>
+          <p className="text-white font-black text-lg">No weekly reports yet.</p>
+          <p className="text-slate-400 text-sm mt-1">Submit your first Top 5 to appear on the Selector Nation landing page.</p>
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {reports.map((report: any) => (
+            <div key={report.id} className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <p className="font-black text-white">{report.warehouse_name}</p>
+                  <p className="text-slate-500 text-xs mt-0.5">{report.week}</p>
+                  <p className="text-slate-600 text-xs">{new Date(report.created_at).toLocaleDateString()}</p>
+                </div>
+                <span className="text-yellow-400 text-lg">🏆</span>
+              </div>
+              <div className="space-y-2">
+                {(report.top_selectors || []).map((s: any, i: number) => (
+                  <div key={i} className="flex items-center gap-2.5 text-sm">
+                    <span className="font-black w-5 text-center">{MEDALS[i] || `${i + 1}.`}</span>
+                    <span className="font-bold text-white flex-1">{s.selector_name}</span>
+                    <span className="text-slate-400 text-xs">{s.cases_picked?.toLocaleString()} cases</span>
+                    <span className="text-yellow-400 font-black">{s.rate}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Post Moderation (Selector Nation) ────────────────────────────────────────
 
 const SN_API = import.meta.env.BASE_URL + "api/social/moderate";
@@ -2942,7 +3085,7 @@ function PostModerationSection() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TABS = ["Dashboard", "Revenue", "CRM", "NOVA Metrics", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests", "Lesson Videos", "Post Moderation"] as const;
+const TABS = ["Dashboard", "Revenue", "CRM", "NOVA Metrics", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests", "Lesson Videos", "Post Moderation", "Weekly Reports"] as const;
 type Tab = typeof TABS[number];
 
 export default function OwnerPage() {
@@ -2966,6 +3109,7 @@ export default function OwnerPage() {
     if (tab === "Lesson Videos")  return "🎬 Lesson Videos";
     if (tab === "NOVA Metrics")      return "📈 NOVA Metrics";
     if (tab === "Post Moderation")   return "📋 Post Moderation";
+    if (tab === "Weekly Reports")    return "🏆 Weekly Reports";
     return "🏢 Subscriptions";
   }
 
@@ -3040,6 +3184,7 @@ export default function OwnerPage() {
         {activeTab === "Talk Requests" && <TalkRequestsSection />}
         {activeTab === "Lesson Videos" && <LessonVideosSection />}
         {activeTab === "Post Moderation" && <PostModerationSection />}
+        {activeTab === "Weekly Reports" && <WeeklyReportsSection />}
 
       </div>
     </div>

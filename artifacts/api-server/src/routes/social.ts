@@ -392,4 +392,171 @@ router.post("/social/conversations/:id/messages", async (req, res) => {
   }
 });
 
+// ── WEEKLY REPORTS ────────────────────────────────────────────────────────────
+
+router.get("/social/weekly-reports", async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 5;
+    const reports = await db.execute(sql`
+      SELECT r.id, r.warehouse_name, r.week, r.created_at,
+             json_agg(s.* ORDER BY s.rank ASC) AS top_selectors
+      FROM sbn_weekly_reports r
+      LEFT JOIN sbn_weekly_top_selectors s ON s.report_id = r.id
+      GROUP BY r.id
+      ORDER BY r.created_at DESC
+      LIMIT ${limit}
+    `);
+    res.json({ reports: reports.rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to load weekly reports" });
+  }
+});
+
+router.post("/social/weekly-reports", async (req, res) => {
+  try {
+    const { warehouseName, week, selectors, submittedBy } = req.body;
+    if (!warehouseName || !week || !Array.isArray(selectors)) {
+      return res.status(400).json({ error: "warehouseName, week, and selectors[] required" });
+    }
+    const rows = await db.execute(sql`
+      INSERT INTO sbn_weekly_reports (warehouse_name, week, submitted_by)
+      VALUES (${warehouseName}, ${week}, ${submittedBy || null})
+      RETURNING id, warehouse_name, week, created_at
+    `);
+    const report = (rows as any).rows?.[0];
+    if (!report?.id) return res.status(500).json({ error: "Failed to create report" });
+
+    for (let i = 0; i < Math.min(selectors.length, 5); i++) {
+      const s = selectors[i];
+      await db.execute(sql`
+        INSERT INTO sbn_weekly_top_selectors (report_id, selector_name, rank, cases_picked, hours_worked, rate)
+        VALUES (${report.id}, ${s.name || "Unknown"}, ${i + 1}, ${s.cases || 0}, ${s.hours || 0}, ${s.rate || 0})
+      `);
+    }
+
+    res.json({ report, message: "Weekly report submitted" });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to submit weekly report" });
+  }
+});
+
+// ── GOLD STATUS ───────────────────────────────────────────────────────────────
+
+router.post("/social/check-gold", async (req, res) => {
+  try {
+    const { email, month } = req.body;
+    if (!email || !month) return res.status(400).json({ error: "email and month required" });
+
+    const user = await db.query.sbnUsers.findFirst({ where: eq(sbnUsers.email, email) });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [stats] = await db.select({
+      avgRate: sql<number>`ROUND(AVG(${sbnPerformanceLogs.rate}::numeric), 1)`,
+      avgAccuracy: sql<number>`ROUND(AVG(${sbnPerformanceLogs.accuracy}::numeric), 1)`,
+      totalHours: sql<number>`SUM(${sbnPerformanceLogs.casesPicked}::numeric * 0.01)`,
+    }).from(sbnPerformanceLogs)
+      .where(and(
+        eq(sbnPerformanceLogs.userId, user.id),
+        sql`${sbnPerformanceLogs.createdAt} >= ${monthStart}`,
+      ));
+
+    const rate = Number(stats?.avgRate || 0);
+    const accuracy = Number(stats?.avgAccuracy || 100);
+    const hours = Number(stats?.totalHours || 0);
+    const achieved = rate >= 100 && accuracy >= 95 && hours >= 80;
+
+    await db.execute(sql`
+      INSERT INTO sbn_monthly_gold (user_id, month, achieved)
+      VALUES (${user.id}, ${month}, ${achieved})
+      ON CONFLICT (user_id, month) DO UPDATE SET achieved = EXCLUDED.achieved
+    `);
+
+    res.json({ achieved, rate, accuracy, hours, month });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to check gold status" });
+  }
+});
+
+router.get("/social/gold-achievers", async (req, res) => {
+  try {
+    const month = (req.query.month as string) || new Date().toISOString().slice(0, 7);
+    const rows = await db.execute(sql`
+      SELECT g.*, p.full_name, p.nova_id, p.performance_badge, p.country
+      FROM sbn_monthly_gold g
+      JOIN sbn_profiles p ON p.user_id = g.user_id
+      WHERE g.month = ${month} AND g.achieved = true
+      ORDER BY g.created_at ASC
+    `);
+    res.json({ achievers: (rows as any).rows || [], month });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to load gold achievers" });
+  }
+});
+
+// ── REFERRALS ─────────────────────────────────────────────────────────────────
+
+function genReferralCode() {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+router.get("/social/referrals", async (req, res) => {
+  try {
+    const { email } = req.query as { email: string };
+    if (!email) return res.status(400).json({ error: "email required" });
+
+    const user = await db.query.sbnUsers.findFirst({ where: eq(sbnUsers.email, email) });
+    if (!user) return res.json({ referralCode: null, referrals: [], totalInvites: 0 });
+
+    let profile = await db.query.sbnProfiles.findFirst({ where: eq(sbnProfiles.userId, user.id) });
+    if (!profile) return res.json({ referralCode: null, referrals: [], totalInvites: 0 });
+
+    if (!profile.referralCode) {
+      const code = genReferralCode();
+      await db.update(sbnProfiles).set({ referralCode: code }).where(eq(sbnProfiles.userId, user.id));
+      profile = { ...profile, referralCode: code };
+    }
+
+    const referrals = await db.execute(sql`
+      SELECT r.*, true as joined FROM sbn_referrals r WHERE r.referrer_user_id = ${user.id}
+      ORDER BY r.created_at DESC
+    `);
+
+    res.json({
+      referralCode: profile.referralCode,
+      referralLink: `https://picksmartacademy.net/join?ref=${profile.referralCode}`,
+      referrals: (referrals as any).rows || [],
+      totalInvites: (referrals as any).rows?.length || 0,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to load referral info" });
+  }
+});
+
+router.post("/social/referrals/invite", async (req, res) => {
+  try {
+    const { referrerEmail, invitedEmail } = req.body;
+    if (!referrerEmail || !invitedEmail) return res.status(400).json({ error: "referrerEmail and invitedEmail required" });
+
+    const referrer = await db.query.sbnUsers.findFirst({ where: eq(sbnUsers.email, referrerEmail) });
+    if (!referrer) return res.status(404).json({ error: "Referrer not found" });
+
+    await db.execute(sql`
+      INSERT INTO sbn_referrals (referrer_user_id, referred_email, joined)
+      VALUES (${referrer.id}, ${invitedEmail}, false)
+      ON CONFLICT DO NOTHING
+    `);
+
+    res.json({ ok: true, message: "Invite tracked" });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to track invite" });
+  }
+});
+
 export default router;

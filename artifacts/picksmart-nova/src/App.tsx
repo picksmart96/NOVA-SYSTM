@@ -25,6 +25,7 @@ import LeaderboardPage from "@/pages/leaderboard";
 import PricingPage from "@/pages/pricing";
 import CompanyRequestPage from "@/pages/company-request";
 import SelectorNationPage from "@/pages/selector-nation";
+import ReferPage from "@/pages/refer";
 import SelectorBreakingNewsPage from "@/pages/app/SelectorBreakingNewsPage";
 
 import MyAssignmentsPage from "@/pages/nova/my-assignments";
@@ -231,7 +232,10 @@ function Router() {
         <Layout><GatedRoute><LeaderboardPage /></GatedRoute></Layout>
       </Route>
       <Route path="/selector-nation">
-        <Layout><GatedRoute><SelectorNationPage /></GatedRoute></Layout>
+        <Layout><SelectorNationPage /></Layout>
+      </Route>
+      <Route path="/refer">
+        <Layout><GatedRoute><ReferPage /></GatedRoute></Layout>
       </Route>
       <Route path="/selector-breaking-news">
         <Layout><GatedRoute><SelectorBreakingNewsPage /></GatedRoute></Layout>
