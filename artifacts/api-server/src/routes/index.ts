@@ -13,6 +13,7 @@ import invitesRouter from "./invites";
 import authCodesRouter from "./authCodes";
 import leadsRouter from "./leads";
 import metricsRouter from "./metrics";
+import socialRouter from "./social";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(invitesRouter);
 router.use(authCodesRouter);
 router.use(leadsRouter);
 router.use(metricsRouter);
+router.use(socialRouter);
 
 export default router;

@@ -2832,7 +2832,117 @@ function NovaMetricsTab() {
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
-const TABS = ["Dashboard", "Revenue", "CRM", "NOVA Metrics", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests", "Lesson Videos"] as const;
+// ── Post Moderation (Selector Nation) ────────────────────────────────────────
+
+const SN_API = import.meta.env.BASE_URL + "api/social/moderate";
+
+function PostModerationSection() {
+  const [posts, setPosts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actioning, setActioning] = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    const r = await fetch(`${SN_API}/pending`).catch(() => null);
+    if (r?.ok) { const d = await r.json(); setPosts(d.posts || []); }
+    setLoading(false);
+  }
+
+  async function act(id: string, action: "approve" | "reject") {
+    setActioning(id);
+    await fetch(`${SN_API}/posts/${id}/${action}`, { method: "POST" }).catch(() => {});
+    setPosts(p => p.filter(post => post.id !== id));
+    setActioning(null);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-black">Post Moderation</h2>
+          <p className="text-slate-400 text-sm mt-1">Review and approve selector posts before they appear in the Selector Nation feed.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {posts.length > 0 && (
+            <span className="px-4 py-2 rounded-xl bg-yellow-400 text-slate-950 font-black text-sm">
+              {posts.length} Pending
+            </span>
+          )}
+          <button onClick={load} className="px-4 py-2 rounded-xl border border-slate-700 text-slate-400 hover:text-white text-sm font-bold transition">
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-20">
+          <div className="h-8 w-8 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : posts.length === 0 ? (
+        <div className="text-center py-20 rounded-2xl border border-slate-800 bg-slate-900">
+          <div className="text-4xl mb-3">✅</div>
+          <p className="text-white font-black text-lg">All clear!</p>
+          <p className="text-slate-400 text-sm mt-1">No posts pending review.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {posts.map((post) => {
+            const name = post.profile?.fullName || "Unknown";
+            const novaId = post.profile?.novaId || "";
+            const initials2 = name.split(" ").map((p: string) => p[0]).join("").toUpperCase().slice(0, 2);
+            return (
+              <div key={post.id} className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
+                <div className="flex items-start gap-4">
+                  <div className="w-11 h-11 rounded-full bg-yellow-400 text-slate-950 font-black flex items-center justify-center text-sm shrink-0">
+                    {initials2}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="font-black text-white">{name}</span>
+                      {novaId && <span className="text-slate-500 text-xs font-mono">{novaId}</span>}
+                      {post.profile?.country && <span className="text-slate-500 text-xs">{post.profile.country}</span>}
+                    </div>
+                    <p className="text-slate-300 text-sm leading-relaxed">{post.content}</p>
+                    {post.hashtags?.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {post.hashtags.map((h: string) => <span key={h} className="text-yellow-400 text-xs font-bold">{h}</span>)}
+                      </div>
+                    )}
+                    <p className="text-slate-600 text-xs mt-2">
+                      Submitted: {new Date(post.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={() => act(post.id, "approve")}
+                      disabled={actioning === post.id}
+                      className="px-4 py-2 rounded-xl bg-green-500 text-white font-black text-sm hover:bg-green-400 transition disabled:opacity-50"
+                    >
+                      ✅ Approve
+                    </button>
+                    <button
+                      onClick={() => act(post.id, "reject")}
+                      disabled={actioning === post.id}
+                      className="px-4 py-2 rounded-xl bg-red-600 text-white font-black text-sm hover:bg-red-500 transition disabled:opacity-50"
+                    >
+                      ❌ Reject
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TABS = ["Dashboard", "Revenue", "CRM", "NOVA Metrics", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests", "Lesson Videos", "Post Moderation"] as const;
 type Tab = typeof TABS[number];
 
 export default function OwnerPage() {
@@ -2854,7 +2964,8 @@ export default function OwnerPage() {
     if (tab === "Users & Access") return "👥 Users & Access";
     if (tab === "Talk Requests")  return "💬 Talk Requests";
     if (tab === "Lesson Videos")  return "🎬 Lesson Videos";
-    if (tab === "NOVA Metrics")   return "📈 NOVA Metrics";
+    if (tab === "NOVA Metrics")      return "📈 NOVA Metrics";
+    if (tab === "Post Moderation")   return "📋 Post Moderation";
     return "🏢 Subscriptions";
   }
 
@@ -2928,6 +3039,7 @@ export default function OwnerPage() {
         {activeTab === "Subscriptions" && <SubscriptionsTab />}
         {activeTab === "Talk Requests" && <TalkRequestsSection />}
         {activeTab === "Lesson Videos" && <LessonVideosSection />}
+        {activeTab === "Post Moderation" && <PostModerationSection />}
 
       </div>
     </div>

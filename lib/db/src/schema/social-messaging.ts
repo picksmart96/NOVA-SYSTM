@@ -27,8 +27,9 @@ export const sbnMessages = pgTable("sbn_messages", {
   id: text("id").primaryKey().default(sql`gen_random_uuid()`),
   conversationId: text("conversation_id").notNull().references(() => sbnConversations.id, { onDelete: "cascade" }),
   senderUserId: text("sender_user_id").notNull().references(() => sbnUsers.id, { onDelete: "cascade" }),
-  content: text("content").notNull(),
+  content: text("content").notNull().default(""),
   imageUrl: text("image_url").notNull().default(""),
+  voiceUrl: text("voice_url").notNull().default(""),
   isDeleted: boolean("is_deleted").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
