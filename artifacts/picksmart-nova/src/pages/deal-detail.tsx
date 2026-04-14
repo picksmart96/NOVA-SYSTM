@@ -75,7 +75,7 @@ export default function DealDetailPage() {
       <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
         <div className="text-center">
           <p className="text-xl font-bold mb-4">Deal not found</p>
-          <button onClick={() => navigate("/owner-access?token=PSA-DRAOGO96-OWNER-2024")} className="text-yellow-400 underline">
+          <button onClick={() => navigate("/owner")} className="text-yellow-400 underline">
             Back to Owner Panel
           </button>
         </div>
@@ -90,7 +90,7 @@ export default function DealDetailPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <button
-            onClick={() => navigate("/owner-access?token=PSA-DRAOGO96-OWNER-2024")}
+            onClick={() => navigate("/owner")}
             className="flex items-center gap-2 text-slate-400 hover:text-white transition text-sm"
           >
             <ArrowLeft className="h-4 w-4" /> Back to CRM

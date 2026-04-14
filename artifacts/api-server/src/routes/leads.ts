@@ -82,24 +82,26 @@ router.put("/leads/:id", async (req, res) => {
       updatedAt: new Date(),
     };
 
-    const strFields = [
-      "companyName","contactName","contactRole","email","phone",
-      "city","state","warehouseType","status","nextAction","notes",
-    ];
-    const dateFields = [
-      "nextActionDate","demoDate","proposalDate","trialStart",
-      "trialEnd","contractSigned","renewalDate",
-    ];
-    const numericFields = ["contractValue","weeklyPrice"];
+    // Explicitly allow-list and map each field — no bracket access with user-supplied keys
+    const strMap: Record<string, string> = {
+      companyName: "companyName", contactName: "contactName", contactRole: "contactRole",
+      email: "email", phone: "phone", city: "city", state: "state",
+      warehouseType: "warehouseType", status: "status", nextAction: "nextAction", notes: "notes",
+    };
+    const dateMap: Record<string, string> = {
+      nextActionDate: "nextActionDate", demoDate: "demoDate", proposalDate: "proposalDate",
+      trialStart: "trialStart", trialEnd: "trialEnd", contractSigned: "contractSigned", renewalDate: "renewalDate",
+    };
+    const numMap: Record<string, string> = { contractValue: "contractValue", weeklyPrice: "weeklyPrice" };
 
-    for (const f of strFields) {
-      if (body[f] !== undefined) patch[f] = String(body[f]);
+    for (const [k, dest] of Object.entries(strMap)) {
+      if (Object.prototype.hasOwnProperty.call(body, k)) patch[dest] = String(body[k]);
     }
-    for (const f of dateFields) {
-      if (body[f] !== undefined) patch[f] = body[f] ? String(body[f]) : null;
+    for (const [k, dest] of Object.entries(dateMap)) {
+      if (Object.prototype.hasOwnProperty.call(body, k)) patch[dest] = body[k] ? String(body[k]) : null;
     }
-    for (const f of numericFields) {
-      if (body[f] !== undefined) patch[f] = body[f] != null ? String(body[f]) : null;
+    for (const [k, dest] of Object.entries(numMap)) {
+      if (Object.prototype.hasOwnProperty.call(body, k)) patch[dest] = body[k] != null ? String(body[k]) : null;
     }
 
     const [lead] = await db
