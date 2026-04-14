@@ -1,0 +1,232 @@
+import React, { useEffect, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+const getEnv = (key) => {
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) return import.meta.env[key];
+  if (typeof window !== 'undefined' && window.__ENV && window.__ENV[key]) return window.__ENV[key];
+  return undefined;
+};
+
+const supabase = createClient(
+  getEnv('VITE_SUPABASE_URL') || '',
+  getEnv('VITE_SUPABASE_ANON_KEY') || ''
+);
+
+const OWNER_USERNAME = getEnv('VITE_OWNER_USERNAME') || 'Draogo96';
+const OWNER_PASSWORD = getEnv('VITE_OWNER_PASSWORD') || 'Draogo1996#nova#';
+
+const today = () => new Date().toISOString().slice(0,10);
+const diffDays = (a,b)=>{
+  if(!a||!b) return null;
+  return Math.floor((new Date(b)-new Date(a))/(1000*60*60*24));
+};
+const money = (n) => `$${Number(n || 0).toLocaleString()}`;
+
+export default function OwnerControlCRM(){
+  const [authOpen, setAuthOpen] = useState(true);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+
+  const [leads,setLeads]=useState([]);
+  const [alerts,setAlerts]=useState({followups:[],closing:[],renewals:[]});
+  const [finance,setFinance]=useState({
+    revenue:0,
+    payouts:0,
+    profit:0,
+    activeClients:0,
+    monthlyRecurring:0,
+  });
+
+  const isAuthed = !authOpen;
+
+  useEffect(()=>{
+    if (isAuthed) load();
+  },[isAuthed]);
+
+  const login = (e) => {
+    e.preventDefault();
+    setAuthError('');
+    if (username === OWNER_USERNAME && password === OWNER_PASSWORD) {
+      setAuthOpen(false);
+      return;
+    }
+    setAuthError('Wrong owner username or password.');
+  };
+
+  const load = async ()=>{
+    const {data}=await supabase.from('owner_leads').select('*').order('created_at', { ascending: false });
+    const leadRows = data || [];
+    setLeads(leadRows);
+    computeAlerts(leadRows);
+    computeFinance(leadRows);
+  }
+
+  const computeAlerts = (data)=>{
+    const followups=[];
+    const closing=[];
+    const renewals=[];
+
+    data.forEach(d=>{
+      if(d.next_action_date===today()) followups.push(d);
+
+      if(d.trial_end && diffDays(today(),d.trial_end)<=3 && diffDays(today(),d.trial_end)>=0){
+        closing.push(d);
+      }
+
+      if(d.renewal_date && diffDays(today(),d.renewal_date)<=14 && diffDays(today(),d.renewal_date)>=0){
+        renewals.push(d);
+      }
+    });
+
+    setAlerts({followups,closing,renewals});
+  }
+
+  const computeFinance = async (leadRows)=>{
+    const activeClients = leadRows.filter(d => d.status === 'active_client');
+    const revenue = activeClients.reduce((sum,d)=> sum + Number(d.contract_value || 0), 0);
+    const monthlyRecurring = activeClients.reduce((sum,d)=> {
+      if (d.weekly_price) return sum + Number(d.weekly_price) * 4;
+      if (d.contract_value) return sum + Number(d.contract_value) / 12;
+      return sum;
+    }, 0);
+
+    let payouts = 0;
+
+    const { data: companyReferrals } = await supabase
+      .from('company_referrals')
+      .select('*');
+
+    if (companyReferrals?.length) {
+      payouts += companyReferrals.filter(r => r.reward_earned).reduce((sum) => sum + 500, 0);
+    }
+
+    const { data: selectorReferrals } = await supabase
+      .from('referrals')
+      .select('*');
+
+    if (selectorReferrals?.length) {
+      payouts += selectorReferrals.filter(r => r.reward_given).reduce((sum) => sum + 25, 0);
+    }
+
+    const profit = revenue - payouts;
+
+    setFinance({
+      revenue,
+      payouts,
+      profit,
+      activeClients: activeClients.length,
+      monthlyRecurring,
+    });
+  }
+
+  const generateDealLink = (deal)=>{
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/deal-sign/${deal.id}`;
+  }
+
+  if (authOpen) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl">
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-yellow-300">Owner Access</p>
+          <h1 className="mt-3 text-3xl font-black">NOVA Owner Control</h1>
+          <p className="mt-3 text-slate-300">Sign in to access leads, deals, scripts, alerts, and finance.</p>
+
+          <form onSubmit={login} className="mt-6 space-y-4">
+            <div>
+              <label className="mb-2 block text-sm font-bold text-yellow-300">Username</label>
+              <input value={username} onChange={(e) => setUsername(e.target.value)} className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400" />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-bold text-yellow-300">Password</label>
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400" />
+            </div>
+            {authError ? <p className="text-sm text-red-300">{authError}</p> : null}
+            <button className="w-full rounded-2xl bg-yellow-400 px-5 py-3 font-bold text-slate-950">Open Owner Dashboard</button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  return(
+    <div className="p-6 bg-slate-950 text-white min-h-screen">
+      <h1 className="text-3xl font-bold mb-6">🔥 Owner Command Center</h1>
+
+      <div className="grid md:grid-cols-5 gap-4 mb-8">
+        <FinanceCard title="Total Revenue" value={money(finance.revenue)} sub="Closed and active contract value" />
+        <FinanceCard title="Referral Payouts" value={money(finance.payouts)} sub="Company + selector rewards" />
+        <FinanceCard title="Profit" value={money(finance.profit)} sub="Revenue minus payouts" />
+        <FinanceCard title="Active Clients" value={finance.activeClients} sub="Live paying companies" />
+        <FinanceCard title="MRR" value={money(finance.monthlyRecurring)} sub="Monthly recurring revenue" />
+      </div>
+
+      <div className="grid md:grid-cols-3 gap-4 mb-8">
+        <AlertCard title="🔔 Follow Up Today" list={alerts.followups} />
+        <AlertCard title="📅 Closing Soon" list={alerts.closing} />
+        <AlertCard title="💰 Renewals" list={alerts.renewals} />
+      </div>
+
+      <div className="space-y-4">
+        {leads.map(d=>(
+          <div key={d.id} className="p-5 bg-slate-900 rounded-2xl border border-slate-700">
+            <div className="flex justify-between items-start gap-4">
+              <div>
+                <h2 className="text-xl font-bold">{d.company_name}</h2>
+                <p className="text-sm text-slate-400">Status: {d.status}</p>
+                {d.contract_value ? <p className="text-sm text-slate-400">Contract: {money(d.contract_value)}</p> : null}
+                {d.weekly_price ? <p className="text-sm text-slate-400">Weekly Price: {money(d.weekly_price)}</p> : null}
+              </div>
+              <a href={`/deal/${d.id}`} className="text-yellow-400 underline">Open Deal</a>
+            </div>
+
+            <div className="mt-3">
+              <p className="text-xs">Client Link</p>
+              <input value={generateDealLink(d)} readOnly className="w-full p-2 bg-black mt-1 rounded" />
+            </div>
+
+            {d.status === 'active_client' && (
+              <div className="mt-3 text-green-400 font-bold">✅ ACTIVE CLIENT</div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function FinanceCard({title,value,sub}){
+  return(
+    <div className="bg-slate-900 p-4 rounded-2xl border border-slate-700">
+      <p className="text-sm text-slate-400">{title}</p>
+      <p className="text-2xl font-bold mt-2">{value}</p>
+      <p className="text-xs text-slate-500 mt-2">{sub}</p>
+    </div>
+  )
+}
+
+function AlertCard({title,list}){
+  return(
+    <div className="bg-slate-900 p-4 rounded-2xl border border-slate-700">
+      <h3 className="font-bold mb-2">{title}</h3>
+      {list.length===0 && <p className="text-sm text-slate-400">No alerts</p>}
+      {list.map(l=>(
+        <div key={l.id} className="text-sm mb-1">{l.company_name}</div>
+      ))}
+    </div>
+  )
+}
+
+/*
+DB TABLES USED HERE:
+- owner_leads
+- company_referrals
+- referrals
+
+FINANCE LOGIC:
+- Revenue = sum of active_client contract values
+- MRR = weekly_price * 4 or contract_value / 12
+- Payouts = $500 per rewarded company referral + $25 per rewarded selector referral
+- Profit = revenue - payouts
+*/
