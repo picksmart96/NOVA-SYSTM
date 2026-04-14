@@ -266,11 +266,11 @@ function buildLocalReply(
     };
   }
 
-  // ── Already in trial stage, collecting info ────────────────────────────────
+  // ── Already in trial stage — form is showing, just encourage them ────────────
   if (stage === "trial" && (!lead.companyName || !lead.email)) {
     return {
       stage: "trial",
-      text: "Almost there — I just need your company name and the best email for whoever handles operations.\n\nThat's all I need to create your trial setup.",
+      text: "Go ahead and fill out the form — I'll get everything set up on my end as soon as you hit submit.",
     };
   }
 
@@ -306,6 +306,9 @@ export default function NovaSalesVoiceAgent() {
   const [humanForm, setHumanForm] = useState({ name: "", email: "", company: "", phone: "", topic: "" });
   const [humanSubmitted, setHumanSubmitted] = useState(false);
   const [humanSubmitting, setHumanSubmitting] = useState(false);
+  const [showTrialForm, setShowTrialForm] = useState(false);
+  const [trialForm, setTrialForm] = useState({ company: "", managerName: "", email: "", phone: "" });
+  const [trialSubmitting, setTrialSubmitting] = useState(false);
   const [lead, setLead] = useState<LeadState>({
     companyName: "",
     managerName: "",
@@ -542,9 +545,14 @@ export default function NovaSalesVoiceAgent() {
       speak(reply.text.replace(/\n/g, " "));
       setIsThinking(false);
 
-      // Auto-create trial if we have company + email
-      if (reply.stage === "trial" && currentLead.companyName && currentLead.email && !trialCreated) {
-        await createTrialLead(currentLead);
+      // If moving into trial stage, show the sign-up form instead of waiting for typed info
+      if (reply.stage === "trial" && !trialCreated) {
+        if (currentLead.companyName && currentLead.email) {
+          await createTrialLead(currentLead);
+        } else {
+          // Pop the form after a short delay so NOVA's message appears first
+          setTimeout(() => setShowTrialForm(true), 600);
+        }
       }
     }, 400);
   }, [input, isThinking, stage, lead, trialCreated, pushMessage, speak, createTrialLead]);
@@ -682,6 +690,107 @@ export default function NovaSalesVoiceAgent() {
           >
             Stop listening
           </button>
+        </div>
+      )}
+
+      {/* ── Trial sign-up form overlay ── */}
+      {showTrialForm && !trialCreated && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/90 backdrop-blur-sm px-4 pb-4 sm:pb-0">
+          <div className="w-full max-w-md bg-[#0c1428] border border-yellow-400/40 rounded-3xl shadow-[0_0_80px_rgba(250,204,21,0.15)] overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center gap-3 px-6 pt-6 pb-4 border-b border-slate-800">
+              <div className="w-9 h-9 rounded-xl bg-yellow-400 flex items-center justify-center shrink-0">
+                <span className="text-slate-950 font-black text-sm">N</span>
+              </div>
+              <div>
+                <p className="font-black text-white text-sm leading-none">Start Your Free 30-Day Trial</p>
+                <p className="text-xs text-yellow-300 mt-0.5">No credit card. No commitment.</p>
+              </div>
+              <button
+                onClick={() => setShowTrialForm(false)}
+                className="ml-auto text-slate-600 hover:text-slate-300 transition text-lg leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Form */}
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!trialForm.company || !trialForm.email) return;
+                setTrialSubmitting(true);
+
+                // Stop listening while submitting
+                recognitionRef.current?.stop();
+                autoListenRef.current = false;
+
+                // Hide form immediately for snappy feel
+                setShowTrialForm(false);
+
+                // Update lead with form values and create trial
+                const filledLead: LeadState = {
+                  companyName: trialForm.company,
+                  managerName: trialForm.managerName,
+                  email: trialForm.email,
+                  phone: trialForm.phone,
+                  painPoint: lead.painPoint,
+                  selectors: lead.selectors,
+                };
+                setLead(filledLead);
+
+                // NOVA acknowledges while creating the trial
+                const ack = `Perfect, ${trialForm.managerName || "there"}! Creating your trial setup for ${trialForm.company} right now. One moment.`;
+                pushMessage("assistant", ack);
+                speak(ack);
+
+                await createTrialLead(filledLead);
+                setTrialSubmitting(false);
+              }}
+              className="px-6 py-5 space-y-3"
+            >
+              <input
+                required
+                placeholder="Company name *"
+                value={trialForm.company}
+                onChange={(e) => setTrialForm((f) => ({ ...f, company: e.target.value }))}
+                className="w-full rounded-xl bg-slate-800 border border-slate-700 px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400 transition"
+              />
+              <input
+                placeholder="Your name (manager / supervisor)"
+                value={trialForm.managerName}
+                onChange={(e) => setTrialForm((f) => ({ ...f, managerName: e.target.value }))}
+                className="w-full rounded-xl bg-slate-800 border border-slate-700 px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400 transition"
+              />
+              <input
+                type="email"
+                required
+                placeholder="Email address *"
+                value={trialForm.email}
+                onChange={(e) => setTrialForm((f) => ({ ...f, email: e.target.value }))}
+                className="w-full rounded-xl bg-slate-800 border border-slate-700 px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400 transition"
+              />
+              <input
+                type="tel"
+                placeholder="Phone number (optional)"
+                value={trialForm.phone}
+                onChange={(e) => setTrialForm((f) => ({ ...f, phone: e.target.value }))}
+                className="w-full rounded-xl bg-slate-800 border border-slate-700 px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400 transition"
+              />
+
+              <button
+                type="submit"
+                disabled={trialSubmitting || !trialForm.company || !trialForm.email}
+                className="w-full rounded-2xl bg-yellow-400 text-slate-950 font-black py-3.5 text-sm hover:bg-yellow-300 active:scale-95 transition disabled:opacity-50 shadow-[0_0_30px_rgba(250,204,21,0.25)]"
+              >
+                {trialSubmitting ? "Setting up your trial…" : "Start My 30-Day Trial →"}
+              </button>
+
+              <p className="text-center text-xs text-slate-600 pb-1">
+                Free trial · No credit card · Cancel anytime
+              </p>
+            </form>
+          </div>
         </div>
       )}
 
