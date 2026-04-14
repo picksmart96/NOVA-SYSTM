@@ -519,10 +519,15 @@ export default function SelectorBreakingNewsPage() {
 
   const [postText, setPostText] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [photoPreview, setPhotoPreview] = useState<string>("");
   const [hashtagInput, setHashtagInput] = useState("");
+  const [taggedUsers, setTaggedUsers] = useState<BreakingNewsUser[]>([]);
+  const [showFeelings, setShowFeelings] = useState(false);
+  const [showTagPicker, setShowTagPicker] = useState(false);
   const [activeTab, setActiveTab] = useState<"feed" | "saved" | "profile">("feed");
   const [viewingProfile, setViewingProfile] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const hashtags = useMemo(() => {
     return hashtagInput
@@ -532,12 +537,36 @@ export default function SelectorBreakingNewsPage() {
       .map((t) => (t.startsWith("#") ? t : `#${t}`));
   }, [hashtagInput]);
 
+  const FEELINGS = ["😊 Feeling happy","💪 Feeling strong","🔥 On fire","😎 Feeling focused","😅 Feeling tired","🙌 Grateful","😤 Grinding","🏆 Feeling accomplished","😄 Feeling great","😩 Exhausted but done"];
+
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const result = ev.target?.result as string;
+      setPhotoPreview(result);
+      setImageUrl(result);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleTagUser = (user: BreakingNewsUser) => {
+    if (taggedUsers.find((u) => u.id === user.id)) return;
+    setTaggedUsers((prev) => [...prev, user]);
+    setPostText((prev) => prev + (prev.endsWith(" ") || !prev ? "" : " ") + `@${user.name.split(" ")[0]} `);
+    setShowTagPicker(false);
+  };
+
   const handleCreatePost = () => {
-    if (!postText.trim()) return;
+    if (!postText.trim() && !photoPreview) return;
     createPost({ content: postText, imageUrl, hashtags });
     setPostText("");
     setImageUrl("");
+    setPhotoPreview("");
     setHashtagInput("");
+    setTaggedUsers([]);
   };
 
   const displayedPosts = useMemo(() => {
@@ -712,6 +741,16 @@ export default function SelectorBreakingNewsPage() {
               {/* Post creator */}
               {activeTab !== "saved" && (
                 <div className="rounded-2xl bg-[#242526] border border-white/8 p-4 space-y-3 shadow-lg">
+
+                  {/* Hidden file input */}
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoSelect}
+                  />
+
                   <div className="flex items-center gap-3">
                     <Avatar name={currentUser?.name} size="md" online />
                     <button
@@ -731,38 +770,115 @@ export default function SelectorBreakingNewsPage() {
                     className="w-full bg-transparent text-white text-sm outline-none placeholder:text-slate-600 resize-none px-1"
                   />
 
-                  {postText && (
-                    <div className="space-y-2">
-                      <input
-                        value={imageUrl}
-                        onChange={(e) => setImageUrl(e.target.value)}
-                        placeholder="Image URL (optional)"
-                        className="w-full rounded-xl bg-[#3a3b3c] border border-white/8 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-yellow-400 transition"
-                      />
-                      <input
-                        value={hashtagInput}
-                        onChange={(e) => setHashtagInput(e.target.value)}
-                        placeholder="Hashtags: selectorlife stackingtips"
-                        className="w-full rounded-xl bg-[#3a3b3c] border border-white/8 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-yellow-400 transition"
-                      />
+                  {/* Tagged users chips */}
+                  {taggedUsers.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {taggedUsers.map((u) => (
+                        <span key={u.id} className="flex items-center gap-1 rounded-full bg-blue-500/15 border border-blue-400/30 px-2.5 py-1 text-xs font-semibold text-blue-300">
+                          <img src={`https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(u.name)}`} className="h-4 w-4 rounded-full" alt="" />
+                          @{u.name.split(" ")[0]}
+                          <button onClick={() => setTaggedUsers((prev) => prev.filter((x) => x.id !== u.id))} className="ml-0.5 text-blue-400 hover:text-white">×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Photo preview */}
+                  {photoPreview && (
+                    <div className="relative rounded-xl overflow-hidden border border-white/10">
+                      <img src={photoPreview} alt="Preview" className="w-full max-h-64 object-cover" />
+                      <button
+                        onClick={() => { setPhotoPreview(""); setImageUrl(""); }}
+                        className="absolute top-2 right-2 rounded-full bg-black/60 p-1.5 text-white hover:bg-black/80 transition"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Hashtags */}
+                  {(postText || photoPreview) && (
+                    <input
+                      value={hashtagInput}
+                      onChange={(e) => setHashtagInput(e.target.value)}
+                      placeholder="Add hashtags: selectorlife stackingtips"
+                      className="w-full rounded-xl bg-[#3a3b3c] border border-white/8 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-yellow-400 transition"
+                    />
+                  )}
+
+                  {/* Feeling picker dropdown */}
+                  {showFeelings && (
+                    <div className="rounded-2xl bg-[#3a3b3c] border border-white/10 p-3 grid grid-cols-2 gap-1.5">
+                      {FEELINGS.map((f) => (
+                        <button
+                          key={f}
+                          onClick={() => {
+                            setPostText((prev) => (prev.trim() ? `${prev.trim()} — ${f}` : f));
+                            setShowFeelings(false);
+                          }}
+                          className="rounded-xl px-3 py-2 text-left text-sm text-slate-200 hover:bg-white/8 transition"
+                        >
+                          {f}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Tag picker dropdown */}
+                  {showTagPicker && (
+                    <div className="rounded-2xl bg-[#3a3b3c] border border-white/10 p-3 space-y-1 max-h-52 overflow-y-auto">
+                      <p className="text-xs font-bold text-slate-500 uppercase mb-2 px-1">Tag a member</p>
+                      {users.filter((u) => u.id !== currentUserId).map((u) => (
+                        <button
+                          key={u.id}
+                          onClick={() => handleTagUser(u)}
+                          className="w-full flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white/8 transition text-left"
+                        >
+                          <img src={`https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(u.name)}`} className="h-8 w-8 rounded-full bg-slate-700" alt={u.name} />
+                          <div>
+                            <p className="text-sm font-semibold text-white">{u.name}</p>
+                            <p className="text-xs text-slate-500">{u.handle}</p>
+                          </div>
+                          {taggedUsers.find((x) => x.id === u.id) && (
+                            <span className="ml-auto text-xs text-green-400 font-bold">Tagged ✓</span>
+                          )}
+                        </button>
+                      ))}
                     </div>
                   )}
 
                   <div className="border-t border-white/5 pt-3 flex items-center justify-between">
                     <div className="flex gap-1">
-                      <button className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-green-400 hover:bg-white/8 transition">
+                      {/* Photo button */}
+                      <button
+                        onClick={() => photoInputRef.current?.click()}
+                        className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-green-400 hover:bg-white/8 transition"
+                      >
                         <Camera className="h-4 w-4" /> Photo
                       </button>
-                      <button className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-yellow-400 hover:bg-white/8 transition">
+
+                      {/* Feeling button */}
+                      <button
+                        onClick={() => { setShowFeelings((v) => !v); setShowTagPicker(false); }}
+                        className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition ${showFeelings ? "bg-yellow-400/15 text-yellow-300" : "text-yellow-400 hover:bg-white/8"}`}
+                      >
                         <Smile className="h-4 w-4" /> Feeling
                       </button>
-                      <button className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-blue-400 hover:bg-white/8 transition">
+
+                      {/* Tag button */}
+                      <button
+                        onClick={() => { setShowTagPicker((v) => !v); setShowFeelings(false); }}
+                        className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition ${showTagPicker ? "bg-blue-400/15 text-blue-300" : "text-blue-400 hover:bg-white/8"}`}
+                      >
                         <Tag className="h-4 w-4" /> Tag
+                        {taggedUsers.length > 0 && (
+                          <span className="rounded-full bg-blue-400 text-slate-950 text-[10px] font-black px-1.5">{taggedUsers.length}</span>
+                        )}
                       </button>
                     </div>
                     <button
                       onClick={handleCreatePost}
-                      disabled={!postText.trim()}
+                      disabled={!postText.trim() && !photoPreview}
                       className="rounded-xl bg-yellow-400 px-5 py-2 text-sm font-bold text-slate-950 hover:bg-yellow-300 disabled:opacity-40 disabled:cursor-not-allowed transition"
                     >
                       Post
