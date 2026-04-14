@@ -27,6 +27,7 @@ interface LeadState {
 const QUICK_REPLIES = [
   "We have speed problems",
   "We have too many picking mistakes",
+  "What's the difference vs what we have now?",
   "Show me how NOVA works",
   "How much does it cost?",
   "Start free trial",
@@ -100,6 +101,54 @@ function buildLocalReply(
     return {
       stage: "pitch",
       text: `Let me show you something real quick…\n\nIf you have ${nums[0]} selectors and NOVA saves just 1 hour per person…\n\nThat's about $${roi.daily.toLocaleString()} a day.\n\nThat's over $${roi.monthly.toLocaleString()} per month in saved labor and performance.\n\nThat's why most teams move forward after the trial.`,
+    };
+  }
+
+  // Before / after comparison
+  if (
+    lower.includes("how is it different") ||
+    lower.includes("what's the difference") ||
+    lower.includes("what is the difference") ||
+    lower.includes("compare") ||
+    lower.includes("before after") ||
+    lower.includes("before and after") ||
+    lower.includes("vs ") ||
+    lower.includes("versus") ||
+    lower.includes("better than") ||
+    lower.includes("different from") ||
+    lower.includes("why nova") ||
+    lower.includes("prove it") ||
+    lower.includes("show me the difference")
+  ) {
+    return {
+      stage: "demo",
+      text: `Let me show you the difference real quick…
+
+BEFORE NOVA:
+— Selectors hesitate between picks
+— Miscounts and mispicks happen
+— Pallets are inconsistent
+— Supervisors react instead of control
+— Rate is unstable
+
+AFTER NOVA:
+— Selectors move continuously without hesitation
+— Check codes are confirmed every time
+— Pallets are built clean and stable
+— Supervisors push updates in real-time
+— Rate becomes consistent and predictable
+
+That gap right there… is where your money is going.
+
+If that gap is costing you even 10% performance… that's thousands of dollars every month.
+
+Most warehouses don't realize it because everything still looks busy 😄
+
+But busy doesn't always mean efficient.
+
+The fastest way to see this difference is to run NOVA in your operation.
+
+Let me set up your free trial so you can see it live.`,
     };
   }
 
