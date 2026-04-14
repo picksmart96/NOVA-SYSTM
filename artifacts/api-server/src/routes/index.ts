@@ -14,6 +14,7 @@ import authCodesRouter from "./authCodes";
 import leadsRouter from "./leads";
 import metricsRouter from "./metrics";
 import socialRouter from "./social";
+import novaSalesChatRouter from "./novaSalesChat";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(authCodesRouter);
 router.use(leadsRouter);
 router.use(metricsRouter);
 router.use(socialRouter);
+router.use(novaSalesChatRouter);
 
 export default router;

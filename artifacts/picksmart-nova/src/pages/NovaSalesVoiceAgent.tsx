@@ -584,29 +584,71 @@ export default function NovaSalesVoiceAgent() {
     }
   }, [trialCreated, pushMessage, speak]);
 
+  // ── Call AI for intelligent response ─────────────────────────────────────────
+  const callNovaAI = useCallback(async (
+    conversationMessages: Message[],
+    currentStage: SalesStage,
+    currentLead: LeadState,
+  ): Promise<{ text: string; stage: SalesStage } | null> => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6000); // 6s timeout
+
+      const res = await fetch("/api/nova-sales-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          messages: conversationMessages.slice(-12).map((m) => ({
+            role: m.role === "assistant" ? "assistant" : "user",
+            content: m.text,
+          })),
+          stage: currentStage,
+          lead: {
+            managerName: currentLead.managerName,
+            companyName: currentLead.companyName,
+            painPoint: currentLead.painPoint,
+            selectors: currentLead.selectors,
+          },
+        }),
+      });
+
+      clearTimeout(timeout);
+
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.text && data.stage) {
+        return { text: data.text, stage: data.stage as SalesStage };
+      }
+      return null;
+    } catch {
+      return null; // network error or timeout → use local fallback
+    }
+  }, []);
+
   // ── Send message ─────────────────────────────────────────────────────────────
   const sendMessage = useCallback(async (overrideText?: string) => {
     const text = (overrideText ?? input).trim();
     if (!text || isThinking) return;
 
+    const userMessage: Message = { id: crypto.randomUUID(), role: "user", text, createdAt: new Date() };
     pushMessage("user", text);
     setInput("");
     setIsThinking(true);
     setErrorMsg("");
 
     // Update lead from text — extract name specifically during greeting stages
-    setLead((prev) => {
-      const pain = guessPainPoint(text);
-      const updated = parseLeadDetails(text, prev);
-      if (pain && !updated.painPoint) updated.painPoint = pain;
-      if ((stage === "greeting" || stage === "name_ask") && !updated.managerName) {
-        const firstName = extractFirstName(text);
-        if (firstName) updated.managerName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
-      }
-      return updated;
-    });
+    const currentLead = parseLeadDetails(text, lead);
+    if (guessPainPoint(text) && !currentLead.painPoint) {
+      currentLead.painPoint = guessPainPoint(text)!;
+    }
+    if ((stage === "greeting" || stage === "name_ask") && !currentLead.managerName) {
+      const firstName = extractFirstName(text);
+      if (firstName) currentLead.managerName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+    }
+    setLead(currentLead);
 
-    // Detect "real person" request
+    // Detect "real person" request — always handle locally
     if (isRealPersonTrigger(text)) {
       setTimeout(() => {
         const msg = "Of course! I've pulled up our contact form right in the sidebar.\n\nFill it out and our team will reach out to you within 24 hours — usually much sooner.";
@@ -618,35 +660,27 @@ export default function NovaSalesVoiceAgent() {
       return;
     }
 
-    // Build local reply quickly
-    const currentLead = parseLeadDetails(text, lead);
-    if (guessPainPoint(text) && !currentLead.painPoint) {
-      currentLead.painPoint = guessPainPoint(text)!;
-    }
-    // Also capture name synchronously for greeting stages so reply can use it
-    if ((stage === "greeting" || stage === "name_ask") && !currentLead.managerName) {
-      const firstName = extractFirstName(text);
-      if (firstName) currentLead.managerName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
-    }
-    const reply = buildLocalReply(text, stage, currentLead);
+    // Build the full conversation history including the new user message
+    const fullHistory = [...messages, userMessage];
 
-    setTimeout(async () => {
-      setStage(reply.stage);
-      pushMessage("assistant", reply.text);
-      speak(reply.text.replace(/\n/g, " "));
-      setIsThinking(false);
+    // Try AI first, fall back to local script if unavailable
+    const aiReply = await callNovaAI(fullHistory, stage, currentLead);
+    const reply = aiReply ?? buildLocalReply(text, stage, currentLead);
 
-      // If moving into trial stage, show the sign-up form instead of waiting for typed info
-      if (reply.stage === "trial" && !trialCreated) {
-        if (currentLead.companyName && currentLead.email) {
-          await createTrialLead(currentLead);
-        } else {
-          // Pop the form after a short delay so NOVA's message appears first
-          setTimeout(() => setShowTrialForm(true), 600);
-        }
+    setStage(reply.stage);
+    pushMessage("assistant", reply.text);
+    speak(reply.text.replace(/\n/g, " "));
+    setIsThinking(false);
+
+    // If moving into trial stage, show the sign-up form
+    if (reply.stage === "trial" && !trialCreated) {
+      if (currentLead.companyName && currentLead.email) {
+        await createTrialLead(currentLead);
+      } else {
+        setTimeout(() => setShowTrialForm(true), 600);
       }
-    }, 400);
-  }, [input, isThinking, stage, lead, trialCreated, pushMessage, speak, createTrialLead]);
+    }
+  }, [input, isThinking, stage, lead, messages, trialCreated, pushMessage, speak, createTrialLead, callNovaAI]);
 
   // Keep ref in sync so voice onresult always has the latest sendMessage
   useEffect(() => {
