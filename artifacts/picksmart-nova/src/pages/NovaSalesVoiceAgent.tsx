@@ -562,7 +562,7 @@ export default function NovaSalesVoiceAgent() {
 
           {/* What NOVA is saying */}
           {nowSpeakingText && (
-            <p className="max-w-xs text-center text-slate-300 text-sm leading-relaxed" style={{ display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            <p className="max-w-sm text-center text-slate-300 text-sm leading-relaxed px-2">
               {nowSpeakingText.replace(/\n/g, " ")}
             </p>
           )}
