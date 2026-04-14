@@ -559,4 +559,186 @@ router.post("/social/referrals/invite", async (req, res) => {
   }
 });
 
+// ── COMPANY REFERRALS ─────────────────────────────────────────────────────────
+
+router.get("/social/company-referrals", async (req, res) => {
+  try {
+    const rows = await db.execute(sql`
+      SELECT * FROM company_referrals ORDER BY created_at DESC
+    `);
+    res.json({ referrals: (rows as any).rows || [] });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to load company referrals" });
+  }
+});
+
+router.post("/social/company-referrals", async (req, res) => {
+  try {
+    const { referrerCompanyName, referredCompanyName, referredCompanyEmail, dealId } = req.body;
+    if (!referredCompanyName) return res.status(400).json({ error: "referredCompanyName required" });
+    const rows = await db.execute(sql`
+      INSERT INTO company_referrals (referrer_company_name, referred_company_name, referred_company_email, deal_id)
+      VALUES (${referrerCompanyName || null}, ${referredCompanyName}, ${referredCompanyEmail || null}, ${dealId || null})
+      RETURNING *
+    `);
+    res.json({ referral: (rows as any).rows?.[0] });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to create company referral" });
+  }
+});
+
+router.patch("/social/company-referrals/:id/reward", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const rows = await db.execute(sql`
+      UPDATE company_referrals
+      SET reward_earned = true, payment_verified = true, reward_paid_at = now()
+      WHERE id = ${id}
+      RETURNING *
+    `);
+    res.json({ referral: (rows as any).rows?.[0] });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to mark reward" });
+  }
+});
+
+// ── FINANCE SUMMARY ────────────────────────────────────────────────────────────
+
+router.get("/social/finance-summary", async (req, res) => {
+  try {
+    const leadsRows = await db.execute(sql`
+      SELECT * FROM owner_leads ORDER BY created_at DESC
+    `);
+    const leads: any[] = (leadsRows as any).rows || [];
+
+    const activeClients = leads.filter((l: any) => l.status === "active_client");
+    const revenue = activeClients.reduce((sum: number, l: any) => sum + Number(l.contract_value || 0), 0);
+    const monthlyRecurring = activeClients.reduce((sum: number, l: any) => {
+      if (l.weekly_price) return sum + Number(l.weekly_price) * 4;
+      if (l.contract_value) return sum + Number(l.contract_value) / 12;
+      return sum;
+    }, 0);
+
+    const companyRefRows = await db.execute(sql`SELECT * FROM company_referrals`);
+    const companyRefs: any[] = (companyRefRows as any).rows || [];
+
+    const selectorRefRows = await db.execute(sql`SELECT * FROM sbn_referrals`);
+    const selectorRefs: any[] = (selectorRefRows as any).rows || [];
+
+    const rewardedCompany = companyRefs.filter((r: any) => r.reward_earned);
+    const rewardedSelector = selectorRefs.filter((r: any) => r.reward_given);
+    const payouts = rewardedCompany.length * 500 + rewardedSelector.length * 25;
+    const profit = revenue - payouts;
+
+    const monthKey = (d: string) => {
+      if (!d) return "Unknown";
+      const dt = new Date(d);
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+    };
+
+    const revenueByMonth: Record<string, number> = {};
+    activeClients.forEach((c: any) => {
+      const k = monthKey(c.contract_signed || c.created_at);
+      revenueByMonth[k] = (revenueByMonth[k] || 0) + Number(c.contract_value || 0);
+    });
+
+    const payoutByMonth: Record<string, number> = {};
+    rewardedCompany.forEach((r: any) => { const k = monthKey(r.created_at); payoutByMonth[k] = (payoutByMonth[k] || 0) + 500; });
+    rewardedSelector.forEach((r: any) => { const k = monthKey(r.created_at); payoutByMonth[k] = (payoutByMonth[k] || 0) + 25; });
+
+    res.json({
+      revenue, payouts, profit, monthlyRecurring,
+      activeClientCount: activeClients.length,
+      pendingCount: leads.filter((l: any) => l.status !== "active_client" && l.status !== "closed_lost").length,
+      paidCompanies: activeClients,
+      rewardedCompanyReferrals: rewardedCompany,
+      rewardedSelectorReferrals: rewardedSelector,
+      allCompanyReferrals: companyRefs,
+      allSelectorReferrals: selectorRefs,
+      monthlyRevenue: Object.entries(revenueByMonth)
+        .map(([month, amount]) => ({ month, amount }))
+        .sort((a, b) => b.month.localeCompare(a.month)),
+      monthlyPayouts: Object.entries(payoutByMonth)
+        .map(([month, amount]) => ({ month, amount }))
+        .sort((a, b) => b.month.localeCompare(a.month)),
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to load finance summary" });
+  }
+});
+
+// ── WEEKLY EMAIL REPORT ────────────────────────────────────────────────────────
+
+router.post("/social/finance-report-email", async (req, res) => {
+  try {
+    const leadsRows = await db.execute(sql`SELECT * FROM owner_leads WHERE status = 'active_client'`);
+    const activeClients: any[] = (leadsRows as any).rows || [];
+    const revenue = activeClients.reduce((s: number, c: any) => s + Number(c.contract_value || 0), 0);
+
+    const companyRefRows = await db.execute(sql`SELECT * FROM company_referrals WHERE reward_earned = true`);
+    const selectorRefRows = await db.execute(sql`SELECT * FROM sbn_referrals WHERE reward_given = true`);
+    const payouts = ((companyRefRows as any).rows?.length || 0) * 500 + ((selectorRefRows as any).rows?.length || 0) * 25;
+    const profit = revenue - payouts;
+
+    const companyList = activeClients.map((c: any) => `${c.company_name} — $${Number(c.contract_value || 0).toLocaleString()}`).join("\n");
+
+    const htmlBody = `
+      <div style="font-family:sans-serif;color:#1e293b;max-width:600px;margin:0 auto">
+        <div style="background:#0f172a;padding:24px;border-radius:12px;margin-bottom:16px">
+          <h1 style="color:#facc15;font-size:24px;margin:0">⚡ NOVA Weekly Finance Report</h1>
+          <p style="color:#94a3b8;margin:8px 0 0">Generated ${new Date().toLocaleDateString("en-US", { weekday:"long",month:"long",day:"numeric",year:"numeric" })}</p>
+        </div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+          <tr>
+            <td style="padding:12px;background:#f8fafc;border:1px solid #e2e8f0;font-weight:bold">Total Revenue</td>
+            <td style="padding:12px;background:#f8fafc;border:1px solid #e2e8f0;color:#16a34a;font-weight:bold">$${revenue.toLocaleString()}</td>
+          </tr>
+          <tr>
+            <td style="padding:12px;border:1px solid #e2e8f0;font-weight:bold">Referral Payouts</td>
+            <td style="padding:12px;border:1px solid #e2e8f0;color:#dc2626;font-weight:bold">-$${payouts.toLocaleString()}</td>
+          </tr>
+          <tr>
+            <td style="padding:12px;background:#f8fafc;border:1px solid #e2e8f0;font-weight:bold">Net Profit</td>
+            <td style="padding:12px;background:#f8fafc;border:1px solid #e2e8f0;color:#2563eb;font-weight:bold;font-size:18px">$${profit.toLocaleString()}</td>
+          </tr>
+          <tr>
+            <td style="padding:12px;border:1px solid #e2e8f0;font-weight:bold">Active Clients</td>
+            <td style="padding:12px;border:1px solid #e2e8f0">${activeClients.length}</td>
+          </tr>
+        </table>
+        ${activeClients.length > 0 ? `
+          <h2 style="color:#0f172a;font-size:16px">Active Companies</h2>
+          <ul style="margin:0;padding-left:20px">
+            ${activeClients.map((c: any) => `<li>${c.company_name} — <strong>$${Number(c.contract_value || 0).toLocaleString()}</strong></li>`).join("")}
+          </ul>
+        ` : ""}
+        <p style="color:#94a3b8;font-size:12px;margin-top:24px">Sent by NOVA Platform · PickSmart Academy</p>
+      </div>
+    `;
+
+    const { default: nodemailer } = await import("nodemailer");
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.GMAIL_USER || process.env.EMAIL_FROM,
+        pass: process.env.GMAIL_PASS || process.env.EMAIL_PASS,
+      },
+    });
+
+    await transporter.sendMail({
+      from: `NOVA Reports <${process.env.GMAIL_USER || process.env.EMAIL_FROM}>`,
+      to: req.body.toEmail || process.env.GMAIL_USER || process.env.EMAIL_FROM,
+      subject: `⚡ NOVA Weekly Finance Report — $${profit.toLocaleString()} profit`,
+      html: htmlBody,
+      text: `NOVA Weekly Finance Report\nRevenue: $${revenue}\nPayouts: $${payouts}\nProfit: $${profit}\nActive Clients: ${activeClients.length}\n\n${companyList}`,
+    });
+
+    res.json({ ok: true, message: "Report sent" });
+  } catch (e: any) {
+    console.error("[finance-report-email]", e);
+    res.status(500).json({ error: "Failed to send report", detail: e?.message });
+  }
+});
+
 export default router;

@@ -1451,251 +1451,425 @@ function UsersAccessSection() {
 }
 
 // ── Revenue Tab ───────────────────────────────────────────────────────────────
-interface CompanyClient {
-  id: string;
-  name: string;
-  email: string;
-  status: "active" | "pending" | "cancelled";
-  weeklyRate: number;
-  startDate: string;
+
+const OWNER_API = import.meta.env.BASE_URL + "api";
+const money = (n: number | string) => `$${Number(n || 0).toLocaleString()}`;
+
+type FinFilter = "all" | "revenue" | "payouts" | "profit" | "clients";
+
+interface FinanceSummary {
+  revenue: number; payouts: number; profit: number;
+  monthlyRecurring: number; activeClientCount: number; pendingCount: number;
+  paidCompanies: any[]; rewardedCompanyReferrals: any[];
+  rewardedSelectorReferrals: any[]; allCompanyReferrals: any[];
+  allSelectorReferrals: any[];
+  monthlyRevenue: { month: string; amount: number }[];
+  monthlyPayouts: { month: string; amount: number }[];
 }
 
-const INITIAL_CLIENTS: CompanyClient[] = [
-  { id: "c1", name: "ES3 Lancaster", email: "ops@es3lancaster.com", status: "active", weeklyRate: 1660, startDate: "Jan 2025" },
-  { id: "c2", name: "Dallas Warehouse DC", email: "manager@dallaswh.com", status: "active", weeklyRate: 1660, startDate: "Feb 2025" },
-  { id: "c3", name: "Chicago Distribution", email: "admin@chicagodc.com", status: "pending", weeklyRate: 1660, startDate: "—" },
-];
+function FinCard({ title, value, sub, active, onClick, color = "yellow" }: {
+  title: string; value: string | number; sub: string;
+  active: boolean; onClick: () => void; color?: "yellow" | "green" | "red" | "blue";
+}) {
+  const border = active
+    ? color === "yellow" ? "border-yellow-400 bg-yellow-400/5"
+    : color === "green"  ? "border-green-400 bg-green-400/5"
+    : color === "red"    ? "border-red-400 bg-red-400/5"
+    : "border-blue-400 bg-blue-400/5"
+    : "border-slate-700 bg-slate-900 hover:border-slate-500";
+  const val = color === "yellow" ? "text-yellow-400"
+    : color === "green"  ? "text-green-400"
+    : color === "red"    ? "text-red-400"
+    : "text-blue-400";
+  return (
+    <div onClick={onClick} className={`rounded-2xl border cursor-pointer transition p-5 ${border}`}>
+      <p className="text-xs text-slate-500 uppercase tracking-widest mb-2">{title}</p>
+      <p className={`text-3xl font-black ${active ? val : "text-white"}`}>{value}</p>
+      <p className="text-xs text-slate-600 mt-1.5">{sub}</p>
+    </div>
+  );
+}
 
 function RevenueTab() {
-  const [clients, setClients] = useState<CompanyClient[]>(INITIAL_CLIENTS);
-  const [form, setForm]       = useState({ name: "", email: "", weeklyRate: 1660 });
-  const [showForm, setShowForm] = useState(false);
+  const [fin, setFin] = useState<FinanceSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<FinFilter>("all");
+  const [companyRefs, setCompanyRefs] = useState<any[]>([]);
+  const [showRefForm, setShowRefForm] = useState(false);
+  const [refForm, setRefForm] = useState({ referrerCompanyName: "", referredCompanyName: "", referredCompanyEmail: "" });
+  const [addingRef, setAddingRef] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailMsg, setEmailMsg] = useState("");
+  const [toEmail, setToEmail] = useState("");
   const [invoiceStatus, setInvoiceStatus] = useState<Record<string, "loading" | "sent" | "error">>({});
 
-  const activeClients  = clients.filter((c) => c.status === "active");
-  const pendingClients = clients.filter((c) => c.status === "pending");
-  const weeklyRevenue  = activeClients.reduce((s, c) => s + c.weeklyRate, 0);
+  async function load() {
+    setLoading(true);
+    const [finR, refR] = await Promise.all([
+      fetch(`${OWNER_API}/social/finance-summary`).catch(() => null),
+      fetch(`${OWNER_API}/social/company-referrals`).catch(() => null),
+    ]);
+    if (finR?.ok) { const d = await finR.json(); setFin(d); }
+    if (refR?.ok) { const d = await refR.json(); setCompanyRefs(d.referrals || []); }
+    setLoading(false);
+  }
 
-  const statusBadge = (s: CompanyClient["status"]) => {
-    if (s === "active")    return "bg-green-500/15 text-green-300 border-green-500/30";
-    if (s === "pending")   return "bg-yellow-400/15 text-yellow-300 border-yellow-400/30";
-    return "bg-red-500/15 text-red-300 border-red-500/30";
-  };
+  useEffect(() => { load(); }, []);
 
-  const sendInvoice = async (client: CompanyClient) => {
-    setInvoiceStatus((p) => ({ ...p, [client.id]: "loading" }));
+  async function markReward(id: string) {
+    await fetch(`${OWNER_API}/social/company-referrals/${id}/reward`, { method: "PATCH" });
+    load();
+  }
+
+  async function addCompanyRef() {
+    if (!refForm.referredCompanyName.trim()) return;
+    setAddingRef(true);
+    await fetch(`${OWNER_API}/social/company-referrals`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(refForm),
+    });
+    setAddingRef(false);
+    setShowRefForm(false);
+    setRefForm({ referrerCompanyName: "", referredCompanyName: "", referredCompanyEmail: "" });
+    load();
+  }
+
+  function exportCSV() {
+    if (!fin) return;
+    const rows: string[][] = [["Company", "Contract Value", "Status", "Contract Signed"]];
+    (fin.paidCompanies || []).forEach((c: any) => {
+      rows.push([c.company_name, c.contract_value || "0", c.status, c.contract_signed || ""]);
+    });
+    const csv = "data:text/csv;charset=utf-8," + rows.map(r => r.join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = encodeURI(csv);
+    a.download = `nova_finance_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+  }
+
+  async function exportPDF() {
+    if (!fin) return;
+    // @ts-ignore
+    const jspdfMod = await import("jspdf");
+    const jsPDF = jspdfMod.jsPDF || jspdfMod.default?.jsPDF || jspdfMod.default;
+    const doc = new jsPDF();
+    doc.setFontSize(20); doc.text("NOVA Financial Report", 20, 20);
+    doc.setFontSize(11);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, 32);
+    doc.setLineWidth(0.5); doc.line(20, 36, 190, 36);
+    doc.setFontSize(13);
+    doc.text(`Total Revenue:    ${money(fin.revenue)}`, 20, 48);
+    doc.text(`Referral Payouts: -${money(fin.payouts)}`, 20, 58);
+    doc.text(`Net Profit:       ${money(fin.profit)}`, 20, 68);
+    doc.text(`Active Clients:   ${fin.activeClientCount}`, 20, 78);
+    doc.text(`Monthly Recurring: ${money(fin.monthlyRecurring)}`, 20, 88);
+    if (fin.paidCompanies?.length) {
+      doc.setFontSize(12); doc.text("Active Companies:", 20, 102);
+      let y = 112;
+      fin.paidCompanies.forEach((c: any) => {
+        doc.setFontSize(10);
+        doc.text(`${c.company_name}  —  ${money(c.contract_value || 0)}`, 24, y);
+        y += 9;
+      });
+    }
+    doc.save(`nova_finance_${new Date().toISOString().slice(0, 10)}.pdf`);
+  }
+
+  async function sendEmailReport() {
+    if (!toEmail.trim()) return;
+    setEmailSending(true);
+    const r = await fetch(`${OWNER_API}/social/finance-report-email`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toEmail }),
+    });
+    const d = await r.json().catch(() => ({}));
+    setEmailSending(false);
+    setEmailMsg(d.ok ? "Report sent!" : `Error: ${d.detail || d.error || "failed"}`);
+    setTimeout(() => setEmailMsg(""), 5000);
+  }
+
+  const sendInvoice = async (id: string, name: string, email: string, rate: number) => {
+    setInvoiceStatus((p) => ({ ...p, [id]: "loading" }));
     try {
-      const res = await fetch("/api/create-checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyName: client.name, email: client.email, weeklyRate: client.weeklyRate }),
+      const res = await fetch(`${OWNER_API}/create-checkout`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyName: name, email, weeklyRate: rate }),
       });
       const data = await res.json() as { url?: string; error?: string };
-      if (!res.ok || !data.url) throw new Error(data.error ?? "No URL returned");
+      if (!res.ok || !data.url) throw new Error(data.error ?? "No URL");
       window.open(data.url, "_blank");
-      setInvoiceStatus((p) => ({ ...p, [client.id]: "sent" }));
-      setTimeout(() => setInvoiceStatus((p) => { const n = { ...p }; delete n[client.id]; return n; }), 4000);
-    } catch (err) {
-      console.error("[Revenue] sendInvoice:", err);
-      setInvoiceStatus((p) => ({ ...p, [client.id]: "error" }));
-      setTimeout(() => setInvoiceStatus((p) => { const n = { ...p }; delete n[client.id]; return n; }), 4000);
+      setInvoiceStatus((p) => ({ ...p, [id]: "sent" }));
+      setTimeout(() => setInvoiceStatus((p) => { const n = { ...p }; delete n[id]; return n; }), 4000);
+    } catch {
+      setInvoiceStatus((p) => ({ ...p, [id]: "error" }));
+      setTimeout(() => setInvoiceStatus((p) => { const n = { ...p }; delete n[id]; return n; }), 4000);
     }
   };
 
-  const addClient = () => {
-    if (!form.name.trim() || !form.email.trim()) return;
-    setClients((prev) => [
-      ...prev,
-      {
-        id: `c${Date.now()}`,
-        name: form.name.trim(),
-        email: form.email.trim(),
-        status: "pending",
-        weeklyRate: form.weeklyRate,
-        startDate: "—",
-      },
-    ]);
-    setForm({ name: "", email: "", weeklyRate: 1660 });
-    setShowForm(false);
-  };
+  if (loading) return <div className="flex justify-center py-24"><div className="h-10 w-10 border-4 border-yellow-400 border-t-transparent rounded-full animate-spin" /></div>;
+
+  const f = fin || {} as FinanceSummary;
 
   return (
     <div className="space-y-8">
 
-      {/* Stripe key notice */}
+      {/* Terms modal */}
+      {showTerms && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-2xl p-7 max-h-[80vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="font-black text-white text-xl">Referral Terms &amp; Conditions</h2>
+              <button onClick={() => setShowTerms(false)}><X className="h-5 w-5 text-slate-400" /></button>
+            </div>
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-yellow-400 font-black text-base mb-3">Company Referral Terms</h3>
+                <ol className="space-y-2 list-decimal list-inside text-slate-300 text-sm leading-relaxed">
+                  {[
+                    "Rewards are only issued after a referred company completes payment for a paid subscription plan.",
+                    "The referred company must remain active and in good standing for a minimum of 30 days before any reward is released.",
+                    "Free trials alone do not qualify for rewards.",
+                    "Rewards are issued only after verified payment has been successfully processed and not refunded.",
+                    "If a referred company cancels, disputes, or fails payment within the first 30 days, the reward is void.",
+                    "Rewards are issued at the sole discretion of the platform and may be adjusted, delayed, or denied in cases of abuse, fraud, or violation of platform policies.",
+                    "Self-referrals or attempts to create duplicate accounts to claim rewards are strictly prohibited and will result in account suspension.",
+                    "Rewards may be issued as cash equivalents, credits, or platform benefits depending on program structure.",
+                    "The platform reserves the right to modify or terminate the referral program at any time.",
+                    "By participating in the referral program, users agree to all terms listed above.",
+                  ].map((t, i) => <li key={i}>{t}</li>)}
+                </ol>
+              </div>
+              <div>
+                <h3 className="text-yellow-400 font-black text-base mb-3">Selector Referral Terms</h3>
+                <ul className="space-y-2 list-disc list-inside text-slate-300 text-sm leading-relaxed">
+                  <li>Rewards are issued only after the referred user becomes active and completes required activity (training, usage, or company participation).</li>
+                  <li>Rewards are not issued for inactive or fake accounts.</li>
+                  <li>Referral abuse or spam invites will result in removal from the program.</li>
+                  <li>Rewards may take up to 30 days to process.</li>
+                </ul>
+              </div>
+            </div>
+            <button onClick={() => setShowTerms(false)} className="mt-6 w-full py-3 rounded-xl bg-yellow-400 text-slate-950 font-black hover:bg-yellow-300 transition">Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Export + email bar */}
+      <div className="flex flex-wrap items-center gap-3">
+        <button onClick={exportCSV} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-green-600 text-white font-black text-xs hover:bg-green-500 transition">
+          📊 Export CSV
+        </button>
+        <button onClick={exportPDF} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white font-black text-xs hover:bg-blue-500 transition">
+          📄 Export PDF
+        </button>
+        <button onClick={() => setShowTerms(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-700 text-slate-400 font-black text-xs hover:border-slate-500 hover:text-white transition">
+          📋 Referral Terms
+        </button>
+        <div className="flex items-center gap-2 ml-auto flex-wrap">
+          <input value={toEmail} onChange={e => setToEmail(e.target.value)} placeholder="you@email.com" type="email"
+            className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-yellow-400 w-44" />
+          <button onClick={sendEmailReport} disabled={emailSending || !toEmail.trim()}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-yellow-400 text-slate-950 font-black text-xs hover:bg-yellow-300 transition disabled:opacity-50">
+            {emailSending ? "Sending…" : "📧 Email Report"}
+          </button>
+          {emailMsg && <span className={`text-xs font-bold ${emailMsg.startsWith("Error") ? "text-red-400" : "text-green-400"}`}>{emailMsg}</span>}
+        </div>
+      </div>
+
+      {/* Finance cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <FinCard title="Total Revenue" value={money(f.revenue || 0)} sub={`${f.activeClientCount || 0} active contracts`} active={filter === "revenue"} onClick={() => setFilter(filter === "revenue" ? "all" : "revenue")} color="yellow" />
+        <FinCard title="Referral Payouts" value={money(f.payouts || 0)} sub="Company $500 · Selector $25" active={filter === "payouts"} onClick={() => setFilter(filter === "payouts" ? "all" : "payouts")} color="red" />
+        <FinCard title="Net Profit" value={money(f.profit || 0)} sub="Revenue minus payouts" active={filter === "profit"} onClick={() => setFilter(filter === "profit" ? "all" : "profit")} color="green" />
+        <FinCard title="Active Clients" value={f.activeClientCount || 0} sub={`${money(f.monthlyRecurring || 0)} / mo est.`} active={filter === "clients"} onClick={() => setFilter(filter === "clients" ? "all" : "clients")} color="blue" />
+        <FinCard title="Monthly Recurring" value={money(f.monthlyRecurring || 0)} sub="Based on contract terms" active={false} onClick={() => {}} color="yellow" />
+      </div>
+
+      {/* Filter detail panel */}
+      {(filter === "revenue" || filter === "clients") && (
+        <div className="rounded-2xl border border-yellow-400/30 bg-yellow-400/5 p-5">
+          <h3 className="font-black text-white mb-4 flex items-center gap-2"><Building2 className="h-4 w-4 text-yellow-400" /> Active Paying Companies</h3>
+          {(f.paidCompanies || []).length === 0 ? (
+            <p className="text-slate-400 text-sm">No active clients yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {(f.paidCompanies || []).map((c: any) => (
+                <div key={c.id} className="flex items-center justify-between rounded-xl bg-slate-900 border border-slate-800 px-4 py-3">
+                  <div>
+                    <p className="font-bold text-white text-sm">{c.company_name}</p>
+                    <p className="text-slate-500 text-xs">{c.email}{c.contract_signed ? ` · Signed ${c.contract_signed}` : ""}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-yellow-400 font-black">{money(c.contract_value || 0)}</p>
+                    <button onClick={() => sendInvoice(c.id, c.company_name, c.email, Number(c.weekly_price || 1660))}
+                      disabled={invoiceStatus[c.id] === "loading"}
+                      className="text-xs font-bold text-blue-400 hover:text-blue-300 mt-0.5 flex items-center gap-1">
+                      <Send className="h-3 w-3" /> {invoiceStatus[c.id] === "sent" ? "Sent!" : invoiceStatus[c.id] === "error" ? "Failed" : "Send Invoice"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {filter === "payouts" && (
+        <div className="rounded-2xl border border-red-400/30 bg-red-400/5 p-5">
+          <h3 className="font-black text-white mb-4">Rewarded Referrals</h3>
+          {(f.rewardedCompanyReferrals || []).length === 0 && (f.rewardedSelectorReferrals || []).length === 0 ? (
+            <p className="text-slate-400 text-sm">No rewards paid out yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {(f.rewardedCompanyReferrals || []).map((r: any) => (
+                <div key={r.id} className="flex items-center justify-between rounded-xl bg-slate-900 border border-slate-800 px-4 py-3">
+                  <div>
+                    <p className="font-bold text-white text-sm">Company Referral</p>
+                    <p className="text-slate-500 text-xs">{r.referred_company_name} · {r.reward_paid_at ? new Date(r.reward_paid_at).toLocaleDateString() : new Date(r.created_at).toLocaleDateString()}</p>
+                  </div>
+                  <p className="text-red-400 font-black">-$500</p>
+                </div>
+              ))}
+              {(f.rewardedSelectorReferrals || []).map((r: any) => (
+                <div key={r.id} className="flex items-center justify-between rounded-xl bg-slate-900 border border-slate-800 px-4 py-3">
+                  <div>
+                    <p className="font-bold text-white text-sm">Selector Referral</p>
+                    <p className="text-slate-500 text-xs">{r.referred_email} · {new Date(r.created_at).toLocaleDateString()}</p>
+                  </div>
+                  <p className="text-red-400 font-black">-$25</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {filter === "profit" && (
+        <div className="rounded-2xl border border-green-400/30 bg-green-400/5 p-5">
+          <h3 className="font-black text-white mb-4">Profit Breakdown</h3>
+          {[
+            { label: "Total Revenue", val: money(f.revenue || 0), color: "text-green-400" },
+            { label: "Referral Payouts (Company $500 each)", val: `-${money(f.rewardedCompanyReferrals?.length ? f.rewardedCompanyReferrals.length * 500 : 0)}`, color: "text-red-400" },
+            { label: "Referral Payouts (Selector $25 each)", val: `-${money(f.rewardedSelectorReferrals?.length ? f.rewardedSelectorReferrals.length * 25 : 0)}`, color: "text-red-400" },
+            { label: "Net Profit", val: money(f.profit || 0), color: "text-yellow-400" },
+          ].map(row => (
+            <div key={row.label} className="flex justify-between items-center rounded-xl bg-slate-900 border border-slate-800 px-4 py-3 mb-2">
+              <p className="text-slate-300 font-medium text-sm">{row.label}</p>
+              <p className={`font-black ${row.color}`}>{row.val}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Monthly breakdown */}
+      <div className="grid xl:grid-cols-2 gap-5">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <h3 className="font-black text-white mb-4 flex items-center gap-2"><TrendingUp className="h-4 w-4 text-green-400" /> Monthly Revenue</h3>
+          {(f.monthlyRevenue || []).length === 0 ? <p className="text-slate-500 text-sm">No data yet.</p> : (
+            <div className="space-y-2">
+              {(f.monthlyRevenue || []).map((m: any) => (
+                <div key={m.month} className="flex justify-between items-center rounded-xl bg-slate-950 border border-slate-800 px-4 py-2.5">
+                  <p className="text-slate-300 font-bold text-sm">{m.month}</p>
+                  <p className="text-green-400 font-black">{money(m.amount)}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+          <h3 className="font-black text-white mb-4 flex items-center gap-2"><BarChart3 className="h-4 w-4 text-red-400" /> Monthly Payouts</h3>
+          {(f.monthlyPayouts || []).length === 0 ? <p className="text-slate-500 text-sm">No payouts yet.</p> : (
+            <div className="space-y-2">
+              {(f.monthlyPayouts || []).map((m: any) => (
+                <div key={m.month} className="flex justify-between items-center rounded-xl bg-slate-950 border border-slate-800 px-4 py-2.5">
+                  <p className="text-slate-300 font-bold text-sm">{m.month}</p>
+                  <p className="text-red-400 font-black">-{money(m.amount)}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Company referrals panel */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h3 className="font-black text-white text-lg flex items-center gap-2"><Users className="h-5 w-5 text-yellow-400" /> Company Referrals</h3>
+            <p className="text-slate-500 text-xs mt-0.5">$500 reward per verified company referral (paid + 30 days active)</p>
+          </div>
+          <button onClick={() => setShowRefForm(v => !v)} className="px-4 py-2.5 rounded-xl bg-yellow-400 text-slate-950 font-black text-xs hover:bg-yellow-300 transition">
+            {showRefForm ? "Cancel" : "+ Log Referral"}
+          </button>
+        </div>
+        {showRefForm && (
+          <div className="rounded-2xl border border-yellow-400/20 bg-slate-950 p-5 mb-5 space-y-3">
+            <div className="grid sm:grid-cols-3 gap-3">
+              <input value={refForm.referrerCompanyName} onChange={e => setRefForm(p => ({ ...p, referrerCompanyName: e.target.value }))}
+                placeholder="Referring company (optional)"
+                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm focus:border-yellow-400 focus:outline-none" />
+              <input value={refForm.referredCompanyName} onChange={e => setRefForm(p => ({ ...p, referredCompanyName: e.target.value }))}
+                placeholder="Referred company name *"
+                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm focus:border-yellow-400 focus:outline-none" />
+              <input value={refForm.referredCompanyEmail} onChange={e => setRefForm(p => ({ ...p, referredCompanyEmail: e.target.value }))}
+                placeholder="Email" type="email"
+                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm focus:border-yellow-400 focus:outline-none" />
+            </div>
+            <button onClick={addCompanyRef} disabled={addingRef || !refForm.referredCompanyName.trim()}
+              className="px-5 py-2.5 rounded-xl bg-yellow-400 text-slate-950 font-black text-sm hover:bg-yellow-300 transition disabled:opacity-50">
+              {addingRef ? "Saving…" : "Save Referral"}
+            </button>
+          </div>
+        )}
+        {/* Link generator */}
+        <div className="rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-3 mb-4 flex items-center gap-3 flex-wrap">
+          <div className="text-slate-400 text-xs font-bold">Share referral link:</div>
+          <code className="flex-1 text-xs text-yellow-300 font-mono bg-slate-900 rounded px-2 py-1 truncate select-all">
+            {window.location.origin}/company-request?ref_company=YourCompanyName
+          </code>
+          <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/company-request?ref_company=YourCompanyName`); }}
+            className="text-xs px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300 hover:text-white font-bold transition">Copy</button>
+        </div>
+
+        {companyRefs.length === 0 ? (
+          <p className="text-slate-500 text-sm">No company referrals tracked yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {companyRefs.map((r: any) => (
+              <div key={r.id} className={`flex items-center justify-between rounded-xl border px-4 py-3 ${r.reward_earned ? "border-green-500/30 bg-green-500/5" : "border-slate-800 bg-slate-950"}`}>
+                <div>
+                  <p className="font-bold text-white text-sm">{r.referred_company_name}</p>
+                  <p className="text-slate-500 text-xs">
+                    {r.referrer_company_name ? `Referred by ${r.referrer_company_name} · ` : ""}
+                    {r.referred_company_email || "—"} · {new Date(r.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {r.reward_earned ? (
+                    <span className="px-3 py-1 rounded-full bg-green-500/20 text-green-400 font-black text-xs border border-green-500/30">✅ $500 Paid</span>
+                  ) : (
+                    <button onClick={() => markReward(r.id)} className="px-3 py-1.5 rounded-xl bg-yellow-400/20 text-yellow-300 font-black text-xs border border-yellow-400/30 hover:bg-yellow-400/30 transition">
+                      Mark Rewarded
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Stripe notice */}
       <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 px-5 py-4 flex items-start gap-3">
         <AlertCircle className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-bold text-blue-300">Stripe setup required to send live invoices</p>
+          <p className="text-sm font-bold text-blue-300">Stripe required for live invoice generation</p>
           <p className="text-xs text-blue-400/70 mt-1">
             Add <code className="bg-slate-800 px-1 rounded">STRIPE_SECRET_KEY</code>,{" "}
             <code className="bg-slate-800 px-1 rounded">STRIPE_WEBHOOK_SECRET</code>, and{" "}
-            <code className="bg-slate-800 px-1 rounded">APP_URL</code> to your environment variables.
-            The Send Invoice button will open the Stripe checkout page for your client once configured.
+            <code className="bg-slate-800 px-1 rounded">APP_URL</code> to enable the Send Invoice button.
           </p>
-        </div>
-      </div>
-
-      {/* Revenue summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <DollarSign className="h-4 w-4 text-yellow-400" />
-            <p className="text-xs text-slate-500 uppercase tracking-widest">Weekly Revenue</p>
-          </div>
-          <p className="text-3xl font-black text-yellow-400">
-            ${weeklyRevenue.toLocaleString()}
-          </p>
-          <p className="text-xs text-slate-600 mt-1">{activeClients.length} active client{activeClients.length !== 1 ? "s" : ""}</p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <Building2 className="h-4 w-4 text-emerald-400" />
-            <p className="text-xs text-slate-500 uppercase tracking-widest">Active Clients</p>
-          </div>
-          <p className="text-3xl font-black text-white">{activeClients.length}</p>
-          <p className="text-xs text-slate-600 mt-1">${(weeklyRevenue * 4).toLocaleString()} / month est.</p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <CreditCard className="h-4 w-4 text-blue-400" />
-            <p className="text-xs text-slate-500 uppercase tracking-widest">Pending</p>
-          </div>
-          <p className="text-3xl font-black text-white">{pendingClients.length}</p>
-          <p className="text-xs text-slate-600 mt-1">awaiting first payment</p>
-        </div>
-      </div>
-
-      {/* Client list */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-xl font-black flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-yellow-400" />
-            Company Clients
-          </h2>
-          <button
-            onClick={() => setShowForm((v) => !v)}
-            className="flex items-center gap-1.5 rounded-xl bg-yellow-400 px-4 py-2 text-xs font-black text-slate-950 hover:bg-yellow-300 transition"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add Client
-          </button>
-        </div>
-
-        {/* Add client form */}
-        {showForm && (
-          <div className="mb-5 rounded-2xl border border-yellow-400/20 bg-slate-950 p-5 space-y-3">
-            <p className="text-sm font-bold text-yellow-400">New Client</p>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <input
-                value={form.name}
-                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                placeholder="Company name"
-                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm focus:border-yellow-400 focus:outline-none"
-              />
-              <input
-                value={form.email}
-                onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-                placeholder="Billing email"
-                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm focus:border-yellow-400 focus:outline-none"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-400">Rate $</span>
-                <input
-                  type="number"
-                  value={form.weeklyRate}
-                  onChange={(e) => setForm((p) => ({ ...p, weeklyRate: Number(e.target.value) }))}
-                  className="w-24 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm focus:border-yellow-400 focus:outline-none"
-                />
-                <span className="text-sm text-slate-500">/week</span>
-              </div>
-              <button
-                onClick={addClient}
-                className="rounded-xl bg-yellow-400 px-4 py-2.5 text-sm font-black text-slate-950 hover:bg-yellow-300 transition"
-              >
-                Save
-              </button>
-              <button
-                onClick={() => setShowForm(false)}
-                className="text-xs text-slate-500 hover:text-slate-300"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Client rows */}
-        <div className="space-y-3">
-          {clients.map((client) => {
-            const invStatus = invoiceStatus[client.id];
-            return (
-              <div
-                key={client.id}
-                className="rounded-xl border border-slate-800 bg-slate-950 px-5 py-4 flex flex-wrap items-center justify-between gap-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-bold text-white">{client.name}</p>
-                    <span className={`rounded-full border px-2.5 py-0.5 text-xs font-bold ${statusBadge(client.status)}`}>
-                      {client.status}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">{client.email} · Since {client.startDate}</p>
-                </div>
-
-                <div className="flex items-center gap-4 shrink-0">
-                  <div className="text-right">
-                    <p className="text-lg font-black text-yellow-400">${client.weeklyRate.toLocaleString()}</p>
-                    <p className="text-xs text-slate-600">per week</p>
-                  </div>
-
-                  <button
-                    onClick={() => sendInvoice(client)}
-                    disabled={invStatus === "loading"}
-                    className={`flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-black transition ${
-                      invStatus === "sent"
-                        ? "bg-green-500/20 text-green-300 border border-green-500/30"
-                        : invStatus === "error"
-                        ? "bg-red-500/20 text-red-300 border border-red-500/30"
-                        : "bg-yellow-400 text-slate-950 hover:bg-yellow-300"
-                    } disabled:opacity-50`}
-                  >
-                    <Send className="h-3.5 w-3.5" />
-                    {invStatus === "loading" ? "Sending…"
-                      : invStatus === "sent"  ? "Sent!"
-                      : invStatus === "error" ? "Failed"
-                      : "Send Invoice"}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* How it works */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-        <h3 className="text-lg font-black mb-4">How Invoice Payments Work</h3>
-        <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          {[
-            { n: "1", title: "Click Send Invoice", body: "Opens a Stripe payment page for the client's weekly subscription." },
-            { n: "2", title: "Client Pays Online",   body: "Client enters their card. Stripe handles billing, receipts, and retries." },
-            { n: "3", title: "Auto Confirmation",    body: "Stripe sends receipt + invoice directly to the client's email." },
-            { n: "4", title: "Account Activated",    body: "Webhook fires on payment — company account gets marked as subscribed." },
-          ].map(({ n, title, body }) => (
-            <div key={n} className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-              <div className="h-7 w-7 rounded-full bg-yellow-400/20 flex items-center justify-center mb-3">
-                <span className="text-xs font-black text-yellow-400">{n}</span>
-              </div>
-              <p className="text-sm font-bold text-white">{title}</p>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed">{body}</p>
-            </div>
-          ))}
         </div>
       </div>
 

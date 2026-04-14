@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, Building2, Users, CheckCircle2, Send, Phone, Mail } from "lucide-react";
+import { ArrowLeft, Building2, Users, CheckCircle2, Send, Phone, Mail, Share2 } from "lucide-react";
+
+const API = import.meta.env.BASE_URL + "api";
 
 type FormState = "idle" | "sending" | "sent";
 
 export default function CompanyRequestPage() {
   const [formState, setFormState] = useState<FormState>("idle");
+  const [refCompany, setRefCompany] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     company: "",
@@ -14,6 +17,12 @@ export default function CompanyRequestPage() {
     teamSize: "",
     message: "",
   });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref_company");
+    if (ref) setRefCompany(ref);
+  }, []);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -25,11 +34,23 @@ export default function CompanyRequestPage() {
     setFormState("sending");
 
     try {
-      await fetch("/api/company-request", {
+      await fetch(`${API}/company-request`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, referredByCompany: refCompany }),
       });
+
+      if (refCompany) {
+        await fetch(`${API}/social/company-referrals`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            referrerCompanyName: refCompany,
+            referredCompanyName: form.company,
+            referredCompanyEmail: form.email,
+          }),
+        }).catch(() => {});
+      }
     } catch {
       // fire-and-forget — show success regardless
     }
@@ -77,6 +98,16 @@ export default function CompanyRequestPage() {
         >
           <ArrowLeft className="h-4 w-4" /> Back to Pricing
         </Link>
+
+        {refCompany && (
+          <div className="mb-6 rounded-2xl border border-yellow-400/40 bg-yellow-400/10 px-5 py-4 flex items-center gap-3">
+            <Share2 className="h-5 w-5 text-yellow-400 shrink-0" />
+            <div>
+              <p className="text-yellow-300 font-black text-sm">You were referred by <span className="text-yellow-400">{refCompany}</span></p>
+              <p className="text-slate-400 text-xs mt-0.5">Your referral will be tracked. If you subscribe, they earn a $500 reward after 30 days.</p>
+            </div>
+          </div>
+        )}
 
         <div className="mb-10">
           <div className="flex items-center gap-3 mb-4">
