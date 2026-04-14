@@ -57,7 +57,15 @@ function guessPainPoint(text: string): string | null {
   const t = text.toLowerCase();
   if (t.includes("speed") || t.includes("slow") || t.includes("pace") || t.includes("rate")) return "speed";
   if (t.includes("mistake") || t.includes("accuracy") || t.includes("mispick") || t.includes("damage")) return "accuracy";
-  if (t.includes("training") || t.includes("new hire")) return "training";
+  if (
+    t.includes("training") || t.includes("new hire") || t.includes("new hires") ||
+    t.includes("onboard") || t.includes("orientation") || t.includes("quit") ||
+    t.includes("turnover") || t.includes("retention") || t.includes("scared") ||
+    t.includes("frustrated") || t.includes("confusion") || t.includes("don't know what to do") ||
+    t.includes("floor ready") || t.includes("ramp") || t.includes("new employee") ||
+    t.includes("new employees") || t.includes("new workers") || t.includes("newbie") ||
+    t.includes("first week") || t.includes("week one") || t.includes("starter")
+  ) return "training";
   return null;
 }
 
@@ -178,7 +186,7 @@ function buildLocalReply(
     if (pain === "training") {
       return {
         stage: "pitch",
-        text: `${nameGreet} New hire training is a big one. Instead of relying only on shadowing, NOVA coaches every selector live while they pick.\n\nNew hires ramp faster. Veterans stay consistent. And supervisors spend less time correcting.\n\nHow many selectors are on your team?`,
+        text: `${nameGreet} Training is honestly one of the toughest parts of warehouse work — and most people don't realize how much goes wrong before a new hire ever takes their first pick.\n\nHere's what usually happens: Day one, they come in excited. They sit through orientation. They watch the safety videos. Maybe they do jack training or forklift cert. Hours of information — and by the end of it, they're overwhelmed.\n\nThen someone says "okay, you're ready for the floor." And they walk out there...\n\nAnd it feels like total chaos.\n\nPallets moving. Numbers flying. A voice in their headset they can barely follow. Nobody warned them it would feel like this.\n\nThat's when the fear kicks in — "Is this job even for me?" That thought runs through almost every new hire's head in week one.\n\nSome push through it. Others quit. And the ones who stay... make mistakes. Mispicks. Slow rates. Pallet build errors. All because nobody actually prepared them for what the floor really feels like.\n\nThat's exactly where NOVA comes in.\n\nAfter orientation and safety training is done — before they ever touch a real pick — NOVA steps in. We walk them through exactly what to expect: the rhythm of picking, how to confirm check codes, how to build a clean pallet, how to transition between stops without losing time.\n\nBy the time they hit the floor, they already know the job. No confusion. Less stress. Fewer injuries. And a whole lot less "I quit after week two."\n\nI always say — NOVA doesn't throw new hires into the deep end. We actually teach them to swim first. 😄\n\nHonestly, it's the difference between a new hire who makes it 90 days and becomes solid... and one who's gone before week three.\n\nSo — would it be worth running a free 30-day trial and seeing the difference with your next group?`,
       };
     }
     // Generic reason or "just looking" — move to discovery
@@ -333,9 +341,10 @@ function buildLocalReply(
 
   // ── Pain point: training ───────────────────────────────────────────────────
   if (pain === "training") {
+    const name = lead.managerName ? `${lead.managerName}, ` : "";
     return {
       stage: "pitch",
-      text: "Training is a big one — especially for new hires.\n\nInstead of shadow training only, NOVA coaches every selector live while they work.\n\nNew hires ramp faster. Veterans stay sharp. Supervisors spend less time correcting.\n\nWould you like to see that in action with a free trial?",
+      text: `${name}training is one of the most overlooked problems in warehousing — and nobody talks about how much it actually costs.\n\nHere's the reality: A new hire comes in excited on day one. They sit through orientation. Safety videos. Jack training. Forklift cert. Hours of it — and by the end they're already mentally drained.\n\nThen they get told "you're ready for the floor." And they walk out there...\n\nAnd it feels like chaos.\n\nPallets moving. Numbers coming fast. A voice in the headset they barely understand. Nobody told them it would feel like this.\n\nThat's when fear takes over — "Is this job even for me?" Almost every new hire thinks that in week one.\n\nSome push through. Some quit. And the ones who stay make expensive mistakes — mispicks, pallet errors, slow rates — because they were never actually prepared for what the floor feels like.\n\nNOVA changes that.\n\nWe step in after orientation and safety training — before they ever touch a real pick. We show them exactly what to expect: the picking rhythm, check code confirmations, clean pallet building, how to move between stops without losing time.\n\nBy the time they hit the floor, they already know the job. Less confusion. Less stress. Fewer injuries. And a lot less "I quit after two weeks."\n\nI always say — NOVA doesn't throw new hires into the deep end. We actually teach them to swim. 😄\n\nIt's the difference between a hire who makes it 90 days and becomes solid... and one who's gone before week three.\n\nWould it be worth running a free 30-day trial with your next batch of new hires?`,
     };
   }
 
