@@ -32,6 +32,7 @@ export function pickNovaVoice(lang: string): SpeechSynthesisVoice | null {
 }
 
 // ── Core speak function ───────────────────────────────────────────────────────
+// Chrome-hardened: fixes cancel→speak race, 15-second cutoff, and paused state.
 
 export function novaSpeak(
   text: string,
@@ -40,30 +41,59 @@ export function novaSpeak(
   opts?: { rate?: number; pitch?: number }
 ): void {
   if (!("speechSynthesis" in window)) { onDone?.(); return; }
+
+  // Cancel any current speech, then wait a tick — Chrome drops speak() if
+  // called immediately after cancel().
   window.speechSynthesis.cancel();
 
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang   = lang.startsWith("es") ? "es-US" : "en-US";
-  u.rate   = opts?.rate  ?? 0.97;
-  u.pitch  = opts?.pitch ?? 1;
+  const doSpeak = () => {
+    // Resume in case the synthesizer is in a paused state (another Chrome quirk)
+    window.speechSynthesis.resume();
 
-  // Try to assign a good voice; fall back to browser default for that lang
-  const voice = pickNovaVoice(lang);
-  if (voice) u.voice = voice;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang  = lang.startsWith("es") ? "es-US" : "en-US";
+    u.rate  = opts?.rate  ?? 0.97;
+    u.pitch = opts?.pitch ?? 1;
 
-  u.onend   = () => onDone?.();
-  u.onerror = () => onDone?.();
-
-  // Voices can be lazy-loaded; slight delay on first call
-  if (window.speechSynthesis.getVoices().length === 0) {
-    window.speechSynthesis.onvoiceschanged = () => {
-      const v2 = pickNovaVoice(lang);
-      if (v2) u.voice = v2;
-      window.speechSynthesis.speak(u);
+    const applyVoice = () => {
+      const voice = pickNovaVoice(lang);
+      if (voice) u.voice = voice;
     };
-  } else {
-    window.speechSynthesis.speak(u);
-  }
+    applyVoice();
+
+    // Chrome bug: speech silently stops after ~15 seconds for long texts.
+    // Workaround: pause/resume every 14 s to reset the internal timer.
+    const keepAlive = setInterval(() => {
+      if (!window.speechSynthesis.speaking) { clearInterval(keepAlive); return; }
+      window.speechSynthesis.pause();
+      window.speechSynthesis.resume();
+    }, 14000);
+
+    u.onend = () => {
+      clearInterval(keepAlive);
+      onDone?.();
+    };
+    u.onerror = () => {
+      clearInterval(keepAlive);
+      onDone?.();
+    };
+
+    if (window.speechSynthesis.getVoices().length === 0) {
+      // Voices not ready yet — wait for them (use addEventListener so we don't
+      // clobber any other handler that may be listening).
+      const onVoices = () => {
+        applyVoice();
+        window.speechSynthesis.speak(u);
+        window.speechSynthesis.removeEventListener("voiceschanged", onVoices);
+      };
+      window.speechSynthesis.addEventListener("voiceschanged", onVoices);
+    } else {
+      window.speechSynthesis.speak(u);
+    }
+  };
+
+  // 120 ms gap gives Chrome's cancel() time to fully flush before the next speak()
+  setTimeout(doSpeak, 120);
 }
 
 // ── Recognition language ──────────────────────────────────────────────────────
