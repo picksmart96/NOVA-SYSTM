@@ -263,6 +263,7 @@ export default function NovaSalesVoiceAgent() {
   const [isListening, setIsListening] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
+  const [ttsUnlocked, setTtsUnlocked] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [trialCreated, setTrialCreated] = useState(false);
   const [showHumanForm, setShowHumanForm] = useState(false);
@@ -324,6 +325,14 @@ export default function NovaSalesVoiceAgent() {
     if (!voiceOn || !canSpeak) return;
     novaSpeak(text, "en");
   }, [voiceOn, canSpeak]);
+
+  // ── Activate voice (called from user-gesture tap on overlay) ─────────────────
+  const handleActivate = useCallback(() => {
+    setTtsUnlocked(true);
+    const welcome =
+      "Most warehouses lose 15 to 25 percent performance from small mistakes and slow transitions. I fix that. What's hurting your operation more right now — speed or accuracy?";
+    if (canSpeak) novaSpeak(welcome, "en");
+  }, [canSpeak]);
 
   // ── Track event ─────────────────────────────────────────────────────────────
   async function trackEvent(event: string, dealId?: string) {
@@ -442,6 +451,48 @@ export default function NovaSalesVoiceAgent() {
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-950 text-white">
+
+      {/* ── Voice activation overlay — shown until user taps ── */}
+      {!ttsUnlocked && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/97 backdrop-blur-sm px-6">
+          <div className="max-w-md w-full text-center space-y-8">
+            {/* Pulsing orb */}
+            <div className="relative mx-auto w-36 h-36">
+              <div className="absolute inset-0 rounded-full border-4 border-yellow-400/30 animate-ping" />
+              <div className="absolute inset-2 rounded-full border-4 border-yellow-400/20 animate-ping" style={{ animationDelay: "400ms" }} />
+              <div className="relative flex h-full w-full items-center justify-center rounded-full border-4 border-yellow-400 bg-slate-950 shadow-[0_0_60px_rgba(250,204,21,0.4)]">
+                <div className="text-center">
+                  <p className="text-3xl font-black text-white">NOVA</p>
+                  <p className="text-[10px] text-yellow-400 font-bold tracking-widest">SALES AGENT</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h2 className="text-2xl font-black text-white mb-2">Tap to hear NOVA speak</h2>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Browsers require a tap before playing audio. Tap the button below and NOVA will greet you out loud.
+              </p>
+            </div>
+
+            <button
+              onClick={handleActivate}
+              className="w-full flex items-center justify-center gap-3 rounded-3xl bg-yellow-400 px-8 py-5 font-black text-slate-950 text-lg hover:bg-yellow-300 active:scale-95 transition shadow-[0_0_40px_rgba(250,204,21,0.3)]"
+            >
+              <Volume2 className="h-6 w-6" />
+              Activate NOVA Voice
+            </button>
+
+            <button
+              onClick={() => setTtsUnlocked(true)}
+              className="text-slate-600 text-sm hover:text-slate-400 transition underline"
+            >
+              Skip voice — text only
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-sm px-6 py-4">
         <div className="mx-auto max-w-6xl flex items-center justify-between">
