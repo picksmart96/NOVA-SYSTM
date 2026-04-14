@@ -143,6 +143,35 @@ router.post("/leads/:id/sign", async (req, res) => {
   }
 });
 
+// POST /api/nova-sales-lead — public endpoint: prospect from /meet-nova
+// Creates a lead with source="meet_nova_preview" and returns a deal link
+router.post("/nova-sales-lead", async (req, res) => {
+  try {
+    const body = req.body as Record<string, unknown>;
+    const appUrl = process.env.APP_URL ?? "https://nova-warehouse-control.replit.app";
+
+    const [lead] = await db
+      .insert(ownerLeadsTable)
+      .values({
+        companyName:  String(body.companyName ?? "Unknown Company"),
+        contactName:  String(body.managerName ?? ""),
+        contactRole:  "Manager",
+        email:        String(body.email ?? ""),
+        phone:        String(body.phone ?? ""),
+        status:       "new_lead",
+        nextAction:   "Schedule demo / start free trial",
+        notes:        `Source: ${body.source ?? "meet_nova_preview"}\nPain point: ${body.painPoint ?? ""}`,
+      })
+      .returning();
+
+    const dealLink = `${appUrl}/deal-sign/${lead.id}`;
+    res.status(201).json({ ok: true, leadId: lead.id, dealLink });
+  } catch (err) {
+    req.log.error({ err }, "Error creating nova-sales-lead");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // DELETE /api/leads/:id
 router.delete("/leads/:id", async (req, res) => {
   try {

@@ -10,3 +10,4 @@ export * from "./social-messaging";
 export * from "./social-groups";
 export * from "./social-moderation";
 export * from "./owner-leads";
+export * from "./nova-metrics";

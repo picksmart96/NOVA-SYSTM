@@ -1,0 +1,499 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+
+const SALES_STAGES = {
+  OPEN: 'open',
+  DISCOVERY: 'discovery',
+  PITCH: 'pitch',
+  DEMO: 'demo',
+  TRIAL: 'trial',
+  CLOSE: 'close',
+};
+
+const QUICK_REPLIES = [
+  'We have speed problems',
+  'We have too many picking mistakes',
+  'Show me how NOVA works',
+  'How much does it cost?',
+  'Start free trial',
+];
+
+function guessPainPoint(text) {
+  const t = text.toLowerCase();
+  if (t.includes('speed') || t.includes('slow') || t.includes('pace') || t.includes('rate')) return 'speed';
+  if (t.includes('mistake') || t.includes('accuracy') || t.includes('mispick') || t.includes('damage')) return 'accuracy';
+  if (t.includes('training') || t.includes('new hire')) return 'training';
+  return null;
+}
+
+function buildAssistantReply(userText, stage, lead) {
+  const pain = guessPainPoint(userText);
+  const lower = userText.toLowerCase();
+
+  if (lower.includes('how much') || lower.includes('price') || lower.includes('cost')) {
+    return {
+      stage: SALES_STAGES.CLOSE,
+      text:
+        'We offer a 30-day free trial first. After that, our full company system is typically structured as enterprise pricing based on your operation size. The best next step is a quick demo and a trial group so you can see real results before committing.',
+    };
+  }
+
+  if (lower.includes('trial') || lower.includes('start') || lower.includes('sign up')) {
+    return {
+      stage: SALES_STAGES.TRIAL,
+      text:
+        'Perfect. I can help you start a free 30-day trial. First, tell me your company name and the best email for the manager or supervisor handling operations.',
+    };
+  }
+
+  if (lower.includes('demo') || lower.includes('show me')) {
+    return {
+      stage: SALES_STAGES.DEMO,
+      text:
+        'Here is the simple version. NOVA gives selectors live coaching, helps reduce mistakes, improves pace, gives supervisors a real shift control system, and turns training into something your team can actually use during work. What is the bigger pain for your team right now: speed, mistakes, or training?',
+    };
+  }
+
+  if (stage === SALES_STAGES.OPEN) {
+    return {
+      stage: SALES_STAGES.DISCOVERY,
+      text:
+        'Hi, I’m NOVA. I help warehouses improve selector performance, reduce mistakes, and give supervisors better control of the shift. What is the biggest issue in your operation right now — speed, mistakes, or training?',
+    };
+  }
+
+  if (pain === 'speed') {
+    return {
+      stage: SALES_STAGES.PITCH,
+      text:
+        'That is exactly where NOVA helps. Most slow performance is not from the pick itself. It comes from hesitation, wasted motion, weak transitions, and poor coaching. NOVA fixes that with live voice guidance, skill training, and supervisor updates. Would you like a quick demo or a free 30-day trial?',
+    };
+  }
+
+  if (pain === 'accuracy') {
+    return {
+      stage: SALES_STAGES.PITCH,
+      text:
+        'That is one of the biggest problems NOVA is built for. We train selectors to confirm correctly, build cleaner pallets, reduce mispicks, and keep quality high. Supervisors can also push safety and shift updates live. Would you like me to show how it works or help you start a trial?',
+    };
+  }
+
+  if (pain === 'training') {
+    return {
+      stage: SALES_STAGES.PITCH,
+      text:
+        'NOVA is strong for that. Instead of relying only on shadow training, you give every selector a guided system they can use while learning. That makes training faster, cleaner, and more consistent. Would you like a quick demo or the free trial path?',
+    };
+  }
+
+  if (stage === SALES_STAGES.TRIAL) {
+    if (!lead.companyName || !lead.email) {
+      return {
+        stage: SALES_STAGES.TRIAL,
+        text:
+          'To start the trial, send me your company name and the best manager email. After that, I can create your next step and move you into onboarding.',
+      };
+    }
+  }
+
+  return {
+    stage,
+    text:
+      'I can help with that. The fastest next step is either a quick demo or a free 30-day trial so your team can see results in real use. Which one do you want?',
+  };
+}
+
+export default function NovaSalesVoiceAgent() {
+  const [messages, setMessages] = useState([
+    {
+      id: 'welcome',
+      role: 'assistant',
+      text: 'Hi, I’m NOVA. I help warehouses improve performance, reduce mistakes, and run cleaner shifts. What is the biggest issue in your warehouse right now — speed, mistakes, or training?',
+      createdAt: new Date(),
+    },
+  ]);
+  const [input, setInput] = useState('');
+  const [stage, setStage] = useState(SALES_STAGES.OPEN);
+  const [isListening, setIsListening] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
+  const [voiceOn, setVoiceOn] = useState(true);
+  const [error, setError] = useState('');
+  const [lead, setLead] = useState({
+    companyName: '',
+    managerName: '',
+    email: '',
+    phone: '',
+    painPoint: '',
+  });
+
+  const recognitionRef = useRef(null);
+  const endRef = useRef(null);
+
+  const canListen = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  }, []);
+
+  const canSpeak = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return 'speechSynthesis' in window;
+  }, []);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  useEffect(() => {
+    if (!canListen) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SR();
+    recognition.lang = 'en-US';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      setError('');
+      setIsListening(true);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+      setError('Voice input did not work. Try again in a quieter area.');
+    };
+
+    recognition.onresult = (event) => {
+      const text = event.results?.[0]?.[0]?.transcript || '';
+      if (text.trim()) setInput(text.trim());
+    };
+
+    recognitionRef.current = recognition;
+  }, [canListen]);
+
+  const speak = (text) => {
+    if (!voiceOn || !canSpeak) return;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const pushMessage = (role, text) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        role,
+        text,
+        createdAt: new Date(),
+      },
+    ]);
+  };
+
+  const parseLeadDetails = (text) => {
+    const updated = { ...lead };
+    if (!updated.email) {
+      const emailMatch = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+      if (emailMatch) updated.email = emailMatch[0];
+    }
+    if (!updated.phone) {
+      const phoneMatch = text.match(/(\+?\d[\d\s().-]{7,}\d)/);
+      if (phoneMatch) updated.phone = phoneMatch[0];
+    }
+    if (!updated.companyName && text.length < 120) {
+      updated.companyName = text;
+    }
+    return updated;
+  };
+
+  const createTrialLead = async () => {
+    try {
+      const response = await fetch('/api/nova-sales-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyName: lead.companyName,
+          managerName: lead.managerName,
+          email: lead.email,
+          phone: lead.phone,
+          painPoint: lead.painPoint,
+          source: 'meet_nova_preview',
+        }),
+      });
+
+      if (!response.ok) throw new Error('Lead route failed');
+      const data = await response.json();
+
+      if (data?.dealLink) {
+        const reply = `Perfect. I created your trial setup. Taking you there now.`;
+        pushMessage('assistant', reply);
+        speak('Perfect. Taking you to your trial setup now.');
+
+        // 🔥 AUTO REDIRECT TO AGREEMENT + CHECKOUT
+        setTimeout(() => {
+          window.location.href = data.dealLink;
+        }, 1200);
+
+      } else {
+        const reply = 'I saved your request. A team member can follow up with you to start the trial.';
+        pushMessage('assistant', reply);
+        speak(reply);
+      }
+    } catch (e) {
+      console.error(e);
+      const reply = 'I could not create the trial automatically right now, but your request can still be captured once your backend is connected.';
+      pushMessage('assistant', reply);
+      speak(reply);
+    }
+  };
+
+  const sendMessage = async (overrideText) => {
+    const text = (overrideText ?? input).trim();
+    if (!text || isThinking) return;
+
+    pushMessage('user', text);
+    setInput('');
+    setIsThinking(true);
+    setError('');
+
+    const maybePain = guessPainPoint(text);
+    if (maybePain && !lead.painPoint) {
+      setLead((prev) => ({ ...prev, painPoint: maybePain }));
+    }
+
+    const newLead = parseLeadDetails(text);
+    setLead(newLead);
+
+    const result = buildAssistantReply(text, stage, newLead);
+
+    window.setTimeout(async () => {
+      setStage(result.stage);
+      pushMessage('assistant', result.text);
+      speak(result.text);
+      setIsThinking(false);
+
+      if (
+        result.stage === SALES_STAGES.TRIAL &&
+        newLead.companyName &&
+        newLead.email &&
+        (text.toLowerCase().includes('@') || text.toLowerCase().includes('trial'))
+      ) {
+        await createTrialLead();
+      }
+    }, 450);
+  };
+
+  const onSubmit = (e) => {
+    e.preventDefault();
+    sendMessage();
+  };
+
+  const startListening = () => {
+    recognitionRef.current?.start();
+  };
+
+  const stopListening = () => {
+    recognitionRef.current?.stop();
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white p-4 md:p-6">
+      <div className="mx-auto max-w-6xl grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
+        <aside className="rounded-3xl border border-slate-800 bg-slate-900 p-6 h-fit">
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-yellow-300">Meet NOVA</p>
+          <h1 className="mt-3 text-3xl font-black">Sales Voice Agent</h1>
+          <p className="mt-4 text-slate-300 leading-7">
+            Use this on your preview page so NOVA can talk like a real sales person, qualify the warehouse, and move them toward a free trial or checkout.
+          </p>
+
+          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+            <p className="text-sm font-bold text-yellow-300">Current Sales Stage</p>
+            <p className="mt-2 text-slate-200 capitalize">{stage.replace('_', ' ')}</p>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+            <p className="text-sm font-bold text-yellow-300">Lead Snapshot</p>
+            <div className="mt-3 space-y-2 text-sm text-slate-300">
+              <p>Company: {lead.companyName || 'Not captured yet'}</p>
+              <p>Email: {lead.email || 'Not captured yet'}</p>
+              <p>Phone: {lead.phone || 'Not captured yet'}</p>
+              <p>Pain Point: {lead.painPoint || 'Not captured yet'}</p>
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+            <p className="text-sm font-bold text-yellow-300">Quick Replies</p>
+            <div className="mt-3 space-y-2">
+              {QUICK_REPLIES.map((reply) => (
+                <button
+                  key={reply}
+                  onClick={() => sendMessage(reply)}
+                  className="w-full rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3 text-left text-sm text-slate-200 hover:border-yellow-400"
+                >
+                  {reply}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+            <p className="text-sm font-bold text-yellow-300">Voice Controls</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={isListening ? stopListening : startListening}
+                disabled={!canListen}
+                className="rounded-xl bg-yellow-400 px-4 py-2 font-bold text-slate-950 disabled:opacity-40"
+              >
+                {isListening ? 'Stop Voice' : 'Start Voice'}
+              </button>
+              <button
+                onClick={() => setVoiceOn((v) => !v)}
+                className="rounded-xl border border-slate-700 px-4 py-2 font-semibold"
+              >
+                {voiceOn ? 'Voice On' : 'Voice Off'}
+              </button>
+            </div>
+            {!canListen ? <p className="mt-3 text-xs text-slate-400">Voice input is not supported in this browser.</p> : null}
+          </div>
+        </aside>
+
+        <main className="rounded-3xl border border-slate-800 bg-slate-900 p-4 md:p-6 flex flex-col min-h-[80vh]">
+          <div className="border-b border-slate-800 pb-4 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-black">Talk to NOVA</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                This version is focused on selling, qualifying, demoing, and moving warehouse companies into your trial and deal flow.
+              </p>
+            </div>
+            <div className="rounded-2xl bg-slate-950 border border-slate-800 px-4 py-2 text-sm text-slate-300">
+              {isThinking ? 'NOVA is talking...' : 'Ready'}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto py-6 space-y-4">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-[85%] rounded-3xl px-5 py-4 shadow-lg ${
+                    message.role === 'user'
+                      ? 'bg-yellow-400 text-slate-950'
+                      : 'bg-slate-950 border border-slate-800 text-slate-100'
+                  }`}
+                >
+                  <div className="whitespace-pre-wrap leading-7 text-sm md:text-base">{message.text}</div>
+                </div>
+              </div>
+            ))}
+            <div ref={endRef} />
+          </div>
+
+          {error ? (
+            <div className="mb-4 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              {error}
+            </div>
+          ) : null}
+
+          <form onSubmit={onSubmit} className="border-t border-slate-800 pt-4">
+            <div className="flex gap-3 items-end">
+              <div className="flex-1">
+                <label className="sr-only" htmlFor="sales-nova-input">Ask NOVA</label>
+                <textarea
+                  id="sales-nova-input"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Type or say what is happening in your warehouse..."
+                  rows={3}
+                  className="w-full resize-none rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={!input.trim() || isThinking}
+                className="rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 disabled:opacity-50"
+              >
+                Send
+              </button>
+            </div>
+          </form>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+/*
+========================================
+REPLIT BACKEND ROUTE: /api/nova-sales-lead
+========================================
+
+import express from 'express';
+import { createClient } from '@supabase/supabase-js';
+
+const router = express.Router();
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+router.post('/api/nova-sales-lead', async (req, res) => {
+  try {
+    const {
+      companyName,
+      managerName,
+      email,
+      phone,
+      painPoint,
+      source,
+    } = req.body;
+
+    const { data, error } = await supabase
+      .from('owner_leads')
+      .insert({
+        company_name: companyName,
+        contact_name: managerName,
+        email,
+        phone,
+        notes: `Pain point: ${painPoint || ''}`,
+        status: 'new_lead',
+        warehouse_type: source || 'meet_nova_preview',
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+
+    res.json({
+      ok: true,
+      leadId: data.id,
+      dealLink: `${process.env.APP_URL}/deal-sign/${data.id}`,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ ok: false });
+  }
+});
+
+export default router;
+
+========================================
+HOW TO USE THIS IN REPLIT
+========================================
+
+1. Put this file in something like:
+   src/pages/NovaSalesVoiceAgent.jsx
+
+2. Add a route:
+   <Route path="/meet-nova" element={<NovaSalesVoiceAgent />} />
+
+3. Add env vars:
+   VITE_SUPABASE_URL=...
+   VITE_SUPABASE_ANON_KEY=...
+   SUPABASE_URL=...
+   SUPABASE_SERVICE_ROLE_KEY=...
+   APP_URL=https://your-replit-domain
+
+4. Make sure owner_leads table already exists.
+*/

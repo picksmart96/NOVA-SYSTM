@@ -2696,8 +2696,143 @@ function LessonVideosSection() {
   );
 }
 
+// ── NOVA Metrics Tab ─────────────────────────────────────────────────────────
+
+interface MetricsSummary { chat: number; trial: number; paid: number; conversion: string; }
+interface MetricsEvent { id: string; event: string; dealId: string | null; userId: string | null; createdAt: string; }
+
+function MetricCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5 text-center">
+      <p className="text-3xl font-black text-yellow-400">{value}</p>
+      <p className="mt-1 text-sm font-bold text-white">{label}</p>
+      {sub && <p className="mt-0.5 text-xs text-slate-500">{sub}</p>}
+    </div>
+  );
+}
+
+function NovaMetricsTab() {
+  const [summary, setSummary] = useState<MetricsSummary | null>(null);
+  const [events, setEvents] = useState<MetricsEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [sumRes, evtRes] = await Promise.all([
+        fetch("/api/metrics").then((r) => r.json()),
+        fetch("/api/metrics/events").then((r) => r.json()),
+      ]);
+      setSummary(sumRes);
+      setEvents(Array.isArray(evtRes) ? evtRes : []);
+    } catch { /* silent */ }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const appUrl = typeof window !== "undefined" ? window.location.origin : "https://nova-warehouse-control.replit.app";
+
+  return (
+    <div className="space-y-8 mt-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-black">NOVA Metrics</h2>
+          <p className="text-slate-400 text-sm mt-1">Live funnel tracking — Meet NOVA page → Trial → Paid</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <a
+            href="/meet-nova"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2 rounded-xl bg-yellow-400 text-slate-950 font-bold text-sm hover:bg-yellow-300 transition"
+          >
+            Open Meet NOVA ↗
+          </a>
+          <button
+            onClick={load}
+            className="px-4 py-2 rounded-xl border border-slate-700 text-slate-200 text-sm hover:border-slate-500 transition"
+          >
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* Meet NOVA link share */}
+      <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
+        <p className="text-xs font-bold uppercase tracking-widest text-yellow-300 mb-2">Share This Link with Prospects</p>
+        <div className="flex items-center gap-3">
+          <code className="flex-1 bg-slate-800 rounded-xl px-4 py-2.5 text-sm text-yellow-300 truncate select-all">
+            {appUrl}/meet-nova
+          </code>
+          <button
+            onClick={() => navigator.clipboard.writeText(`${appUrl}/meet-nova`)}
+            className="px-4 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-sm font-bold transition shrink-0"
+          >
+            Copy
+          </button>
+        </div>
+        <p className="text-xs text-slate-500 mt-2">Send this to any warehouse manager — NOVA will talk to them, qualify them, and drive them to the free trial.</p>
+      </div>
+
+      {/* Summary metrics */}
+      {loading ? (
+        <div className="text-center text-slate-400 py-12">Loading metrics…</div>
+      ) : summary ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <MetricCard label="Chats Started" value={summary.chat} sub="Meet NOVA visits" />
+          <MetricCard label="Trials Clicked" value={summary.trial} sub="Reached deal-sign" />
+          <MetricCard label="Payments Completed" value={summary.paid} sub="Confirmed paid" />
+          <MetricCard label="Trial → Paid" value={`${summary.conversion}%`} sub="Conversion rate" />
+        </div>
+      ) : (
+        <div className="text-center text-slate-400 py-12">No metrics data yet.</div>
+      )}
+
+      {/* Event log */}
+      {events.length > 0 && (
+        <div className="rounded-2xl border border-slate-700 bg-slate-900 overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-700">
+            <p className="font-bold text-white">Recent Events</p>
+            <p className="text-xs text-slate-500 mt-0.5">Last {events.length} tracked events</p>
+          </div>
+          <div className="divide-y divide-slate-800 max-h-72 overflow-y-auto">
+            {events.map((e) => (
+              <div key={e.id} className="flex items-center justify-between px-5 py-3 text-sm">
+                <div className="flex items-center gap-3">
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold border ${
+                    e.event === "payment_completed"
+                      ? "bg-green-500/10 text-green-400 border-green-500/30"
+                      : e.event === "trial_clicked"
+                        ? "bg-yellow-400/10 text-yellow-300 border-yellow-400/30"
+                        : "bg-slate-700 text-slate-300 border-slate-600"
+                  }`}>
+                    {e.event}
+                  </span>
+                  {e.dealId && <span className="text-slate-500 text-xs">Deal: {e.dealId.slice(0, 8)}…</span>}
+                </div>
+                <span className="text-slate-500 text-xs shrink-0">
+                  {new Date(e.createdAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {events.length === 0 && !loading && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-10 text-center">
+          <p className="text-slate-400">No events tracked yet.</p>
+          <p className="text-slate-500 text-sm mt-1">Share the Meet NOVA link with a prospect to start tracking.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
-const TABS = ["Dashboard", "Revenue", "CRM", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests", "Lesson Videos"] as const;
+const TABS = ["Dashboard", "Revenue", "CRM", "NOVA Metrics", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests", "Lesson Videos"] as const;
 type Tab = typeof TABS[number];
 
 export default function OwnerPage() {
@@ -2719,6 +2854,7 @@ export default function OwnerPage() {
     if (tab === "Users & Access") return "👥 Users & Access";
     if (tab === "Talk Requests")  return "💬 Talk Requests";
     if (tab === "Lesson Videos")  return "🎬 Lesson Videos";
+    if (tab === "NOVA Metrics")   return "📈 NOVA Metrics";
     return "🏢 Subscriptions";
   }
 
@@ -2785,6 +2921,7 @@ export default function OwnerPage() {
 
         {activeTab === "Revenue" && <RevenueTab />}
         {activeTab === "CRM" && <CRMSection />}
+        {activeTab === "NOVA Metrics" && <NovaMetricsTab />}
         {activeTab === "Links" && <LinkLibrary />}
         {activeTab === "Handbook" && <HandbookSection />}
         {activeTab === "Users & Access" && <UsersAccessSection />}

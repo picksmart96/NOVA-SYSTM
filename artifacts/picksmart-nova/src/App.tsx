@@ -72,6 +72,7 @@ import DemoNovaHelpPage from "@/pages/demo/DemoNovaHelpPage";
 import RequestAccessPage from "@/pages/RequestAccessPage";
 import DealDetailPage from "@/pages/deal-detail";
 import DealSignPage from "@/pages/deal-sign";
+import NovaSalesVoiceAgent from "@/pages/NovaSalesVoiceAgent";
 
 function RedirectToOwner() {
   const [, navigate] = useLocation();
@@ -184,6 +185,9 @@ function Router() {
       </Route>
       <Route path="/deal-sign/:id">
         <DealSignPage />
+      </Route>
+      <Route path="/meet-nova">
+        <NovaSalesVoiceAgent />
       </Route>
 
       {/* ── Gated — requires active subscription to view any content ── */}
