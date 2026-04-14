@@ -97,6 +97,14 @@ function parseLeadDetails(text: string, existing: LeadState): LeadState {
 
 // ── Local reply builder (fallback / speed) ────────────────────────────────────
 
+function isAffirmative(text: string): boolean {
+  return /\b(yes|yeah|yep|yup|sure|ok|okay|alright|absolutely|definitely|sounds good|let's do it|lets do it|of course|for sure|go ahead|please|do it|set it up|sign me up|i'm in|im in|let's go|lets go|agreed|correct|right|exactly|totally|certainly|indeed|sounds great|great|perfect|cool|good|fine|why not|no problem|works for me|tell me more|i'm interested|interested|want to|i want|love to|i'd like|id like|can we|can i|let me|show me|go on|continue|proceed)\b/.test(text.toLowerCase());
+}
+
+function isNegative(text: string): boolean {
+  return /\b(no|nope|nah|not really|not right now|not interested|maybe later|later|not yet|don't think so|dont think so|we're good|we are good|pass|skip|nevermind|never mind|not sure|unsure|i don't know|i dont know|not today|not now)\b/.test(text.toLowerCase());
+}
+
 function buildLocalReply(
   userText: string,
   stage: SalesStage,
@@ -105,17 +113,66 @@ function buildLocalReply(
   const lower = userText.toLowerCase();
   const pain = guessPainPoint(userText);
   const nums = extractNumbers(userText);
+  const affirm = isAffirmative(lower);
+  const negat  = isNegative(lower);
 
-  // ROI question with number
+  // ── ROI question with selector count ──────────────────────────────────────
   if (nums.length > 0 && nums[0] > 1 && nums[0] < 5000) {
     const roi = calculateROI(nums[0]);
     return {
       stage: "pitch",
-      text: `Let me show you something real quick…\n\nIf you have ${nums[0]} selectors and NOVA saves just 1 hour per person…\n\nThat's about $${roi.daily.toLocaleString()} a day.\n\nThat's over $${roi.monthly.toLocaleString()} per month in saved labor and performance.\n\nThat's why most teams move forward after the trial.`,
+      text: `Let me show you something real quick.\n\nIf you have ${nums[0]} selectors and NOVA saves just 1 hour per person per shift…\n\nThat's $${roi.daily.toLocaleString()} a day.\n\nOver $${roi.monthly.toLocaleString()} a month in recovered labor.\n\nMost teams see that return in the first two weeks of the trial.\n\nWant to start the 30-day free trial and see it in your operation?`,
     };
   }
 
-  // Before / after comparison
+  // ── Affirmative responses — context-aware by stage ─────────────────────────
+  if (affirm) {
+    if (stage === "open" || stage === "discovery") {
+      return {
+        stage: "discovery",
+        text: "Great — tell me a little about your operation.\n\nHow many selectors are on your team, and what's the biggest thing hurting your numbers right now — speed, accuracy, or training new hires?",
+      };
+    }
+    if (stage === "pitch" || stage === "demo") {
+      return {
+        stage: "close",
+        text: "Perfect. The fastest way to see real results is to run NOVA in your warehouse for 30 days at no cost.\n\nI can set that up right now.\n\nJust give me your company name and the best email for whoever manages operations.",
+      };
+    }
+    if (stage === "close" || stage === "trial") {
+      return {
+        stage: "trial",
+        text: "Let's do it.\n\nGive me your company name and the best manager email and I'll create your trial setup right now.",
+      };
+    }
+    // Fallback affirmative
+    return {
+      stage: "close",
+      text: "Love the energy.\n\nLet's get your free trial started — just give me your company name and best email and I'll set it up right now.",
+    };
+  }
+
+  // ── Negative / not-now responses ──────────────────────────────────────────
+  if (negat) {
+    if (stage === "open" || stage === "discovery") {
+      return {
+        stage: "discovery",
+        text: "No worries at all.\n\nMost warehouse managers I talk to aren't actively looking — they just want to know what's possible.\n\nIs there one area where your team loses the most time right now? Even just curious.",
+      };
+    }
+    if (stage === "pitch" || stage === "demo") {
+      return {
+        stage: "pitch",
+        text: "Completely fair.\n\nCan I ask — what would have to be true for this to make sense for your team?\n\nI want to make sure I'm not wasting your time.",
+      };
+    }
+    return {
+      stage,
+      text: "No problem at all.\n\nIf you ever want to run a quick trial or have questions about how NOVA works in a real warehouse, I'm here.\n\nIs there anything else I can help you with today?",
+    };
+  }
+
+  // ── Before / after comparison ──────────────────────────────────────────────
   if (
     lower.includes("how is it different") ||
     lower.includes("what's the difference") ||
@@ -133,117 +190,94 @@ function buildLocalReply(
   ) {
     return {
       stage: "demo",
-      text: `Let me show you the difference real quick…
-
-BEFORE NOVA:
-— Selectors hesitate between picks
-— Miscounts and mispicks happen
-— Pallets are inconsistent
-— Supervisors react instead of control
-— Rate is unstable
-
-AFTER NOVA:
-— Selectors move continuously without hesitation
-— Check codes are confirmed every time
-— Pallets are built clean and stable
-— Supervisors push updates in real-time
-— Rate becomes consistent and predictable
-
-That gap right there… is where your money is going.
-
-If that gap is costing you even 10% performance… that's thousands of dollars every month.
-
-Most warehouses don't realize it because everything still looks busy 😄
-
-But busy doesn't always mean efficient.
-
-The fastest way to see this difference is to run NOVA in your operation.
-
-Let me set up your free trial so you can see it live.`,
+      text: `Here's the real difference.\n\nBefore NOVA: selectors hesitate between picks, miscounts happen, pallets are inconsistent, supervisors react instead of control.\n\nAfter NOVA: selectors move without hesitation, codes are confirmed every pick, pallets are clean, supervisors push updates live.\n\nThat gap is where your performance budget is going right now.\n\nMost warehouses don't see it because everything still looks busy — but busy doesn't mean efficient.\n\nWant to run the trial and measure the gap in your own operation?`,
     };
   }
 
-  // Pricing objection
-  if (lower.includes("how much") || lower.includes("price") || lower.includes("cost")) {
+  // ── Pricing ────────────────────────────────────────────────────────────────
+  if (lower.includes("how much") || lower.includes("price") || lower.includes("cost") || lower.includes("pricing")) {
     return {
       stage: "close",
-      text: "If it improves performance even 10%, it pays for itself fast.\n\nThat's why we start with a free trial — no risk.\n\nLet's do this — I'll set up your free 30 days right now.\n\nJust give me your company name and best email.",
+      text: "Great question.\n\nPricing depends on team size and contract length — but here's what matters most right now: the trial is completely free for 30 days.\n\nNo credit card. No commitment. You run it, measure the results, and decide.\n\nMost teams that see real numbers move forward pretty quickly.\n\nWant to start the trial? Give me your company name and email and I'll set it up.",
     };
   }
 
-  // Trial / sign-up
-  if (lower.includes("trial") || lower.includes("start") || lower.includes("sign")) {
+  // ── Trial / sign-up intent ─────────────────────────────────────────────────
+  if (lower.includes("trial") || lower.includes("start") || lower.includes("sign up") || lower.includes("signup")) {
     return {
       stage: "trial",
-      text: "Perfect — let's start your free 30-day trial right now.\n\nFirst, give me your company name and the best email for the manager or supervisor handling operations.",
+      text: "Let's go. Free 30-day trial — I'll get you set up right now.\n\nJust give me your company name and the best email for the manager or supervisor handling operations.",
     };
   }
 
-  // Demo
-  if (lower.includes("demo") || lower.includes("show me") || lower.includes("how")) {
+  // ── Demo / how it works ────────────────────────────────────────────────────
+  if (lower.includes("demo") || lower.includes("show me") || lower.includes("how does") || lower.includes("how does it work") || lower.includes("how it works")) {
     return {
       stage: "demo",
-      text: "NOVA gives every selector real-time coaching while they work.\n\nIt reduces mistakes, improves pace, and gives supervisors control of the shift.\n\nThis isn't theory — it runs during live picking.\n\nWhat's hurting your operation more right now — speed or accuracy?",
+      text: "NOVA runs in real time while your selectors pick.\n\nIt gives voice-directed coaching, confirms check codes, catches mistakes before they ship, and gives supervisors live control of the shift.\n\nIt doesn't replace your current system — it runs on top of it.\n\nMost teams see measurable improvement in the first week.\n\nWhat's the biggest pain point in your operation right now — speed or accuracy?",
     };
   }
 
-  // Open stage
+  // ── Open stage — any first message ────────────────────────────────────────
   if (stage === "open") {
     return {
       stage: "discovery",
-      text: "Most warehouses lose 15–25% performance from small mistakes and slow transitions.\n\nI fix that.\n\nWhat's hurting your operation more right now — speed or accuracy?",
+      text: "Good to hear from you.\n\nTell me about your operation — how many selectors on your team, and what's hurting you more right now, speed or accuracy?",
     };
   }
 
-  // Existing system objection
+  // ── Existing system objection ──────────────────────────────────────────────
   if (lower.includes("already have") || lower.includes("current system") || lower.includes("existing")) {
     return {
       stage: "pitch",
-      text: "Perfect — this works on top of your current system.\n\nIt improves performance without replacing anything.\n\nMost teams see improvement within the first week.",
+      text: "That's completely fine — NOVA runs on top of your current system, not instead of it.\n\nIt adds real-time coaching on the floor without replacing anything you already use.\n\nMost teams keep everything they have and just add NOVA on top.\n\nHow many selectors are on your team?",
     };
   }
 
-  // No time objection
+  // ── No time objection ──────────────────────────────────────────────────────
   if (lower.includes("no time") || lower.includes("busy") || lower.includes("too much")) {
     return {
       stage: "pitch",
-      text: "That's exactly why companies use NOVA.\n\nIt runs during the shift — no extra time needed.\n\nAt this point, the best move is to start the trial and measure results directly in your warehouse.\n\nI'll take you there now.",
+      text: "That's exactly why companies use NOVA — it runs during the shift, no extra training sessions, no classroom time.\n\nSelectors just pick and NOVA coaches them live.\n\nThe setup takes one day. After that it runs on its own.\n\nWant to see what that looks like for your team?",
     };
   }
 
+  // ── Pain point: speed ──────────────────────────────────────────────────────
   if (pain === "speed") {
     return {
       stage: "pitch",
-      text: "That usually means lost time between picks, hesitation, and poor flow.\n\nThat adds up fast.\n\nIf I showed you how to cut 10–15 minutes per assignment, would that matter to your operation?",
+      text: "Speed issues usually come from lost time between picks — hesitation, poor transitions, selectors stopping instead of flowing.\n\nNOVA closes that gap.\n\nMost teams cut 10 to 15 minutes per assignment just from tighter transitions alone.\n\nIf I showed you how to get that time back, would that make a difference for your operation?",
     };
   }
 
+  // ── Pain point: accuracy ───────────────────────────────────────────────────
   if (pain === "accuracy") {
     return {
       stage: "pitch",
-      text: "That's one of the biggest problems NOVA is built for.\n\nWe train selectors to confirm correctly, build cleaner pallets, and reduce mispicks.\n\nIf this worked, would you want your whole team using it?",
+      text: "Accuracy is one of the biggest things NOVA is built for.\n\nIt coaches selectors to confirm every check code, count cases out loud, and build pallets correctly — every stop, every shift.\n\nMost teams see mispick rates drop significantly in the first two weeks.\n\nIf NOVA cut your mispicks in half, would that be worth a 30-day test?",
     };
   }
 
+  // ── Pain point: training ───────────────────────────────────────────────────
   if (pain === "training") {
     return {
       stage: "pitch",
-      text: "NOVA is strong for that.\n\nInstead of relying only on shadow training, every selector gets a guided system they can use while learning.\n\nThat makes training faster, cleaner, and more consistent.\n\nWould you like a quick demo or the free trial path?",
+      text: "Training is a big one — especially for new hires.\n\nInstead of shadow training only, NOVA coaches every selector live while they work.\n\nNew hires ramp faster. Veterans stay sharp. Supervisors spend less time correcting.\n\nWould you like to see that in action with a free trial?",
     };
   }
 
+  // ── Already in trial stage, collecting info ────────────────────────────────
   if (stage === "trial" && (!lead.companyName || !lead.email)) {
     return {
       stage: "trial",
-      text: "To start the trial, send me your company name and the best manager email.\n\nAfter that, I'll create your next step and move you into onboarding.",
+      text: "Almost there — I just need your company name and the best email for whoever handles operations.\n\nThat's all I need to create your trial setup.",
     };
   }
 
-  // Default close push
-  const humor = HUMOR_LINES[Math.floor(Math.random() * HUMOR_LINES.length)];
+  // ── Default: push toward trial ────────────────────────────────────────────
   return {
     stage,
-    text: `${humor}\n\nBut seriously — the fastest next step is a free 30-day trial so your team can see results in real use.\n\nWant me to set that up now?`,
+    text: "Here's what I know for sure — every warehouse I've talked to has found at least one area where performance and money are slipping.\n\nThe best way to find yours is a live 30-day trial in your own operation.\n\nNo cost. No commitment. Real results.\n\nWant to get started? Just give me your company name and best email.",
   };
 }
 
