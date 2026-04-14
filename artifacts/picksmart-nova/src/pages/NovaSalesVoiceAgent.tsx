@@ -4,7 +4,7 @@ import { novaSpeak, pickNovaVoice } from "@/lib/novaSpeech";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type SalesStage = "open" | "discovery" | "pitch" | "demo" | "trial" | "close";
+type SalesStage = "greeting" | "name_ask" | "reason_ask" | "open" | "discovery" | "pitch" | "demo" | "trial" | "close";
 
 interface Message {
   id: string;
@@ -25,10 +25,10 @@ interface LeadState {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const QUICK_REPLIES = [
-  "We have speed problems",
-  "We have too many picking mistakes",
+  "I'm looking to improve my team's picking speed",
+  "We have too many mispicks and mistakes",
+  "I'm trying to train new hires faster",
   "What's the difference vs what we have now?",
-  "Show me how NOVA works",
   "How much does it cost?",
   "Start free trial",
   "I want to talk to a real person",
@@ -95,6 +95,30 @@ function parseLeadDetails(text: string, existing: LeadState): LeadState {
   return updated;
 }
 
+// ── Extract a first name from user input ──────────────────────────────────────
+function extractFirstName(text: string): string | null {
+  const t = text.trim();
+  // "my name is John" / "I'm Maria" / "this is Tom" / "it's Alex"
+  const patterns = [
+    /my name is ([A-Za-z]+)/i,
+    /i'?m ([A-Za-z]+)/i,
+    /this is ([A-Za-z]+)/i,
+    /it'?s ([A-Za-z]+)/i,
+    /call me ([A-Za-z]+)/i,
+    /name'?s ([A-Za-z]+)/i,
+    /([A-Za-z]+) here/i,
+  ];
+  for (const re of patterns) {
+    const m = t.match(re);
+    if (m) return m[1];
+  }
+  // If short and just a name (1-2 words, no digits, no @ signs)
+  if (t.length < 30 && !/[@\d]/.test(t) && t.split(" ").length <= 2) {
+    return t.split(" ")[0];
+  }
+  return null;
+}
+
 // ── Local reply builder (fallback / speed) ────────────────────────────────────
 
 function isAffirmative(text: string): boolean {
@@ -115,6 +139,53 @@ function buildLocalReply(
   const nums = extractNumbers(userText);
   const affirm = isAffirmative(lower);
   const negat  = isNegative(lower);
+
+  // ── Greeting stage — waiting for user's name ──────────────────────────────
+  if (stage === "greeting" || stage === "name_ask") {
+    const firstName = extractFirstName(userText);
+    const name = firstName
+      ? firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase()
+      : null;
+    if (name) {
+      return {
+        stage: "reason_ask",
+        text: `Nice to meet you, ${name}! So what brings you here today? Are you looking to improve your team's speed, reduce picking mistakes, or get new hires up to speed faster?`,
+      };
+    }
+    // Couldn't extract a name — ask again gently
+    return {
+      stage: "name_ask",
+      text: "I didn't quite catch that — what's your name? I want to make sure I'm talking to you personally.",
+    };
+  }
+
+  // ── Reason stage — user just said what brings them here ───────────────────
+  if (stage === "reason_ask") {
+    const nameGreet = lead.managerName ? `Got it, ${lead.managerName}.` : "Got it.";
+    if (pain === "speed") {
+      return {
+        stage: "pitch",
+        text: `${nameGreet} Speed is usually where the biggest time is leaking — hesitation between picks, slow transitions, selectors stopping instead of flowing.\n\nNOVA fixes that in real time, right on the floor.\n\nMost teams recover 10 to 15 minutes per assignment just from better transitions alone.\n\nHow many selectors are on your team right now?`,
+      };
+    }
+    if (pain === "accuracy") {
+      return {
+        stage: "pitch",
+        text: `${nameGreet} Mispicks and mistakes are exactly what NOVA is built to prevent.\n\nIt coaches selectors to confirm every check code, count out loud, and build pallets correctly — every stop, every shift.\n\nMost teams see mispick rates drop fast in the first two weeks.\n\nHow many selectors are you working with?`,
+      };
+    }
+    if (pain === "training") {
+      return {
+        stage: "pitch",
+        text: `${nameGreet} New hire training is a big one. Instead of relying only on shadowing, NOVA coaches every selector live while they pick.\n\nNew hires ramp faster. Veterans stay consistent. And supervisors spend less time correcting.\n\nHow many selectors are on your team?`,
+      };
+    }
+    // Generic reason or "just looking" — move to discovery
+    return {
+      stage: "discovery",
+      text: `${nameGreet} I appreciate you sharing that.\n\nMost warehouse teams I work with are dealing with at least one of these: picking too slow, too many mistakes, or training taking too long.\n\nWhich one hits your operation the hardest?`,
+    };
+  }
 
   // ── ROI question with selector count ──────────────────────────────────────
   if (nums.length > 0 && nums[0] > 1 && nums[0] < 5000) {
@@ -218,11 +289,12 @@ function buildLocalReply(
     };
   }
 
-  // ── Open stage — any first message ────────────────────────────────────────
+  // ── Open stage fallback (shouldn't normally be hit since initial stage is "greeting") ──
   if (stage === "open") {
+    const nameGreet = lead.managerName ? `Thanks, ${lead.managerName}.` : "Thanks for sharing.";
     return {
       stage: "discovery",
-      text: "Good to hear from you.\n\nTell me about your operation — how many selectors on your team, and what's hurting you more right now, speed or accuracy?",
+      text: `${nameGreet}\n\nTell me about your operation — how many selectors on your team, and what's hurting you more right now: speed or accuracy?`,
     };
   }
 
@@ -288,12 +360,12 @@ export default function NovaSalesVoiceAgent() {
     {
       id: "welcome",
       role: "assistant",
-      text: "Most warehouses lose 15–25% performance from small mistakes and slow transitions.\n\nI fix that.\n\nWhat's hurting your operation more right now — speed or accuracy?",
+      text: "Hi! My name is NOVA and I'll be assisting you today.\n\nIf you ever feel like I'm not the right fit, I can send a request to my boss — it usually takes about 24 hours to reply, but I'm fully certified and here to help.\n\nI hope I'm doing a good job so far!\n\nSo — what's your name?",
       createdAt: new Date(),
     },
   ]);
   const [input, setInput] = useState("");
-  const [stage, setStage] = useState<SalesStage>("open");
+  const [stage, setStage] = useState<SalesStage>("greeting");
   const [isListening, setIsListening] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
@@ -405,7 +477,7 @@ export default function NovaSalesVoiceAgent() {
     setTtsUnlocked(true);
 
     const welcome =
-      "Most warehouses lose 15 to 25 percent performance from small mistakes and slow transitions. I fix that. What's hurting your operation more right now, speed or accuracy?";
+      "Hi! My name is NOVA and I'll be assisting you today. If you ever feel like I'm not the right fit, I can send a request to my boss — it usually takes about 24 hours to reply, but I'm fully certified and here to help. I hope I'm doing a good job so far! So — what's your name?";
 
     if (!canSpeak) {
       setTimeout(startListening, 300);
@@ -512,11 +584,15 @@ export default function NovaSalesVoiceAgent() {
     setIsThinking(true);
     setErrorMsg("");
 
-    // Update lead from text
+    // Update lead from text — extract name specifically during greeting stages
     setLead((prev) => {
       const pain = guessPainPoint(text);
       const updated = parseLeadDetails(text, prev);
       if (pain && !updated.painPoint) updated.painPoint = pain;
+      if ((stage === "greeting" || stage === "name_ask") && !updated.managerName) {
+        const firstName = extractFirstName(text);
+        if (firstName) updated.managerName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+      }
       return updated;
     });
 
@@ -536,6 +612,11 @@ export default function NovaSalesVoiceAgent() {
     const currentLead = parseLeadDetails(text, lead);
     if (guessPainPoint(text) && !currentLead.painPoint) {
       currentLead.painPoint = guessPainPoint(text)!;
+    }
+    // Also capture name synchronously for greeting stages so reply can use it
+    if ((stage === "greeting" || stage === "name_ask") && !currentLead.managerName) {
+      const firstName = extractFirstName(text);
+      if (firstName) currentLead.managerName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
     }
     const reply = buildLocalReply(text, stage, currentLead);
 
@@ -808,7 +889,7 @@ export default function NovaSalesVoiceAgent() {
           </div>
           <div className="flex items-center gap-2">
             <span className="px-2 py-1 rounded-full bg-yellow-400/10 border border-yellow-400/30 text-yellow-300 text-xs font-bold uppercase tracking-wider capitalize">
-              {stage.replace("_", " ")}
+              {stage === "greeting" || stage === "name_ask" ? "getting started" : stage === "reason_ask" ? "listening" : stage.replace("_", " ")}
             </span>
             <button
               onClick={() => { setVoiceOn((v) => !v); if (canSpeak) window.speechSynthesis.cancel(); }}
