@@ -98,24 +98,29 @@ function parseLeadDetails(text: string, existing: LeadState): LeadState {
 // ── Extract a first name from user input ──────────────────────────────────────
 function extractFirstName(text: string): string | null {
   const t = text.trim();
-  // "my name is John" / "I'm Maria" / "this is Tom" / "it's Alex"
+
+  // Phrase patterns — grab the word right after the keyword
   const patterns = [
-    /my name is ([A-Za-z]+)/i,
-    /i'?m ([A-Za-z]+)/i,
-    /this is ([A-Za-z]+)/i,
-    /it'?s ([A-Za-z]+)/i,
-    /call me ([A-Za-z]+)/i,
-    /name'?s ([A-Za-z]+)/i,
-    /([A-Za-z]+) here/i,
+    /my name is ([A-Za-zÀ-ÖØ-öø-ÿ]+)/i,
+    /i'?m ([A-Za-zÀ-ÖØ-öø-ÿ]+)/i,
+    /this is ([A-Za-zÀ-ÖØ-öø-ÿ]+)/i,
+    /it'?s ([A-Za-zÀ-ÖØ-öø-ÿ]+)/i,
+    /call me ([A-Za-zÀ-ÖØ-öø-ÿ]+)/i,
+    /name'?s ([A-Za-zÀ-ÖØ-öø-ÿ]+)/i,
+    /my ([A-Za-zÀ-ÖØ-öø-ÿ]+)/i,          // "my Soumaila" → Soumaila
+    /([A-Za-zÀ-ÖØ-öø-ÿ]+) here/i,
   ];
   for (const re of patterns) {
     const m = t.match(re);
     if (m) return m[1];
   }
-  // If short and just a name (1-2 words, no digits, no @ signs)
-  if (t.length < 30 && !/[@\d]/.test(t) && t.split(" ").length <= 2) {
-    return t.split(" ")[0];
+
+  // Any short text with no digits or @ — treat the first word as the name
+  if (t.length < 40 && !/[@\d]/.test(t)) {
+    const firstWord = t.split(/\s+/)[0];
+    if (firstWord.length >= 2) return firstWord;
   }
+
   return null;
 }
 
@@ -146,16 +151,12 @@ function buildLocalReply(
     const name = firstName
       ? firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase()
       : null;
-    if (name) {
-      return {
-        stage: "reason_ask",
-        text: `Nice to meet you, ${name}! So what brings you here today? Are you looking to improve your team's speed, reduce picking mistakes, or get new hires up to speed faster?`,
-      };
-    }
-    // Couldn't extract a name — ask again gently
+    // Always move forward — with or without a name
     return {
-      stage: "name_ask",
-      text: "I didn't quite catch that — what's your name? I want to make sure I'm talking to you personally.",
+      stage: "reason_ask",
+      text: name
+        ? `Hi ${name}! What brings you here today? Are you looking to improve your team's speed, reduce picking mistakes, or get new hires up to speed faster?`
+        : "What brings you here today? Are you looking to improve your team's speed, reduce picking mistakes, or get new hires up to speed faster?",
     };
   }
 
