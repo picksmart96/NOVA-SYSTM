@@ -20,14 +20,29 @@ const SUGGESTED = [
   "Do you support Spanish-speaking selectors?",
 ];
 
+const FREE_QUESTION_LIMIT = 3;
+
+const HUMAN_TRIGGERS = [
+  "speak to someone", "talk to someone", "real person", "human", "representative",
+  "sales", "call me", "phone call", "schedule", "contact", "demo call",
+  "hablar con alguien", "persona real", "llamar", "llamada", "ventas",
+];
+function isHumanTrigger(text: string) {
+  const lower = text.toLowerCase();
+  return HUMAN_TRIGGERS.some((t) => lower.includes(t));
+}
+
 export default function NovaDemoAgentPage() {
   const [, navigate] = useLocation();
   const agent = useNovaDemoVoiceAgent();
 
   const [input, setInput] = useState("");
   const [showSuggested, setShowSuggested] = useState(true);
+  const [questionCount, setQuestionCount] = useState(0);
+  const [lockedOut, setLockedOut] = useState(false);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isEs = agent.language === "es";
 
   // Auto-scroll transcript
   useEffect(() => {
@@ -41,16 +56,29 @@ export default function NovaDemoAgentPage() {
 
   // ── Tap to Activate — must be called from a click handler (user gesture) ──
   const handleActivate = () => {
-    const welcome = agent.language === "es" ? WELCOME_ES : WELCOME_EN;
+    const welcome = isEs ? WELCOME_ES : WELCOME_EN;
     agent.unlockAndSpeak(welcome);
+  };
+
+  const trackQuestion = () => {
+    const next = questionCount + 1;
+    setQuestionCount(next);
+    if (next >= FREE_QUESTION_LIMIT) {
+      setLockedOut(true);
+    }
   };
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || agent.isThinking) return;
+    if (!text || agent.isThinking || lockedOut) return;
     setInput("");
     setShowSuggested(false);
+    if (isHumanTrigger(text)) {
+      navigate("/meet-nova");
+      return;
+    }
     await agent.sendText(text);
+    trackQuestion();
     inputRef.current?.focus();
   };
 
@@ -62,9 +90,14 @@ export default function NovaDemoAgentPage() {
   };
 
   const handleSuggestion = async (text: string) => {
-    if (agent.isThinking) return;
+    if (agent.isThinking || lockedOut) return;
     setShowSuggested(false);
+    if (isHumanTrigger(text)) {
+      navigate("/meet-nova");
+      return;
+    }
     await agent.sendText(text);
+    trackQuestion();
   };
 
   const startVoice = async () => {
@@ -306,12 +339,12 @@ export default function NovaDemoAgentPage() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={agent.language === "es" ? "Escríbele a NOVA…" : "Type your question for NOVA…"}
-                disabled={agent.isThinking || !agent.ttsEnabled}
+                disabled={agent.isThinking || !agent.ttsEnabled || lockedOut}
                 className="flex-1 rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-yellow-400 placeholder:text-slate-600 disabled:opacity-50 transition"
               />
               <button
                 onClick={handleSend}
-                disabled={!input.trim() || agent.isThinking || !agent.ttsEnabled}
+                disabled={!input.trim() || agent.isThinking || !agent.ttsEnabled || lockedOut}
                 className="shrink-0 w-11 h-11 rounded-2xl bg-yellow-400 flex items-center justify-center text-slate-950 hover:bg-yellow-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Send className="h-4 w-4" />
@@ -340,8 +373,55 @@ export default function NovaDemoAgentPage() {
           </div>
         )}
 
+        {/* Question counter */}
+        {questionCount > 0 && !lockedOut && (
+          <div className="rounded-xl border border-white/5 bg-white/3 px-4 py-3">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                {isEs ? "Preguntas gratis" : "Free questions"}
+              </span>
+              <span className="text-[10px] font-bold text-yellow-400">
+                {questionCount} / {FREE_QUESTION_LIMIT}
+              </span>
+            </div>
+            <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-yellow-400 transition-all duration-500"
+                style={{ width: `${(questionCount / FREE_QUESTION_LIMIT) * 100}%` }}
+              />
+            </div>
+            <p className="text-[10px] text-slate-500 mt-1.5">
+              {isEs
+                ? `Después de ${FREE_QUESTION_LIMIT} preguntas gratis, NOVA te conecta con nuestra agente de ventas.`
+                : `After ${FREE_QUESTION_LIMIT} free questions, NOVA connects you with our sales agent.`}
+            </p>
+          </div>
+        )}
+
+        {/* Lock overlay — after 3 questions */}
+        {lockedOut && (
+          <div className="rounded-3xl border border-yellow-400 bg-yellow-400/8 p-8 text-center">
+            <div className="text-5xl mb-4">⚡</div>
+            <h3 className="text-2xl font-black text-yellow-300 mb-2">
+              {isEs ? "¡Has llegado al límite gratuito!" : "You've reached the free limit!"}
+            </h3>
+            <p className="mx-auto max-w-lg text-slate-300 text-sm leading-relaxed mb-6">
+              {isEs
+                ? "Has usado tus 3 preguntas gratis. NOVA, nuestra agente de ventas en vivo, puede responder todas tus preguntas y mostrarte cómo PickSmart Academy puede transformar tu almacén."
+                : "You've used your 3 free questions. NOVA, our live sales agent, can answer all your questions and show you how PickSmart Academy can transform your warehouse."}
+            </p>
+            <button
+              onClick={() => navigate("/meet-nova")}
+              className="inline-flex items-center gap-2 rounded-2xl bg-yellow-400 px-8 py-4 font-black text-slate-950 text-lg hover:bg-yellow-300 transition shadow-[0_0_30px_rgba(250,204,21,0.3)]"
+            >
+              <Zap className="h-5 w-5" />
+              {isEs ? "Hablar con NOVA ahora →" : "Talk to NOVA now →"}
+            </button>
+          </div>
+        )}
+
         {/* Lead prompt */}
-        {agent.showLeadPrompt && (
+        {agent.showLeadPrompt && !lockedOut && (
           <div className="rounded-3xl border border-yellow-400 bg-yellow-400/10 p-7 text-center">
             <Zap className="h-7 w-7 text-yellow-400 mx-auto mb-3" />
             <h3 className="text-xl font-black text-yellow-200 mb-2">
@@ -353,10 +433,10 @@ export default function NovaDemoAgentPage() {
             </p>
             <div className="flex flex-wrap justify-center gap-3">
               <button
-                onClick={() => navigate("/checkout/company")}
+                onClick={() => navigate("/meet-nova")}
                 className="rounded-2xl bg-yellow-400 px-6 py-3 font-bold text-slate-950 hover:bg-yellow-300 transition"
               >
-                Request Company Access
+                ⚡ Talk to NOVA
               </button>
               <button
                 onClick={() => agent.setShowLeadPrompt(false)}
@@ -377,10 +457,10 @@ export default function NovaDemoAgentPage() {
             ← Back to Demo
           </button>
           <button
-            onClick={() => navigate("/checkout/company")}
+            onClick={() => navigate("/meet-nova")}
             className="rounded-xl border border-yellow-400/35 bg-yellow-400/8 px-4 py-2 text-sm font-bold text-yellow-400 hover:bg-yellow-400/15 transition"
           >
-            Get Company Access →
+            ⚡ Talk to NOVA →
           </button>
         </div>
 

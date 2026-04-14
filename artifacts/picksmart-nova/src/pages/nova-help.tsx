@@ -1,11 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "wouter";
 import { askNovaHelp } from "@/lib/novaHelpApi";
 import { detectStopWord } from "@/lib/novaModeRouter";
 import { NovaVoiceStatus, type VoiceStateKey } from "@/components/nova/NovaVoiceStatus";
 import LockedAction from "@/components/paywall/LockedAction";
 import { useTalkRequestStore } from "@/lib/talkRequestStore";
 import { MessageCircle, X, CheckCircle2, Send } from "lucide-react";
+
+// ─── Detect "speak to someone" requests ──────────────────────────────────────
+function isHumanRequestTrigger(text: string): boolean {
+  const t = text.toLowerCase();
+  return (
+    t.includes("speak to someone") || t.includes("talk to someone") ||
+    t.includes("real person") || t.includes("human") || t.includes("call me") ||
+    t.includes("can i speak") || t.includes("can i talk") || t.includes("talk to a person") ||
+    t.includes("speak with someone") || t.includes("contact someone") ||
+    t.includes("speak to a person") || t.includes("connect me") ||
+    t.includes("hablar con alguien") || t.includes("hablar con una persona") ||
+    t.includes("persona real") || t.includes("con alguien del equipo") ||
+    t.includes("quiero hablar") || t.includes("puedo hablar con")
+  );
+}
+
+const FREE_QUESTION_LIMIT = 3;
 
 // ─── Safety check items ──────────────────────────────────────────────────────
 const SAFETY_ITEMS_EN = [
@@ -157,6 +175,12 @@ export default function NovaHelpPage() {
   const { i18n } = useTranslation();
   const isSpanish = i18n.language?.startsWith("es");
   const ttsLang   = isSpanish ? "es-ES" : "en-US";
+  const [, navigate] = useLocation();
+
+  // ── Question counter + soft lock ──────────────────────────────────────────
+  const [questionCount, setQuestionCount] = useState(0);
+  const [lockedOut, setLockedOut]         = useState(false);
+  const questionCountRef = useRef(0);
 
   // ── Talk-to-human state ───────────────────────────────────────────────────
   const { addRequest: addTalkRequest } = useTalkRequestStore();
@@ -273,8 +297,20 @@ export default function NovaHelpPage() {
       return;
     }
 
+    // If they ask for a human, route them straight to the NOVA Sales Agent
+    if (isHumanRequestTrigger(trimmed)) {
+      const msg = isSpanish
+        ? "¡Por supuesto! Te conecto ahora con NOVA, nuestra agente de ventas."
+        : "Of course! Connecting you to NOVA right now.";
+      addLog("NOVA", msg);
+      setAnswer(msg);
+      setPhase("speaking");
+      speakText(msg, ttsLang, () => { navigate("/meet-nova"); });
+      return;
+    }
+
     handleQuestionRef.current?.(trimmed);
-  }, [isSpanish, ttsLang, stopRecognition]);
+  }, [isSpanish, ttsLang, stopRecognition, navigate]);
 
   // ── Start wake listener ───────────────────────────────────────────────────
   const startWakeListen = useCallback(() => {
@@ -394,6 +430,12 @@ export default function NovaHelpPage() {
   const handleQuestion = useCallback(async (question: string) => {
     const q = question.trim();
     if (!q) return;
+
+    // Increment question counter
+    questionCountRef.current += 1;
+    const newCount = questionCountRef.current;
+    setQuestionCount(newCount);
+
     setLastQuestion(q);
     setAnswer("");
     setErrorMsg("");
@@ -405,6 +447,25 @@ export default function NovaHelpPage() {
       if (!sessionActiveRef.current) return;
 
       const unsure = isNovaUnsure(response);
+
+      // After FREE_QUESTION_LIMIT questions, lock and route to NOVA Sales
+      if (newCount >= FREE_QUESTION_LIMIT) {
+        const lockMsg = isSpanish
+          ? response + "\n\n⚡ Has hecho " + newCount + " preguntas. ¡Conectándote ahora con NOVA, nuestra agente de ventas, para darte todo lo que necesitas!"
+          : response + "\n\n⚡ You've asked " + newCount + " questions — let me connect you with NOVA, our sales agent, to give you everything you need!";
+        setAnswer(lockMsg);
+        setPhase("speaking");
+        addLog("NOVA", lockMsg);
+        setLockedOut(true);
+        speakText(
+          isSpanish
+            ? "¡Conectándote ahora con NOVA!"
+            : "Connecting you to NOVA now!",
+          ttsLang,
+          () => { navigate("/meet-nova"); }
+        );
+        return;
+      }
 
       // If NOVA isn't sure, append a human-help offer to the spoken response
       const spoken = unsure
@@ -437,7 +498,7 @@ export default function NovaHelpPage() {
         });
       }
     }
-  }, [isSpanish, ttsLang]);
+  }, [isSpanish, ttsLang, navigate]);
 
   // ── Safety check ─────────────────────────────────────────────────────────
   const safetySpeak = useCallback((text: string, onDone?: () => void) => {
@@ -580,6 +641,12 @@ export default function NovaHelpPage() {
     }
     if (isSafetyTrigger(q)) {
       startSafetyCheckRef.current?.();
+      return;
+    }
+
+    // Human request → go straight to NOVA Sales Agent
+    if (isHumanRequestTrigger(q)) {
+      navigate("/meet-nova");
       return;
     }
 
@@ -774,22 +841,22 @@ export default function NovaHelpPage() {
             )}
 
             {/* Talk suggestion banner (shown when NOVA can't fully answer) */}
-            {talkSuggested && !showTalkCard && !talkSubmitted && (
+            {talkSuggested && !talkSubmitted && (
               <div className="rounded-2xl border border-yellow-400/40 bg-yellow-500/10 px-5 py-4">
                 <p className="text-yellow-200 font-bold text-sm mb-1">
                   {isSpanish ? "¿Quieres hablar con alguien?" : "Want to talk to someone?"}
                 </p>
                 <p className="text-slate-400 text-xs mb-3">
                   {isSpanish
-                    ? "NOVA no pudo responder completamente. Puedes solicitar una llamada con nuestro equipo."
-                    : "NOVA couldn't fully answer that. You can request a conversation with our team."}
+                    ? "NOVA no pudo responder completamente. Conectándote con nuestra agente de ventas."
+                    : "NOVA couldn't fully answer that. Let me connect you with our sales agent."}
                 </p>
                 <button
-                  onClick={() => setShowTalkCard(true)}
+                  onClick={() => navigate("/meet-nova")}
                   className="flex items-center gap-2 rounded-xl bg-yellow-400 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-yellow-300 transition"
                 >
                   <MessageCircle className="h-4 w-4" />
-                  {isSpanish ? "Solicitar conversación" : "Request a conversation"}
+                  {isSpanish ? "Hablar con NOVA ⚡" : "Talk to NOVA ⚡"}
                 </button>
               </div>
             )}
@@ -922,10 +989,56 @@ export default function NovaHelpPage() {
           </div>
         )}
 
-        {/* Persistent "Talk to a person" button */}
-        {sessionActive && !showTalkCard && !talkSubmitted && (
+        {/* Question counter progress bar */}
+        {sessionActive && questionCount > 0 && questionCount < FREE_QUESTION_LIMIT && (
+          <div className="w-full rounded-xl border border-white/5 bg-white/3 px-4 py-2.5">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                {isSpanish ? "Preguntas gratis" : "Free questions"}
+              </span>
+              <span className="text-[10px] font-bold text-yellow-400">
+                {questionCount} / {FREE_QUESTION_LIMIT}
+              </span>
+            </div>
+            <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-yellow-400 transition-all duration-500"
+                style={{ width: `${(questionCount / FREE_QUESTION_LIMIT) * 100}%` }}
+              />
+            </div>
+            <p className="text-[10px] text-slate-500 mt-1.5">
+              {isSpanish
+                ? `Después de ${FREE_QUESTION_LIMIT} preguntas, te conectamos con NOVA.`
+                : `After ${FREE_QUESTION_LIMIT} questions, we connect you with NOVA.`}
+            </p>
+          </div>
+        )}
+
+        {/* Lock overlay — after 3 questions */}
+        {lockedOut && (
+          <div className="w-full rounded-2xl border border-yellow-400/40 bg-yellow-400/5 p-6 text-center">
+            <div className="text-4xl mb-3">⚡</div>
+            <p className="text-yellow-300 font-black text-lg mb-1">
+              {isSpanish ? "¡Conectándote con NOVA!" : "Connecting you to NOVA!"}
+            </p>
+            <p className="text-slate-400 text-sm mb-4">
+              {isSpanish
+                ? "Has usado tus preguntas gratis. NOVA, nuestra agente de ventas, puede darte todo lo que necesitas."
+                : "You've used your free questions. NOVA, our sales agent, can give you everything you need."}
+            </p>
+            <button
+              onClick={() => navigate("/meet-nova")}
+              className="inline-flex items-center gap-2 rounded-xl bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300 transition"
+            >
+              {isSpanish ? "Hablar con NOVA ahora →" : "Talk to NOVA now →"}
+            </button>
+          </div>
+        )}
+
+        {/* Persistent "Talk to a person" button → routes to NOVA Sales Agent */}
+        {sessionActive && !lockedOut && (
           <button
-            onClick={() => { setShowTalkCard(true); setTalkSuggested(false); }}
+            onClick={() => navigate("/meet-nova")}
             className="w-full flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/3 py-2.5 text-xs font-semibold text-slate-400 hover:border-yellow-400/40 hover:text-yellow-300 transition"
           >
             <MessageCircle className="h-3.5 w-3.5" />
