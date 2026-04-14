@@ -264,6 +264,8 @@ export default function NovaSalesVoiceAgent() {
   const [isThinking, setIsThinking] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
   const [ttsUnlocked, setTtsUnlocked] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [nowSpeakingText, setNowSpeakingText] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [trialCreated, setTrialCreated] = useState(false);
   const [showHumanForm, setShowHumanForm] = useState(false);
@@ -335,12 +337,15 @@ export default function NovaSalesVoiceAgent() {
     recognitionRef.current = rec;
   }, [canListen]);
 
-  // ── Speak — auto-restarts mic when done ─────────────────────────────────────
+  // ── Speak — tracks isSpeaking state + auto-restarts mic when done ───────────
   const speak = useCallback((text: string, onDone?: () => void) => {
     if (!voiceOn || !canSpeak) { onDone?.(); return; }
+    setIsSpeaking(true);
+    setNowSpeakingText(text);
     novaSpeak(text, "en", () => {
+      setIsSpeaking(false);
+      setNowSpeakingText("");
       onDone?.();
-      // After NOVA finishes speaking, restart mic automatically
       setTimeout(startListening, 300);
     });
   }, [voiceOn, canSpeak, startListening]);
@@ -352,12 +357,14 @@ export default function NovaSalesVoiceAgent() {
     const welcome =
       "Most warehouses lose 15 to 25 percent performance from small mistakes and slow transitions. I fix that. What's hurting your operation more right now — speed or accuracy?";
     if (canSpeak) {
+      setIsSpeaking(true);
+      setNowSpeakingText(welcome);
       novaSpeak(welcome, "en", () => {
-        // After welcome, auto-start mic
+        setIsSpeaking(false);
+        setNowSpeakingText("");
         setTimeout(startListening, 300);
       });
     } else {
-      // No TTS — just start listening
       setTimeout(startListening, 300);
     }
   }, [canSpeak, startListening]);
@@ -527,6 +534,81 @@ export default function NovaSalesVoiceAgent() {
               Skip voice — text only
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ── Full-screen NOVA speaking view ── */}
+      {ttsUnlocked && isSpeaking && (
+        <div className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-[#060d1f] px-6">
+          {/* Concentric circles — static rings + pulsing center */}
+          <div className="relative flex items-center justify-center mb-10" style={{ width: 280, height: 280 }}>
+            {/* Static concentric rings radiating outward */}
+            <div className="absolute rounded-full border border-yellow-400/15" style={{ width: 280, height: 280 }} />
+            <div className="absolute rounded-full border border-yellow-400/20" style={{ width: 230, height: 230 }} />
+            <div className="absolute rounded-full border border-yellow-400/30" style={{ width: 180, height: 180 }} />
+            <div className="absolute rounded-full border border-yellow-400/45" style={{ width: 132, height: 132 }} />
+            <div className="absolute rounded-full border border-yellow-400/65" style={{ width: 86, height: 86 }} />
+            <div className="absolute rounded-full border-2 border-yellow-400/85" style={{ width: 46, height: 46 }} />
+            {/* Pulsing outer glow ring */}
+            <div className="absolute rounded-full border-2 border-yellow-400/40 animate-ping" style={{ width: 140, height: 140, animationDuration: "1.4s" }} />
+            <div className="absolute rounded-full border border-yellow-400/20 animate-ping" style={{ width: 200, height: 200, animationDuration: "2s", animationDelay: "0.3s" }} />
+            {/* Center dot */}
+            <div className="relative z-10 w-5 h-5 rounded-full bg-yellow-400 shadow-[0_0_20px_rgba(250,204,21,1),0_0_40px_rgba(250,204,21,0.5)]" />
+          </div>
+
+          {/* Label + title */}
+          <h2 className="text-4xl font-black text-white mb-2">Meet NOVA</h2>
+          <p className="text-xs font-bold tracking-[0.25em] uppercase text-yellow-400 mb-6">Speaking…</p>
+
+          {/* What NOVA is saying */}
+          {nowSpeakingText && (
+            <p className="max-w-xs text-center text-slate-300 text-sm leading-relaxed" style={{ display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+              {nowSpeakingText.replace(/\n/g, " ")}
+            </p>
+          )}
+
+          {/* Controls */}
+          <div className="mt-10 flex gap-3">
+            <button
+              onClick={() => { window.speechSynthesis?.cancel(); setIsSpeaking(false); setNowSpeakingText(""); setTimeout(startListening, 300); }}
+              className="rounded-2xl border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-bold text-slate-300 hover:border-yellow-400/50 hover:text-yellow-300 transition"
+            >
+              Skip →
+            </button>
+            <button
+              onClick={() => { const next = !voiceOn; setVoiceOn(next); if (!next) window.speechSynthesis?.cancel(); }}
+              className="flex items-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-bold text-slate-300 hover:border-white/30 transition"
+            >
+              {voiceOn ? <><VolumeX className="h-4 w-4" /> Mute</> : <><Volume2 className="h-4 w-4" /> Unmute</>}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Full-screen NOVA listening view ── */}
+      {ttsUnlocked && isListening && (
+        <div className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-[#060d1f] px-6">
+          <div className="relative flex items-center justify-center mb-10" style={{ width: 280, height: 280 }}>
+            {/* Static rings */}
+            <div className="absolute rounded-full border border-yellow-400/15" style={{ width: 280, height: 280 }} />
+            <div className="absolute rounded-full border border-yellow-400/25" style={{ width: 210, height: 210 }} />
+            <div className="absolute rounded-full border border-yellow-400/40" style={{ width: 150, height: 150 }} />
+            {/* Slow breathing pulse */}
+            <div className="absolute rounded-full border-2 border-yellow-400/50 animate-ping" style={{ width: 110, height: 110, animationDuration: "2s" }} />
+            {/* Mic center */}
+            <div className="relative z-10 w-16 h-16 rounded-full bg-yellow-400 flex items-center justify-center shadow-[0_0_40px_rgba(250,204,21,0.6)]">
+              <Mic className="h-7 w-7 text-slate-950" />
+            </div>
+          </div>
+          <h2 className="text-4xl font-black text-white mb-2">Meet NOVA</h2>
+          <p className="text-xs font-bold tracking-[0.25em] uppercase text-yellow-400 mb-6">Listening…</p>
+          <p className="text-slate-400 text-sm text-center max-w-xs">Speak now — NOVA is ready for your response</p>
+          <button
+            onClick={stopListening}
+            className="mt-10 rounded-2xl border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-bold text-slate-400 hover:border-red-400/50 hover:text-red-300 transition"
+          >
+            Stop listening
+          </button>
         </div>
       )}
 
