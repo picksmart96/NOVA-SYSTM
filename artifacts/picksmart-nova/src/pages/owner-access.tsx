@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useAuthStore } from "@/lib/authStore";
 import { Activity, ShieldCheck, Loader2 } from "lucide-react";
 
-const OWNER_TOKEN = "PSA-DRAOGO96-OWNER-2024";
+const OWNER_TOKEN = import.meta.env.VITE_OWNER_TOKEN as string;
 
 export default function OwnerAccessPage() {
   const [, navigate] = useLocation();
