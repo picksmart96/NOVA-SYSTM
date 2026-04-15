@@ -20,7 +20,7 @@ function formatDate(date: string) {
   });
 }
 
-const TABS = ["Overview", "Assignments", "Activate NOVA", "Selectors", "Trainers", "Sessions", "Shift Post", "Weekly Report"] as const;
+const TABS = ["Overview", "Assignments", "Activate NOVA", "Selectors", "Trainers", "People", "Sessions", "Shift Post", "Weekly Report"] as const;
 type Tab = typeof TABS[number];
 
 const MEDALS = ["🥇", "🥈", "🥉", "4.", "5."];
@@ -30,7 +30,7 @@ const WEEKLY_API = `${BASE_URL}api/social/weekly-reports`;
 export default function SupervisorPage() {
   const { t } = useTranslation();
   const [, navigate] = useLocation();
-  const { logout, accounts, removeAccount, addInvite, currentUser } = useAuthStore();
+  const { logout, accounts, removeAccount, banUser, unbanUser, addInvite, currentUser } = useAuthStore();
   const { trainerInviteRequests, novaSessions, stopNovaSession } = useAccessStore();
   const { selectors, sessions, assignments, removeSelector } = useTrainerStore();
   const { posts: supervisorPosts, addPost, deletePost } = useSupervisorPostStore();
@@ -51,6 +51,7 @@ export default function SupervisorPage() {
   const [preselectedAssignmentId, setPreselectedAssignmentId] = useState<string | null>(null);
   const [confirmSelector, setConfirmSelector] = useState<number | null>(null);
   const [confirmTrainer, setConfirmTrainer] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   // Weekly Report state
   const [wrWarehouseName, setWrWarehouseName] = useState("");
@@ -485,6 +486,167 @@ export default function SupervisorPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          );
+        })()}
+
+        {/* ── People tab — delete selector + trainer accounts ──────────────── */}
+        {tab === "People" && (() => {
+          // Supervisors can only delete selector and trainer accounts
+          const deletable = accounts.filter(
+            (a) => a.role === "selector" || a.role === "trainer"
+          );
+          const protected_ = accounts.filter(
+            (a) => a.role === "supervisor" || a.role === "manager" ||
+                   a.role === "director" || a.role === "owner"
+          );
+
+          const roleColor: Record<string, string> = {
+            selector: "text-slate-300",
+            trainer:  "text-cyan-400",
+          };
+          const roleBg: Record<string, string> = {
+            selector: "bg-slate-700/50 border-slate-600",
+            trainer:  "bg-cyan-500/10 border-cyan-500/30",
+          };
+
+          return (
+            <div className="space-y-6">
+              {/* Info banner */}
+              <div className="flex items-start gap-3 rounded-2xl border border-yellow-400/20 bg-yellow-400/5 p-4">
+                <ShieldAlert className="h-5 w-5 text-yellow-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-bold text-yellow-300">Supervisor Account Management</p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    You can remove <span className="text-white font-bold">selector</span> and <span className="text-white font-bold">trainer</span> accounts.
+                    Manager, director, and owner accounts are protected and cannot be removed from here.
+                  </p>
+                </div>
+              </div>
+
+              {/* Deletable accounts */}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">
+                  Selector &amp; Trainer Accounts ({deletable.length})
+                </p>
+                {deletable.length === 0 && (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-500">
+                    No selector or trainer accounts found.
+                  </div>
+                )}
+                <div className="space-y-3">
+                  {deletable.map((a) => (
+                    <div
+                      key={a.id}
+                      className="rounded-2xl border border-slate-800 bg-slate-900 p-4 flex flex-wrap items-center justify-between gap-4"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center shrink-0 font-black text-white text-sm">
+                          {a.fullName[0]?.toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-black text-white">{a.fullName}</p>
+                          <p className="text-xs text-slate-500">@{a.username}</p>
+                          {a.accountNumber && (
+                            <span className="inline-block mt-0.5 rounded-md border border-slate-700 px-1.5 py-0.5 text-[10px] font-black text-yellow-400 tracking-widest">
+                              {a.accountNumber}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Role badge */}
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold border capitalize ${roleBg[a.role] ?? ""} ${roleColor[a.role] ?? ""}`}>
+                          {a.role}
+                        </span>
+
+                        {/* Status badge */}
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold border ${
+                          a.status === "active"
+                            ? "bg-green-500/10 text-green-300 border-green-500/30"
+                            : "bg-red-500/10 text-red-300 border-red-500/30"
+                        }`}>
+                          {a.status}
+                        </span>
+
+                        {/* Ban / Unban */}
+                        {a.status === "banned" ? (
+                          <button
+                            onClick={() => unbanUser(a.id)}
+                            className="rounded-lg border border-green-500/30 px-3 py-1.5 text-xs font-bold text-green-300 hover:bg-green-500/10 transition"
+                          >
+                            Unban
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => banUser(a.id)}
+                            className="rounded-lg border border-orange-500/30 px-3 py-1.5 text-xs font-bold text-orange-300 hover:bg-orange-500/10 transition"
+                          >
+                            Ban
+                          </button>
+                        )}
+
+                        {/* Delete with confirmation */}
+                        {confirmDelete === a.id ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-red-400 font-semibold">Remove account?</span>
+                            <button
+                              onClick={() => { removeAccount(a.id); setConfirmDelete(null); }}
+                              className="rounded-lg bg-red-600 hover:bg-red-500 px-3 py-1 text-xs font-bold text-white transition"
+                            >
+                              Yes, remove
+                            </button>
+                            <button
+                              onClick={() => setConfirmDelete(null)}
+                              className="rounded-lg border border-slate-600 px-3 py-1 text-xs font-bold text-slate-300 hover:border-slate-400 transition"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDelete(a.id)}
+                            className="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-bold text-red-400 hover:bg-red-500/10 transition flex items-center gap-1"
+                          >
+                            <Trash2 className="h-3 w-3" /> Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Protected accounts — shown but locked */}
+              {protected_.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-600 mb-3">
+                    Protected Accounts — Cannot Be Removed
+                  </p>
+                  <div className="space-y-2">
+                    {protected_.map((a) => (
+                      <div
+                        key={a.id}
+                        className="rounded-2xl border border-slate-800/50 bg-slate-900/40 p-4 flex flex-wrap items-center justify-between gap-4 opacity-50"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center shrink-0 font-black text-slate-500 text-sm">
+                            {a.fullName[0]?.toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-400">{a.fullName}</p>
+                            <p className="text-xs text-slate-600 capitalize">@{a.username} · {a.role}</p>
+                          </div>
+                        </div>
+                        <span className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-bold text-slate-600">
+                          🔒 Protected
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })()}
