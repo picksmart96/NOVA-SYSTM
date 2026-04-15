@@ -16,7 +16,8 @@ const RANK: Record<string, number> = {
   trainer: 1,
   supervisor: 2,
   manager: 3,
-  owner: 4,
+  director: 4,
+  owner: 5,
 };
 
 const atLeast = (min: AuthRole, role: string): boolean =>
@@ -29,8 +30,6 @@ export function useRoleNav(): NavLink[] {
   const { warehouse, hasFeature } = useWarehouse();
   const { setWarehouseBySlug } = useWarehouseStore();
 
-  // IMPORTANT: All hooks must be called before any early returns.
-  // Sync warehouse context from logged-in user's warehouseSlug.
   useEffect(() => {
     if (currentUser?.warehouseSlug && !warehouse) {
       setWarehouseBySlug(currentUser.warehouseSlug);
@@ -41,7 +40,7 @@ export function useRoleNav(): NavLink[] {
   const isOwner = currentUser?.role === "owner";
   const plan = currentUser?.subscriptionPlan ?? null;
 
-  // Personal plan: restricted pages only
+  // Personal plan: restricted nav
   if (plan === "personal") {
     return [
       { href: "/", label: t("nav.home"), group: "public" },
@@ -71,6 +70,26 @@ export function useRoleNav(): NavLink[] {
       { href: "/leaderboard", label: t("nav.leaderboard"), group: "public" },
       { href: "/selector-breaking-news", label: t("nav.selectorNation"), group: "public" },
     );
+  }
+
+  // Trainer+ gets Trainer Portal
+  if (atLeast("trainer", publicRole)) {
+    links.push({ href: "/trainer-portal", label: "Trainer Portal", group: "staff" });
+  }
+
+  // Supervisor+ gets Supervisor dashboard
+  if (atLeast("supervisor", publicRole)) {
+    links.push({ href: "/supervisor", label: "Supervisor", group: "staff" });
+  }
+
+  // Manager+ gets Manager dashboard
+  if (atLeast("manager", publicRole)) {
+    links.push({ href: "/manager", label: "Manager", group: "staff" });
+  }
+
+  // Director+ gets Control Panel
+  if (atLeast("director", publicRole)) {
+    links.push({ href: "/control-panel", label: "Control Panel", group: "staff" });
   }
 
   return links;

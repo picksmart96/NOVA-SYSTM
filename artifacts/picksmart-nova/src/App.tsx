@@ -47,6 +47,8 @@ import CompanyCheckoutPage from "@/pages/checkout-company";
 import OwnerPage from "@/pages/owner";
 import OwnerAccessPage from "@/pages/owner-access";
 
+import ControlPanelPage from "@/pages/control-panel";
+import ManagerPage from "@/pages/manager";
 import SelectorPortalPage from "@/pages/selector-portal";
 import LoginPage from "@/pages/login";
 import InvitePage from "@/pages/invite";
@@ -322,6 +324,24 @@ function Router() {
         <Layout>
           <SubscriptionRoute path="/supervisor" requiredRole="supervisor">
             <SupervisorPage />
+          </SubscriptionRoute>
+        </Layout>
+      </Route>
+
+      {/* Manager tools */}
+      <Route path="/manager">
+        <Layout>
+          <SubscriptionRoute path="/manager" requiredRole="manager">
+            <ManagerPage />
+          </SubscriptionRoute>
+        </Layout>
+      </Route>
+
+      {/* Director Control Panel */}
+      <Route path="/control-panel">
+        <Layout>
+          <SubscriptionRoute path="/control-panel" requiredRole="director">
+            <ControlPanelPage />
           </SubscriptionRoute>
         </Layout>
       </Route>

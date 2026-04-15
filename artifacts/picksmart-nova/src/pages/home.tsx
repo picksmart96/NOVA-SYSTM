@@ -1,4 +1,5 @@
 import HeroSection from "../components/home/HeroSection";
+import CompanyPortalSection from "../components/home/CompanyPortalSection";
 import IntroVideoSection from "../components/home/IntroVideoSection";
 import RealTalkSection from "../components/home/RealTalkSection";
 import CurriculumSection from "../components/home/CurriculumSection";
@@ -13,6 +14,7 @@ export default function HomePage() {
   return (
     <div className="bg-slate-950">
       <HeroSection />
+      <CompanyPortalSection />
       <IntroVideoSection />
       <RealTalkSection />
       <CurriculumSection />

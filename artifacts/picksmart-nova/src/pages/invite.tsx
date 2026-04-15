@@ -10,7 +10,8 @@ const ROLE_HOME: Record<AuthRole, string> = {
   selector: "/selector",
   trainer: "/trainer-portal",
   supervisor: "/supervisor",
-  manager: "/supervisor",
+  manager: "/manager",
+  director: "/control-panel",
   owner: "/command",
 };
 
@@ -19,10 +20,16 @@ const ROLE_LABEL: Record<AuthRole, string> = {
   trainer: "Trainer",
   supervisor: "Supervisor",
   manager: "Manager",
+  director: "Director",
   owner: "Owner",
 };
 
 type Step = "form" | "verify" | "done";
+
+// Open invite: fullName is generic placeholder, email is empty
+function isOpenInvite(invite: { fullName: string; email: string }) {
+  return !invite.email || invite.fullName === "Team Member";
+}
 
 export default function InvitePage() {
   const [, params] = useRoute("/invite/:token");
@@ -31,8 +38,9 @@ export default function InvitePage() {
 
   const token = params?.token ?? "";
   const invite = getInvite(token);
+  const isOpen = invite ? isOpenInvite(invite) : false;
 
-  const suggestedUsername = invite
+  const suggestedUsername = invite && !isOpen
     ? invite.email.split("@")[0].toLowerCase().replace(/[^a-z0-9._-]/g, "")
     : "";
 
@@ -44,15 +52,26 @@ export default function InvitePage() {
   const [verifyCode, setVerifyCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // Open invite fields
+  const [openFullName, setOpenFullName] = useState("");
+  const [openEmail, setOpenEmail] = useState("");
 
   const inputCls = "w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition placeholder:text-slate-600";
   const btnYellow = "w-full rounded-2xl bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300 transition disabled:opacity-40 disabled:cursor-not-allowed";
+
+  // Effective email/name (from token or from open-invite fields)
+  const effectiveEmail = isOpen ? openEmail.trim() : invite?.email ?? "";
+  const effectiveName = isOpen ? openFullName.trim() : invite?.fullName ?? "";
 
   // ── Step 1: fill form + send code ──────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
+    if (isOpen) {
+      if (!effectiveName) { setError("Please enter your full name."); return; }
+      if (!effectiveEmail || !effectiveEmail.includes("@")) { setError("Please enter a valid email address."); return; }
+    }
     if (username.trim().length < 3) { setError("Username must be at least 3 characters."); return; }
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
     if (password !== confirm) { setError("Passwords do not match."); return; }
@@ -62,7 +81,7 @@ export default function InvitePage() {
       const r = await fetch(`${BASE}/api/auth/send-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: invite!.email, name: invite!.fullName, type: "verify" }),
+        body: JSON.stringify({ email: effectiveEmail, name: effectiveName, type: "verify" }),
       });
       if (r.ok) {
         setStep("verify");
@@ -85,7 +104,7 @@ export default function InvitePage() {
       const r = await fetch(`${BASE}/api/auth/verify-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: invite!.email, code: verifyCode.trim() }),
+        body: JSON.stringify({ email: effectiveEmail, code: verifyCode.trim() }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { setError(d.error ?? "Invalid code. Try again."); setLoading(false); return; }
@@ -109,7 +128,7 @@ export default function InvitePage() {
       await fetch(`${BASE}/api/auth/send-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: invite!.email, name: invite!.fullName, type: "verify" }),
+        body: JSON.stringify({ email: effectiveEmail, name: effectiveName, type: "verify" }),
       });
     } catch {}
   };
@@ -155,10 +174,13 @@ export default function InvitePage() {
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 mb-6">
-                <p className="text-white font-bold capitalize">{invite.fullName}</p>
-                <p className="text-slate-400 text-sm">{invite.email}</p>
-              </div>
+              {/* Show name/email only if NOT an open invite */}
+              {!isOpen && (
+                <div className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 mb-6">
+                  <p className="text-white font-bold capitalize">{invite.fullName}</p>
+                  <p className="text-slate-400 text-sm">{invite.email}</p>
+                </div>
+              )}
 
               {error && (
                 <div className="mb-5 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-red-300 text-sm font-medium">
@@ -167,6 +189,32 @@ export default function InvitePage() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-5">
+                {/* Open invite: collect name + email */}
+                {isOpen && (
+                  <>
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-2">Your full name</label>
+                      <input
+                        value={openFullName}
+                        onChange={e => setOpenFullName(e.target.value)}
+                        placeholder="e.g. Maria Lopez"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-2">Your email address</label>
+                      <input
+                        type="email"
+                        value={openEmail}
+                        onChange={e => setOpenEmail(e.target.value)}
+                        placeholder="you@email.com"
+                        className={inputCls}
+                      />
+                      <p className="mt-1.5 text-xs text-slate-500">We'll send a verification code here.</p>
+                    </div>
+                  </>
+                )}
+
                 <div>
                   <label className="block text-sm text-slate-400 mb-2">
                     Choose a username
@@ -180,7 +228,7 @@ export default function InvitePage() {
                     placeholder="e.g. john.smith"
                     className={inputCls}
                   />
-                  <p className="mt-1.5 text-xs text-slate-500">This is what you'll type into NOVA Trainer to start your session.</p>
+                  <p className="mt-1.5 text-xs text-slate-500">This is what you'll type to sign in.</p>
                 </div>
 
                 <div>

@@ -11,6 +11,7 @@ import { useTalkRequestStore, TalkRequest } from "@/lib/talkRequestStore";
 import { useLessonVideoStore, extractYoutubeId } from "@/lib/lessonVideoStore";
 import { LESSON_VIDEO_MAP } from "@/data/lessonVideoMap";
 import { useLeadStore, Lead, LeadStatus, STATUS_OPTIONS, HANDBOOK_SECTIONS } from "@/lib/leadStore";
+import { usePerformanceStore } from "@/lib/performanceStore";
 
 // ── Mock data for demo sections ───────────────────────────────────────────────
 const ADMIN_STATS = {
@@ -3704,7 +3705,244 @@ function ChatLogsSection() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TABS = ["Dashboard", "Revenue", "CRM", "Chat Logs", "NOVA Metrics", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests", "Lesson Videos", "Post Moderation", "Weekly Reports"] as const;
+function OwnerControlPanel() {
+  const { accounts, currentUser, addInvite } = useAuthStore();
+  const { userLogs, userGoals } = usePerformanceStore();
+  const [cpTab, setCpTab] = useState<"overview" | "performance" | "invite">("overview");
+  const [copiedSup, setCopiedSup] = useState(false);
+  const [copiedMgr, setCopiedMgr] = useState(false);
+  const [showSupLink, setShowSupLink] = useState(false);
+  const [showMgrLink, setShowMgrLink] = useState(false);
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const realAccounts = accounts.filter((a) => a.id !== "master");
+  const activeAccounts = realAccounts.filter((a) => a.status === "active");
+  const bannedAccounts = realAccounts.filter((a) => a.status === "banned");
+
+  const allLoggedUsers = Object.keys(userLogs);
+  const loggedTodayCount = allLoggedUsers.filter((u) =>
+    (userLogs[u] ?? []).some((l) => l.date === todayStr)
+  ).length;
+
+  const performanceRows = allLoggedUsers.map((username) => {
+    const logs = userLogs[username] ?? [];
+    const recent = logs.slice(-7);
+    const avg = recent.length ? Math.round(recent.reduce((s, l) => s + l.pickRate, 0) / recent.length) : null;
+    const goal = userGoals[username]?.targetRate ?? null;
+    const trend = recent.length >= 2 ? recent[recent.length - 1].pickRate - recent[0].pickRate : null;
+    return { username, avg, goal, trend, logsCount: logs.length };
+  }).sort((a, b) => (b.avg ?? 0) - (a.avg ?? 0));
+
+  const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
+  const [supLink] = useState(() => {
+    const token = addInvite({ fullName: "Team Member", email: "", role: "supervisor" });
+    return `${window.location.origin}${BASE_URL}/invite/${token}`;
+  });
+  const [mgrLink] = useState(() => {
+    const token = addInvite({ fullName: "Team Member", email: "", role: "manager" });
+    return `${window.location.origin}${BASE_URL}/invite/${token}`;
+  });
+
+  const SUBTABS = [
+    { id: "overview" as const, label: "Overview" },
+    { id: "performance" as const, label: "Performance" },
+    { id: "invite" as const, label: "Invite Links" },
+  ];
+
+  const roleColors: Record<string, string> = {
+    selector: "bg-blue-500/20 text-blue-300",
+    trainer: "bg-green-500/20 text-green-300",
+    supervisor: "bg-orange-500/20 text-orange-300",
+    manager: "bg-purple-500/20 text-purple-300",
+    director: "bg-yellow-500/20 text-yellow-300",
+    owner: "bg-red-500/20 text-red-300",
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-yellow-400/20 bg-yellow-400/5 p-4">
+        <p className="text-yellow-300 text-sm font-bold">Director Control Panel</p>
+        <p className="text-slate-400 text-sm mt-1">This is the same view your company directors see. You have full visibility as the platform owner.</p>
+      </div>
+
+      {/* Sub-tabs */}
+      <div className="flex gap-2 bg-slate-900 p-1.5 rounded-2xl border border-white/8 w-fit">
+        {SUBTABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setCpTab(t.id)}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+              cpTab === t.id ? "bg-yellow-400 text-slate-950" : "text-slate-400 hover:text-white"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Overview */}
+      {cpTab === "overview" && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { label: "Total Users", value: realAccounts.length, sub: `${activeAccounts.length} active` },
+              { label: "Active Today", value: loggedTodayCount, sub: "based on logs" },
+              { label: "Selectors", value: realAccounts.filter((a) => a.role === "selector").length, sub: `${realAccounts.filter((a) => a.role === "trainer").length} trainers` },
+              { label: "Supervisors", value: realAccounts.filter((a) => a.role === "supervisor").length, sub: `${realAccounts.filter((a) => a.role === "manager").length} managers` },
+            ].map((s) => (
+              <div key={s.label} className="rounded-2xl border border-white/8 bg-slate-900 p-5">
+                <p className="text-2xl font-black text-white">{s.value}</p>
+                <p className="text-sm text-slate-300 font-semibold mt-0.5">{s.label}</p>
+                <p className="text-xs text-slate-500 mt-1">{s.sub}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-2xl border border-white/8 bg-slate-900 overflow-hidden">
+            <div className="px-6 py-4 border-b border-white/8">
+              <h2 className="font-black text-white">Full Team Roster</h2>
+              <p className="text-slate-400 text-sm">All active accounts on the platform</p>
+            </div>
+            {activeAccounts.length === 0 ? (
+              <div className="px-6 py-10 text-center text-slate-500">No users yet besides yourself.</div>
+            ) : (
+              <div className="divide-y divide-white/5">
+                {activeAccounts.map((acc) => {
+                  const hasLoggedToday = (userLogs[acc.username] ?? []).some((l) => l.date === todayStr);
+                  return (
+                    <div key={acc.id} className="px-6 py-3.5 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold">
+                          {acc.fullName.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-white text-sm font-semibold">{acc.fullName}</p>
+                          <p className="text-slate-500 text-xs">@{acc.username}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {hasLoggedToday && <span className="text-xs text-green-400 font-semibold">Active today</span>}
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full capitalize ${roleColors[acc.role] ?? "bg-slate-500/20 text-slate-300"}`}>
+                          {acc.role}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          {bannedAccounts.length > 0 && (
+            <p className="text-red-400 text-sm font-semibold">{bannedAccounts.length} banned account(s)</p>
+          )}
+        </div>
+      )}
+
+      {/* Performance */}
+      {cpTab === "performance" && (
+        <div className="rounded-2xl border border-white/8 bg-slate-900 overflow-hidden">
+          {performanceRows.length === 0 ? (
+            <div className="px-6 py-14 text-center">
+              <TrendingUp className="h-10 w-10 text-slate-600 mx-auto mb-3" />
+              <p className="text-slate-400 font-semibold">No performance data yet</p>
+              <p className="text-slate-500 text-sm mt-1">Selectors log pick rate on the Leaderboard page.</p>
+            </div>
+          ) : (
+            <>
+              <div className="px-6 py-3.5 border-b border-white/8 grid grid-cols-4 gap-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <span className="col-span-2">Selector</span>
+                <span className="text-center">7-Day Avg</span>
+                <span className="text-center">Trend</span>
+              </div>
+              <div className="divide-y divide-white/5">
+                {performanceRows.map((row, i) => (
+                  <div key={row.username} className="px-6 py-4 grid grid-cols-4 gap-4 items-center">
+                    <div className="col-span-2 flex items-center gap-3">
+                      <span className="text-xs text-slate-500 w-5">#{i + 1}</span>
+                      <div>
+                        <p className="text-white text-sm font-semibold">{row.username}</p>
+                        <p className="text-slate-600 text-xs">{row.logsCount}d logged</p>
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      {row.avg !== null
+                        ? <span className={`font-black text-lg ${row.avg >= 100 ? "text-green-400" : row.avg >= 90 ? "text-yellow-400" : "text-red-400"}`}>{row.avg}%</span>
+                        : <span className="text-slate-600">—</span>}
+                    </div>
+                    <div className="text-center text-sm font-bold">
+                      {row.trend !== null
+                        ? row.trend > 0 ? <span className="text-green-400">↑ +{row.trend}%</span>
+                          : row.trend < 0 ? <span className="text-red-400">↓ {row.trend}%</span>
+                          : <span className="text-slate-500">Flat</span>
+                        : <span className="text-slate-600">—</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Invite Links */}
+      {cpTab === "invite" && (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-white/8 bg-slate-900 p-5 space-y-4">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="h-5 w-5 text-orange-400" />
+              <div>
+                <p className="text-white font-black">Supervisor Invite Link</p>
+                <p className="text-slate-400 text-sm">Anyone using this link joins as a Supervisor</p>
+              </div>
+            </div>
+            <div className="font-mono text-sm text-slate-300 bg-slate-800 rounded-xl px-4 py-3 break-all">
+              {showSupLink ? supLink : supLink.replace(/\/invite\/.+/, "/invite/••••••••••")}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setShowSupLink(v => !v)} className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-400 hover:text-white transition">
+                {showSupLink ? "Hide" : "Show"}
+              </button>
+              <button
+                onClick={() => { navigator.clipboard.writeText(supLink); setCopiedSup(true); setTimeout(() => setCopiedSup(false), 2500); }}
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-orange-500 hover:bg-orange-400 px-4 py-2 text-sm font-bold text-white transition"
+              >
+                {copiedSup ? <><Check className="h-4 w-4" /> Copied!</> : <><Copy className="h-4 w-4" /> Copy Link</>}
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/8 bg-slate-900 p-5 space-y-4">
+            <div className="flex items-center gap-3">
+              <Briefcase className="h-5 w-5 text-purple-400" />
+              <div>
+                <p className="text-white font-black">Manager Invite Link</p>
+                <p className="text-slate-400 text-sm">Anyone using this link joins as a Manager</p>
+              </div>
+            </div>
+            <div className="font-mono text-sm text-slate-300 bg-slate-800 rounded-xl px-4 py-3 break-all">
+              {showMgrLink ? mgrLink : mgrLink.replace(/\/invite\/.+/, "/invite/••••••••••")}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setShowMgrLink(v => !v)} className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-400 hover:text-white transition">
+                {showMgrLink ? "Hide" : "Show"}
+              </button>
+              <button
+                onClick={() => { navigator.clipboard.writeText(mgrLink); setCopiedMgr(true); setTimeout(() => setCopiedMgr(false), 2500); }}
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 px-4 py-2 text-sm font-bold text-white transition"
+              >
+                {copiedMgr ? <><Check className="h-4 w-4" /> Copied!</> : <><Copy className="h-4 w-4" /> Copy Link</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TABS = ["Dashboard", "Control Panel", "Revenue", "CRM", "Chat Logs", "NOVA Metrics", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests", "Lesson Videos", "Post Moderation", "Weekly Reports"] as const;
 type Tab = typeof TABS[number];
 
 export default function OwnerPage() {
@@ -3718,8 +3956,9 @@ export default function OwnerPage() {
   );
 
   function tabLabel(tab: Tab) {
-    if (tab === "Dashboard")      return "📊 Dashboard";
-    if (tab === "Revenue")        return "💰 Revenue";
+    if (tab === "Dashboard")        return "📊 Dashboard";
+    if (tab === "Control Panel")    return "🏢 Control Panel";
+    if (tab === "Revenue")          return "💰 Revenue";
     if (tab === "CRM")            return "🤝 CRM";
     if (tab === "Chat Logs")      return "💬 Chat Logs";
     if (tab === "Links")          return "🔗 Links";
@@ -3794,6 +4033,7 @@ export default function OwnerPage() {
           </>
         )}
 
+        {activeTab === "Control Panel" && <OwnerControlPanel />}
         {activeTab === "Revenue" && <RevenueTab />}
         {activeTab === "CRM" && <CRMSection />}
         {activeTab === "Chat Logs" && <ChatLogsSection />}
