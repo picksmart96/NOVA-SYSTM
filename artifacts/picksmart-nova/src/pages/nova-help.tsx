@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { askNovaHelp } from "@/lib/novaHelpApi";
+import { askNovaHelp, type ChatMessage } from "@/lib/novaHelpApi";
 import { detectStopWord } from "@/lib/novaModeRouter";
 import { NovaVoiceStatus, type VoiceStateKey } from "@/components/nova/NovaVoiceStatus";
 import LockedAction from "@/components/paywall/LockedAction";
@@ -265,6 +265,8 @@ export default function NovaHelpPage() {
   const [log, setLog]                   = useState<LogEntry[]>([]);
   const [safetyMode, setSafetyMode]     = useState(false);
   const [safetyIndex, setSafetyIndex]   = useState(0);
+  const [chatHistory, setChatHistory]   = useState<ChatMessage[]>([]);
+  const chatHistoryRef                  = useRef<ChatMessage[]>([]);
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const sessionActiveRef  = useRef(false);
@@ -537,8 +539,11 @@ export default function NovaHelpPage() {
     setTalkSuggested(false);
     setPhase("thinking");
 
+    // Build updated history including this user message
+    const historyWithQ: ChatMessage[] = [...chatHistoryRef.current, { role: "user", content: q }];
+
     try {
-      const response = await askNovaHelp(q, isSpanish ? "es" : "en");
+      const response = await askNovaHelp(q, isSpanish ? "es" : "en", chatHistoryRef.current);
       if (!sessionActiveRef.current) return;
 
       const unsure = isNovaUnsure(response);
@@ -568,6 +573,14 @@ export default function NovaHelpPage() {
             ? response + " Si necesitas más ayuda, puedes solicitar hablar con alguien de nuestro equipo."
             : response + " If you need more help, you can request to speak with someone from our team.")
         : response;
+
+      // Save to conversation history
+      const updatedHistory: ChatMessage[] = [
+        ...historyWithQ,
+        { role: "assistant", content: response },
+      ];
+      chatHistoryRef.current = updatedHistory;
+      setChatHistory(updatedHistory);
 
       setAnswer(response);
       setPhase("speaking");
@@ -713,6 +726,8 @@ export default function NovaHelpPage() {
     setLastQuestion("");
     setErrorMsg("");
     setLog([]);
+    chatHistoryRef.current = [];
+    setChatHistory([]);
 
     // Personalized greeting for logged-in users
     if (isRealUser && firstName) {
@@ -964,33 +979,52 @@ export default function NovaHelpPage() {
           </div>
         )}
 
-        {/* Info panels */}
-        {sessionActive && (
+        {/* ── Chat bubble conversation history ─────────────────────────────── */}
+        {sessionActive && chatHistory.length > 0 && (
           <div className="w-full space-y-3">
-            {lastHeard && (
-              <div className="rounded-xl border border-white/5 bg-white/3 px-4 py-3 flex gap-3 items-start">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0 mt-0.5">
-                  {isSpanish ? "Oí" : "Heard"}
-                </span>
-                <p className="text-slate-300 text-sm">{lastHeard}</p>
+            {chatHistory.map((msg, i) => (
+              <div
+                key={i}
+                className={`flex gap-3 items-end ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
+              >
+                {/* Avatar */}
+                <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-black ${
+                  msg.role === "assistant"
+                    ? "bg-violet-600 text-white"
+                    : "bg-slate-700 text-slate-300"
+                }`}>
+                  {msg.role === "assistant" ? "N" : (firstName?.[0]?.toUpperCase() ?? "U")}
+                </div>
+                {/* Bubble */}
+                <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                  msg.role === "assistant"
+                    ? "bg-violet-950/60 border border-violet-500/20 text-white rounded-bl-sm"
+                    : "bg-slate-800 border border-slate-700 text-slate-200 rounded-br-sm"
+                }`}>
+                  {msg.role === "assistant" && (
+                    <p className="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-1">NOVA</p>
+                  )}
+                  <p>{msg.content}</p>
+                </div>
               </div>
-            )}
-            {lastQuestion && lastQuestion !== lastHeard && (
-              <div className="rounded-xl border border-white/5 bg-white/3 px-4 py-3 flex gap-3 items-start">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0 mt-0.5">
-                  {isSpanish ? "Tú" : "You"}
-                </span>
-                <p className="text-slate-300 text-sm">{lastQuestion}</p>
-              </div>
-            )}
-            {answer && (
-              <div className="rounded-2xl border border-violet-500/20 bg-violet-950/30 px-5 py-4">
-                <p className="text-xs text-violet-400 font-semibold uppercase tracking-widest mb-2">NOVA</p>
-                <p className="text-white text-base leading-relaxed">{answer}</p>
+            ))}
+
+            {/* Thinking indicator */}
+            {phase === "thinking" && (
+              <div className="flex gap-3 items-end">
+                <div className="shrink-0 w-7 h-7 rounded-full bg-violet-600 flex items-center justify-center text-xs font-black text-white">N</div>
+                <div className="bg-violet-950/60 border border-violet-500/20 rounded-2xl rounded-bl-sm px-4 py-3">
+                  <p className="text-[10px] font-black text-violet-400 uppercase tracking-widest mb-1">NOVA</p>
+                  <div className="flex gap-1 items-center h-5">
+                    <span className="w-2 h-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-2 h-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-2 h-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* Talk suggestion banner (shown when NOVA can't fully answer) */}
+            {/* Talk suggestion banner */}
             {talkSuggested && !talkSubmitted && (
               <div className="rounded-2xl border border-yellow-400/40 bg-yellow-500/10 px-5 py-4">
                 <p className="text-yellow-200 font-bold text-sm mb-1">
@@ -1013,7 +1047,54 @@ export default function NovaHelpPage() {
           </div>
         )}
 
-        {/* Wake word / Pause chips */}
+        {/* Quick-start chips — show when session is active but no chat history yet */}
+        {sessionActive && chatHistory.length === 0 && phase !== "thinking" && (
+          <div className="w-full">
+            <p className="text-xs text-slate-600 uppercase tracking-widest font-bold mb-2 text-center">
+              {isSpanish ? "Prueba preguntar:" : "Try asking:"}
+            </p>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {(isSpanish ? [
+                "¿Cómo construyo una tarima correctamente?",
+                "Dame consejos de seguridad",
+                "¿Cómo mejoro mi rendimiento?",
+                "¿Qué hago si hago un error de selección?",
+                "Haz mi revisión de seguridad",
+                "Me duele la espalda",
+              ] : [
+                "How do I build a pallet correctly?",
+                "Give me safety tips",
+                "How do I improve my rate?",
+                "What do I do if I mispick?",
+                "Run my safety check",
+                "My back is hurting",
+              ]).map((chip) => (
+                <button
+                  key={chip}
+                  onClick={async () => {
+                    unlockTTS();
+                    if (!sessionActive) {
+                      sessionActiveRef.current = true;
+                      setSessionActive(true);
+                      setLog([]);
+                    }
+                    stopRecognition();
+                    setTextInput("");
+                    if (isSafetyTrigger(chip)) { startSafetyCheckRef.current?.(); return; }
+                    addLog("USER", chip);
+                    setLastQuestion(chip);
+                    await handleQuestion(chip);
+                  }}
+                  className="rounded-full border border-violet-500/30 bg-violet-950/30 px-3 py-1.5 text-xs font-medium text-violet-300 hover:bg-violet-900/50 hover:border-violet-400/50 transition"
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Voice mode status chips */}
         {sessionActive && (
           <div className="w-full flex gap-3 text-center">
             <div className={`flex-1 rounded-xl border px-3 py-2.5 transition-all duration-300 ${

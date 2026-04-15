@@ -1,11 +1,17 @@
 import { matchNovaHelpAnswer } from "@/lib/novaHelpMatcher";
 
-export async function askNovaHelp(question: string, language = "en"): Promise<string> {
+export type ChatMessage = { role: "user" | "assistant"; content: string };
+
+export async function askNovaHelp(
+  question: string,
+  language = "en",
+  history: ChatMessage[] = [],
+): Promise<string> {
   try {
     const res = await fetch("/api/nova-help", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, language }),
+      body: JSON.stringify({ question, language, history }),
     });
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
