@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon, FlaskConical, DollarSign, Building2, CreditCard, Plus, Send, AlertCircle, Phone, FileText, X, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Clock, Youtube, TrendingUp, BarChart3, Briefcase, ChevronRight, Edit3, Trash2 } from "lucide-react";
+import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon, FlaskConical, DollarSign, Building2, CreditCard, Plus, Send, AlertCircle, Phone, FileText, X, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Clock, Youtube, TrendingUp, BarChart3, Briefcase, ChevronRight, Edit3, Trash2, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 import { OWNER_TOKEN } from "./owner-access";
 import { useAuthStore, AuthAccount, AuthRole } from "@/lib/authStore";
@@ -3941,8 +3941,179 @@ function OwnerControlPanel() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Contracts Tab
+// ─────────────────────────────────────────────────────────────────────────────
 
-const TABS = ["Dashboard", "Control Panel", "Revenue", "CRM", "Chat Logs", "NOVA Metrics", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests", "Lesson Videos", "Post Moderation", "Weekly Reports"] as const;
+type ContractRecord = {
+  id: string;
+  companyName: string;
+  contactName: string | null;
+  email: string | null;
+  contractTerm: string;
+  weeklyPrice: string;
+  totalContractValue: string | null;
+  signedName: string | null;
+  signedAt: string | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  status: string;
+  createdAt: string;
+};
+
+function ContractStatusBadge({ status }: { status: string }) {
+  if (status === "active")
+    return <span className="px-2 py-0.5 rounded-full text-xs font-black bg-green-500/20 text-green-400 border border-green-500/30">Active</span>;
+  if (status === "canceled")
+    return <span className="px-2 py-0.5 rounded-full text-xs font-black bg-red-500/20 text-red-400 border border-red-500/30">Canceled</span>;
+  return <span className="px-2 py-0.5 rounded-full text-xs font-black bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">Pending</span>;
+}
+
+function ContractsTab() {
+  const [contracts, setContracts] = useState<ContractRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const base = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
+
+  useEffect(() => {
+    fetch(`${base}/api/contracts`)
+      .then((r) => r.json())
+      .then((data) => { setContracts(Array.isArray(data) ? data : []); setLoading(false); })
+      .catch(() => { setError("Failed to load contracts."); setLoading(false); });
+  }, []);
+
+  const active   = contracts.filter((c) => c.status === "active").length;
+  const pending  = contracts.filter((c) => c.status === "pending").length;
+
+  const totalRevenue = contracts
+    .filter((c) => c.status === "active")
+    .reduce((sum, c) => sum + Number(c.weeklyPrice ?? 0), 0);
+
+  const dealSignUrl = `${window.location.origin}${base}/deal-sign`;
+
+  const [copiedLink, setCopiedLink] = useState(false);
+  function copyDealLink() {
+    navigator.clipboard.writeText(dealSignUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header + deal link */}
+      <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div>
+            <h2 className="text-xl font-black text-white">Company Contracts</h2>
+            <p className="text-slate-400 text-sm mt-1">Track all signed company agreements and their payment status.</p>
+          </div>
+          <div className="sm:ml-auto flex items-center gap-2">
+            <a
+              href={dealSignUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2 text-sm font-bold text-slate-300 hover:text-yellow-400 hover:border-yellow-400/40 transition"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Open Deal Sign Page
+            </a>
+            <button
+              onClick={copyDealLink}
+              className="flex items-center gap-2 rounded-xl bg-yellow-400 px-4 py-2 text-sm font-black text-slate-950 hover:bg-yellow-300 transition"
+            >
+              {copiedLink ? <><Check className="h-4 w-4" /> Copied!</> : <><Copy className="h-4 w-4" /> Copy Link</>}
+            </button>
+          </div>
+        </div>
+
+        {/* Deal sign URL display */}
+        <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 flex items-center gap-3">
+          <LucideLink className="h-4 w-4 text-yellow-400 flex-shrink-0" />
+          <span className="text-slate-400 text-sm font-mono truncate">{dealSignUrl}</span>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[
+          { label: "Total Contracts", value: contracts.length },
+          { label: "Active",          value: active,   color: "text-green-400" },
+          { label: "Pending",         value: pending,  color: "text-yellow-400" },
+          { label: "Weekly Revenue",  value: `$${totalRevenue.toLocaleString()}`, color: "text-white" },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{label}</p>
+            <p className={`text-2xl font-black mt-1 ${color ?? "text-white"}`}>{value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Contracts table */}
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-8 w-8 text-yellow-400 animate-spin" />
+        </div>
+      ) : error ? (
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-center text-red-400">
+          {error}
+        </div>
+      ) : contracts.length === 0 ? (
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-12 text-center space-y-3">
+          <FileText className="h-12 w-12 text-slate-700 mx-auto" />
+          <p className="text-white font-bold text-lg">No contracts yet</p>
+          <p className="text-slate-400 text-sm">Share the deal sign link with companies to get started.</p>
+        </div>
+      ) : (
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-500 text-xs uppercase tracking-widest">
+                  <th className="text-left px-5 py-3 font-bold">Company</th>
+                  <th className="text-left px-5 py-3 font-bold">Term</th>
+                  <th className="text-left px-5 py-3 font-bold">Total Value</th>
+                  <th className="text-left px-5 py-3 font-bold">Weekly Rate</th>
+                  <th className="text-left px-5 py-3 font-bold">Signed By</th>
+                  <th className="text-left px-5 py-3 font-bold">Signed</th>
+                  <th className="text-left px-5 py-3 font-bold">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contracts.map((c, i) => (
+                  <tr
+                    key={c.id}
+                    className={`border-b border-slate-800/60 hover:bg-slate-800/40 transition ${i % 2 === 0 ? "" : "bg-slate-900/30"}`}
+                  >
+                    <td className="px-5 py-3.5">
+                      <p className="font-bold text-white">{c.companyName}</p>
+                      {c.email && <p className="text-slate-500 text-xs mt-0.5">{c.email}</p>}
+                    </td>
+                    <td className="px-5 py-3.5 font-bold text-yellow-400">{c.contractTerm}</td>
+                    <td className="px-5 py-3.5 font-bold text-white">
+                      {c.totalContractValue ? `$${Number(c.totalContractValue).toLocaleString()}` : "—"}
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-300">${Number(c.weeklyPrice).toLocaleString()}/wk</td>
+                    <td className="px-5 py-3.5 text-slate-300">{c.signedName ?? "—"}</td>
+                    <td className="px-5 py-3.5 text-slate-400 text-xs">
+                      {c.signedAt ? new Date(c.signedAt).toLocaleDateString() : "—"}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <ContractStatusBadge status={c.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TABS = ["Dashboard", "Control Panel", "Contracts", "Revenue", "CRM", "Chat Logs", "NOVA Metrics", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests", "Lesson Videos", "Post Moderation", "Weekly Reports"] as const;
 type Tab = typeof TABS[number];
 
 export default function OwnerPage() {
@@ -3958,6 +4129,7 @@ export default function OwnerPage() {
   function tabLabel(tab: Tab) {
     if (tab === "Dashboard")        return "📊 Dashboard";
     if (tab === "Control Panel")    return "🏢 Control Panel";
+    if (tab === "Contracts")        return "📄 Contracts";
     if (tab === "Revenue")          return "💰 Revenue";
     if (tab === "CRM")            return "🤝 CRM";
     if (tab === "Chat Logs")      return "💬 Chat Logs";
@@ -4034,6 +4206,7 @@ export default function OwnerPage() {
         )}
 
         {activeTab === "Control Panel" && <OwnerControlPanel />}
+        {activeTab === "Contracts" && <ContractsTab />}
         {activeTab === "Revenue" && <RevenueTab />}
         {activeTab === "CRM" && <CRMSection />}
         {activeTab === "Chat Logs" && <ChatLogsSection />}

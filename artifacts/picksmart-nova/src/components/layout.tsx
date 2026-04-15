@@ -21,12 +21,13 @@ import SubscribePromptModal from "@/components/paywall/SubscribePromptModal";
 import DemoBanner from "@/components/DemoBanner";
 
 // Paths that are always free — no subscription required to visit.
-const FREE_PATHS = ["/", "/pricing", "/choose-plan", "/login", "/privacy", "/terms", "/register", "/download", "/payment-success", "/payment-cancel"];
+const FREE_PATHS = ["/", "/pricing", "/choose-plan", "/login", "/privacy", "/terms", "/register", "/download", "/payment-success", "/payment-cancel", "/deal-sign"];
 function isFree(href: string) {
   return FREE_PATHS.includes(href) ||
     href.startsWith("/checkout") ||
     href.startsWith("/owner-access") ||
     href.startsWith("/invite") ||
+    href.startsWith("/deal-sign") ||
     href.startsWith("/w/") ||
     href.startsWith("/register") ||
     href.startsWith("/download") ||

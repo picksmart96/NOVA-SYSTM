@@ -75,6 +75,7 @@ import DemoNovaHelpPage from "@/pages/demo/DemoNovaHelpPage";
 import RequestAccessPage from "@/pages/RequestAccessPage";
 import DealDetailPage from "@/pages/deal-detail";
 import DealSignPage from "@/pages/deal-sign";
+import DealSignDirectPage from "@/pages/deal-sign-direct";
 import NovaSalesVoiceAgent from "@/pages/NovaSalesVoiceAgent";
 import PaymentSuccessPage from "@/pages/payment-success";
 import PaymentCancelPage from "@/pages/payment-cancel";
@@ -191,6 +192,9 @@ function Router() {
       </Route>
       <Route path="/deal-sign/:id">
         <DealSignPage />
+      </Route>
+      <Route path="/deal-sign">
+        <DealSignDirectPage />
       </Route>
       <Route path="/meet-nova">
         <NovaSalesVoiceAgent />
