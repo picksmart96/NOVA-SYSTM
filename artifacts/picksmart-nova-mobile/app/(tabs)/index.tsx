@@ -19,6 +19,8 @@ import colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import NovaOrb from "@/components/NovaOrb";
 import { useWakeWordRecognition } from "@/hooks/useSpeechRecognition";
+import { useWakeLock } from "@/hooks/useWakeLock";
+import { useBackgroundAudio } from "@/hooks/useBackgroundAudio";
 
 type OrbState = "idle" | "wake" | "listening" | "thinking" | "speaking";
 interface Message { id: string; role: "nova" | "user"; text: string; }
@@ -53,11 +55,17 @@ export default function NovaScreen() {
   const c           = colors.dark;
   const isES        = language === "es";
 
+  // Keep native audio session active in background (mic + speaker through lock screen)
+  useBackgroundAudio();
+
   const [messages,      setMessages]      = useState<Message[]>([]);
   const [input,         setInput]         = useState("");
   const [orbState,      setOrbState]      = useState<OrbState>("wake");
   const [micEnabled,    setMicEnabled]    = useState(true);
   const [errorMsg,      setErrorMsg]      = useState("");
+
+  // Keep screen awake on web while mic is on so the lock screen doesn't cut the mic
+  useWakeLock(micEnabled);
   // Web audio autoplay policy: speechSynthesis must be triggered by a user gesture.
   // On native it's always unlocked; on web we need a tap first.
   const [audioUnlocked, setAudioUnlocked] = useState(Platform.OS !== "web");
