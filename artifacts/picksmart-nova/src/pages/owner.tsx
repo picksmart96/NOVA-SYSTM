@@ -3444,9 +3444,267 @@ function PostModerationSection() {
   );
 }
 
+// ── Chat Logs Section ─────────────────────────────────────────────────────────
+
+interface NovaSession {
+  id: string;
+  visitorName: string;
+  companyName: string;
+  email: string;
+  phone: string;
+  painPoint: string;
+  stageReached: string;
+  trialClicked: boolean;
+  trialSubmitted: boolean;
+  messageCount: number;
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface NovaMsg {
+  id: number;
+  sessionId: string;
+  role: string;
+  content: string;
+  createdAt: string;
+}
+
+function ChatLogsSection() {
+  const [sessions, setSessions]         = useState<NovaSession[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [selectedId, setSelectedId]     = useState<string | null>(null);
+  const [thread, setThread]             = useState<NovaMsg[]>([]);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [filter, setFilter]             = useState<"all" | "trial" | "submitted">("all");
+
+  useEffect(() => {
+    fetch("/api/nova-sessions")
+      .then((r) => r.json())
+      .then((data) => { setSessions(Array.isArray(data) ? data : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  async function openThread(id: string) {
+    setSelectedId(id);
+    setThreadLoading(true);
+    try {
+      const r = await fetch(`/api/nova-sessions/${id}/messages`);
+      const data = await r.json();
+      setThread(Array.isArray(data) ? data : []);
+    } catch { setThread([]); }
+    setThreadLoading(false);
+  }
+
+  const filtered = sessions.filter((s) => {
+    if (filter === "trial")     return s.trialClicked;
+    if (filter === "submitted") return s.trialSubmitted;
+    return true;
+  });
+
+  const selected = sessions.find((s) => s.id === selectedId);
+
+  const stats = {
+    total:     sessions.length,
+    trials:    sessions.filter((s) => s.trialClicked).length,
+    submitted: sessions.filter((s) => s.trialSubmitted).length,
+    today:     sessions.filter((s) => new Date(s.createdAt).toDateString() === new Date().toDateString()).length,
+  };
+
+  function stageBadge(stage: string) {
+    const map: Record<string, string> = {
+      greeting: "bg-slate-700 text-slate-300",
+      name_ask: "bg-slate-700 text-slate-300",
+      reason_ask: "bg-blue-900/60 text-blue-300",
+      discovery: "bg-blue-900/60 text-blue-300",
+      pitch: "bg-yellow-900/60 text-yellow-300",
+      demo: "bg-yellow-900/60 text-yellow-300",
+      close: "bg-orange-900/60 text-orange-300",
+      trial: "bg-green-900/60 text-green-300",
+    };
+    return map[stage] || "bg-slate-700 text-slate-300";
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Stats row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[
+          { label: "Total Chats", value: stats.total },
+          { label: "Today", value: stats.today },
+          { label: "Trial Clicked", value: stats.trials },
+          { label: "Trial Submitted", value: stats.submitted },
+        ].map(({ label, value }) => (
+          <div key={label} className="rounded-2xl border border-slate-800 bg-slate-900 p-4 text-center">
+            <p className="text-2xl font-black text-yellow-400">{value}</p>
+            <p className="text-xs text-slate-400 mt-1">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid xl:grid-cols-5 gap-6">
+        {/* Session list */}
+        <div className="xl:col-span-2 space-y-3">
+          {/* Filter */}
+          <div className="flex gap-2">
+            {(["all", "trial", "submitted"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                  filter === f
+                    ? "bg-yellow-400 text-slate-950"
+                    : "border border-slate-700 text-slate-400 hover:text-white"
+                }`}
+              >
+                {f === "all" ? "All Chats" : f === "trial" ? "Trial Clicked" : "Trial Submitted"}
+              </button>
+            ))}
+          </div>
+
+          {loading ? (
+            <p className="text-slate-500 text-sm py-6 text-center">Loading…</p>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center">
+              <p className="text-slate-400 text-sm">No conversations yet.</p>
+              <p className="text-slate-600 text-xs mt-1">They'll appear here as visitors chat with NOVA.</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+              {filtered.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => openThread(s.id)}
+                  className={`w-full text-left rounded-2xl border p-4 transition ${
+                    selectedId === s.id
+                      ? "border-yellow-400 bg-yellow-400/5"
+                      : "border-slate-800 bg-slate-900 hover:border-slate-700"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-bold text-sm text-white truncate">
+                        {s.visitorName || "Anonymous visitor"}
+                      </p>
+                      {s.companyName && (
+                        <p className="text-xs text-slate-400 truncate">{s.companyName}</p>
+                      )}
+                      {s.email && (
+                        <p className="text-xs text-slate-500 truncate">{s.email}</p>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      {s.trialSubmitted && (
+                        <span className="px-2 py-0.5 rounded-full bg-green-500/20 border border-green-500/40 text-green-400 text-[10px] font-black">SIGNED UP</span>
+                      )}
+                      {s.trialClicked && !s.trialSubmitted && (
+                        <span className="px-2 py-0.5 rounded-full bg-yellow-400/20 border border-yellow-400/40 text-yellow-300 text-[10px] font-black">TRIAL CLICKED</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${stageBadge(s.stageReached)}`}>
+                      {s.stageReached.replace(/_/g, " ")}
+                    </span>
+                    {s.painPoint && (
+                      <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px]">
+                        {s.painPoint}
+                      </span>
+                    )}
+                    <span className="text-slate-600 text-[10px] ml-auto">
+                      {s.messageCount} msg{s.messageCount !== 1 ? "s" : ""} · {new Date(s.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Conversation thread */}
+        <div className="xl:col-span-3">
+          {!selectedId ? (
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 h-full flex items-center justify-center py-20">
+              <div className="text-center">
+                <p className="text-3xl mb-3">💬</p>
+                <p className="text-slate-400 font-bold">Select a conversation</p>
+                <p className="text-slate-600 text-sm mt-1">Click any chat on the left to see the full transcript</p>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden flex flex-col" style={{ minHeight: 500 }}>
+              {/* Thread header */}
+              {selected && (
+                <div className="border-b border-slate-800 px-5 py-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-black text-white">{selected.visitorName || "Anonymous visitor"}</p>
+                      <div className="flex gap-3 mt-0.5 text-xs text-slate-400 flex-wrap">
+                        {selected.companyName && <span>🏢 {selected.companyName}</span>}
+                        {selected.email && <span>✉️ {selected.email}</span>}
+                        {selected.phone && <span>📞 {selected.phone}</span>}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      {selected.trialSubmitted && (
+                        <span className="px-2 py-1 rounded-xl bg-green-500/20 border border-green-500/40 text-green-400 text-xs font-black">SIGNED UP</span>
+                      )}
+                      {selected.trialClicked && !selected.trialSubmitted && (
+                        <span className="px-2 py-1 rounded-xl bg-yellow-400/20 border border-yellow-400/40 text-yellow-300 text-xs font-black">TRIAL CLICKED</span>
+                      )}
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${stageBadge(selected.stageReached)}`}>
+                        reached: {selected.stageReached.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-slate-600 text-xs mt-1">
+                    {new Date(selected.createdAt).toLocaleString()} · {selected.messageCount} messages
+                    {selected.painPoint ? ` · pain: ${selected.painPoint}` : ""}
+                  </p>
+                </div>
+              )}
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-3">
+                {threadLoading ? (
+                  <p className="text-slate-500 text-sm text-center py-8">Loading transcript…</p>
+                ) : thread.length === 0 ? (
+                  <p className="text-slate-500 text-sm text-center py-8">No messages recorded yet.</p>
+                ) : (
+                  thread.map((msg) => (
+                    <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                      {msg.role === "assistant" && (
+                        <div className="w-6 h-6 rounded-md bg-yellow-400 flex items-center justify-center mr-2 mt-1 shrink-0">
+                          <span className="text-slate-950 font-black text-[10px]">N</span>
+                        </div>
+                      )}
+                      <div
+                        className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-line ${
+                          msg.role === "assistant"
+                            ? "bg-slate-800 text-slate-100"
+                            : "bg-yellow-400 text-slate-950 font-medium"
+                        }`}
+                      >
+                        {msg.content}
+                        <p className="text-[10px] opacity-40 mt-1">
+                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TABS = ["Dashboard", "Revenue", "CRM", "NOVA Metrics", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests", "Lesson Videos", "Post Moderation", "Weekly Reports"] as const;
+const TABS = ["Dashboard", "Revenue", "CRM", "Chat Logs", "NOVA Metrics", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests", "Lesson Videos", "Post Moderation", "Weekly Reports"] as const;
 type Tab = typeof TABS[number];
 
 export default function OwnerPage() {
@@ -3463,6 +3721,7 @@ export default function OwnerPage() {
     if (tab === "Dashboard")      return "📊 Dashboard";
     if (tab === "Revenue")        return "💰 Revenue";
     if (tab === "CRM")            return "🤝 CRM";
+    if (tab === "Chat Logs")      return "💬 Chat Logs";
     if (tab === "Links")          return "🔗 Links";
     if (tab === "Handbook")       return "📖 Handbook";
     if (tab === "Users & Access") return "👥 Users & Access";
@@ -3537,6 +3796,7 @@ export default function OwnerPage() {
 
         {activeTab === "Revenue" && <RevenueTab />}
         {activeTab === "CRM" && <CRMSection />}
+        {activeTab === "Chat Logs" && <ChatLogsSection />}
         {activeTab === "NOVA Metrics" && <NovaMetricsTab />}
         {activeTab === "Links" && <LinkLibrary />}
         {activeTab === "Handbook" && <HandbookSection />}

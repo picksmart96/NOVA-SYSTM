@@ -12,3 +12,4 @@ export * from "./social-moderation";
 export * from "./social-performance";
 export * from "./owner-leads";
 export * from "./nova-metrics";
+export * from "./nova-sessions";

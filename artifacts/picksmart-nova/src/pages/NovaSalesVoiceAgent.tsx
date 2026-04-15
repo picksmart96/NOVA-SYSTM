@@ -400,9 +400,11 @@ export default function NovaSalesVoiceAgent() {
     selectors: null,
   });
 
-  const recognitionRef = useRef<any>(null);
-  const sendMessageRef = useRef<((text: string) => void) | null>(null);
-  const endRef = useRef<HTMLDivElement>(null);
+  const recognitionRef    = useRef<any>(null);
+  const sendMessageRef    = useRef<((text: string) => void) | null>(null);
+  const endRef            = useRef<HTMLDivElement>(null);
+  const sessionIdRef      = useRef<string>(crypto.randomUUID());
+  const savedMsgCountRef  = useRef<number>(1); // welcome message is index 0, skip it
 
   const canListen = useMemo(() => {
     if (typeof window === "undefined") return false;
@@ -418,6 +420,48 @@ export default function NovaSalesVoiceAgent() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // ── Save session + new messages to DB whenever messages change ───────────────
+  useEffect(() => {
+    if (messages.length <= 1) return; // only welcome msg, nothing to save yet
+    const newMsgs = messages.slice(savedMsgCountRef.current);
+    if (newMsgs.length === 0) return;
+
+    const sid = sessionIdRef.current;
+    const fire = async () => {
+      try {
+        // Upsert session metadata
+        await fetch("/api/nova-sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: sid,
+            visitorName:    lead.managerName,
+            companyName:    lead.companyName,
+            email:          lead.email,
+            phone:          lead.phone,
+            painPoint:      lead.painPoint,
+            stageReached:   stage,
+            trialClicked:   showTrialForm || trialCreated,
+            trialSubmitted: trialCreated,
+            messageCount:   messages.length - 1,
+          }),
+        });
+        // Save new messages
+        await fetch(`/api/nova-sessions/${sid}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: newMsgs.map((m) => ({ role: m.role, content: m.text })),
+          }),
+        });
+        savedMsgCountRef.current = messages.length;
+      } catch {
+        // silent — tracking should never break the UX
+      }
+    };
+    fire();
+  }, [messages, lead, stage, showTrialForm, trialCreated]);
 
   // ── Track chat_started on mount ─────────────────────────────────────────────
   useEffect(() => {
