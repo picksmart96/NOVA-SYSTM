@@ -5,8 +5,8 @@ export default function HomeFooter() {
   const { t } = useTranslation();
 
   return (
-    <footer className="border-t border-slate-800 bg-slate-950 py-12">
-      <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-8 items-start">
+    <footer className="border-t border-slate-800 bg-slate-950">
+      <div className="max-w-7xl mx-auto px-6 py-12 grid md:grid-cols-2 gap-8 items-start">
         <div>
           <h3 className="text-2xl font-bold text-white">PickSmart Academy</h3>
           <p className="mt-3 max-w-xl text-slate-400">
@@ -39,6 +39,30 @@ export default function HomeFooter() {
               <Link href="/privacy" className="block hover:text-yellow-400">Privacy Policy</Link>
               <Link href="/terms" className="block hover:text-yellow-400">Terms of Service</Link>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom legal bar */}
+      <div className="border-t border-slate-800/60 bg-slate-950 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p className="text-slate-600 text-xs">
+            © {new Date().getFullYear()} PickSmart Academy. All rights reserved.
+          </p>
+          <div className="flex items-center gap-1 text-xs">
+            <Link
+              href="/privacy"
+              className="text-slate-500 hover:text-yellow-400 transition-colors px-3 py-1.5 rounded-lg hover:bg-slate-800"
+            >
+              Privacy Policy
+            </Link>
+            <span className="text-slate-700">·</span>
+            <Link
+              href="/terms"
+              className="text-slate-500 hover:text-yellow-400 transition-colors px-3 py-1.5 rounded-lg hover:bg-slate-800"
+            >
+              Terms of Service
+            </Link>
           </div>
         </div>
       </div>
