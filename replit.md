@@ -198,6 +198,25 @@ training, nova-help, common-mistakes, leaderboard, selector-breaking-news, train
 - **Component**: `src/components/training/LessonVideoPlayer.tsx` — shows embedded player or placeholder + YouTube search link
 - **Integration**: Lesson session welcome screen + module detail expandable rows
 
+## Account Numbers
+- **Format**: `PSA-XXXX` (4-digit zero-padded), e.g. `PSA-0001`
+- **Master account**: Always `PSA-0001` (hardcoded in `MASTER_ACCOUNT`)
+- **Counter**: `nextAccountNumber: number` in `authStore` (persisted), starts at 2
+- **Assignment**: Automatically assigned on `createAccount` and `acceptInvite`
+- **Display**: Shown in Selector Portal header (account number card alongside NOVA Pin)
+- **Owner lookup**: Owner panel User Management has `AccountNumberLookup` component — type PSA-XXXX to find user by name+role
+- **Owner user list**: Each user row shows their `accountNumber` badge in yellow
+
+## NOVA Support Agent (`/meet-nova`)
+- Rebranded from sales agent to **support agent**
+- **Flow**: account_verify → support (replaces the old sales funnel stages)
+- **Verification**: User types their PSA-XXXX number → `getAccountByNumber()` looks up authStore → shows green verified banner with name + role
+- **Support topics**: warehouse performance, picking strategies, floor safety, training tips, NOVA system usage
+- **Refused topics**: billing, contracts, pricing, invoices, payments, subscriptions, refunds, agreements — responded to with "contact your account owner"
+- **AI backend**: Uses `/api/nova-help` (NOVA Help endpoint) for answers once verified
+- **Quick chips**: Changes to warehouse-focused chips after verification
+- **Sidebar**: Shows green "Verified Account" card with full name, role, and capabilities list when verified
+
 ## Architecture Notes
 - Frontend is pure Vite SPA, no SSR
 - API is OpenAPI-first, codegen via Orval

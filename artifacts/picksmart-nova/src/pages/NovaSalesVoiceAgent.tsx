@@ -35,6 +35,15 @@ const QUICK_REPLIES = [
   "I want to talk to a real person",
 ];
 
+const SUPPORT_QUICK_REPLIES = [
+  "How do I improve my pick rate?",
+  "What are best practices for reducing mispicks?",
+  "How do I train new selectors faster?",
+  "What is the safest way to handle heavy loads?",
+  "How do I use the NOVA voice commands?",
+  "Tips for staying focused during long shifts",
+];
+
 function isRealPersonTrigger(text: string) {
   const t = text.toLowerCase();
   return (
@@ -371,12 +380,12 @@ export default function NovaSalesVoiceAgent() {
     {
       id: "welcome",
       role: "assistant",
-      text: "Hi! My name is NOVA and I'll be assisting you today.\n\nIf you ever feel like I'm not the right fit, I can send a request to my boss — it usually takes about 24 hours to reply, but I'm fully certified and here to help.\n\nI hope I'm doing a good job so far!\n\nSo — what's your name?",
+      text: "Hi! I'm NOVA, your PickSmart Academy support assistant.\n\nTo get started, please share your **Account Number** (it looks like PSA-0001) — you can find it on your Selector Portal or in your welcome email.",
       createdAt: new Date(),
     },
   ]);
   const [input, setInput] = useState("");
-  const [stage, setStage] = useState<SalesStage>("greeting");
+  const [stage, setStage] = useState<SalesStage>("account_verify");
   const [isListening, setIsListening] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
@@ -400,6 +409,9 @@ export default function NovaSalesVoiceAgent() {
     painPoint: "",
     selectors: null,
   });
+  const [verifiedAccount, setVerifiedAccount] = useState<{ fullName: string; accountNumber: string; role: string } | null>(null);
+
+  const { getAccountByNumber } = useAuthStore();
 
   const recognitionRef    = useRef<any>(null);
   const sendMessageRef    = useRef<((text: string) => void) | null>(null);
@@ -532,7 +544,7 @@ export default function NovaSalesVoiceAgent() {
     setTtsUnlocked(true);
 
     const welcome =
-      "Hi! My name is NOVA and I'll be assisting you today. If you ever feel like I'm not the right fit, I can send a request to my boss — it usually takes about 24 hours to reply, but I'm fully certified and here to help. I hope I'm doing a good job so far! So — what's your name?";
+      "Hi! I'm NOVA, your PickSmart Academy support assistant. To get started, please share your account number — it starts with PSA, like PSA-0001. You can find it on your Selector Portal or in your welcome email.";
 
     if (!canSpeak) {
       setTimeout(startListening, 300);
@@ -637,7 +649,27 @@ export default function NovaSalesVoiceAgent() {
   ): Promise<{ text: string; stage: SalesStage } | null> => {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 6000); // 6s timeout
+      const timeout = setTimeout(() => controller.abort(), 8000);
+
+      // Support mode uses the NOVA Help endpoint with warehouse/performance context
+      if (currentStage === "support") {
+        const history = conversationMessages.slice(-10).map((m) => ({
+          role: m.role as "assistant" | "user",
+          content: m.text,
+        }));
+        const lastUserMsg = conversationMessages.filter((m) => m.role === "user").at(-1)?.text ?? "";
+
+        const res = await fetch("/api/nova-help", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({ question: lastUserMsg, lang: "en", history: history.slice(0, -1) }),
+        });
+        clearTimeout(timeout);
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data.answer ? { text: data.answer, stage: "support" } : null;
+      }
 
       const res = await fetch("/api/nova-sales-chat", {
         method: "POST",
@@ -692,6 +724,58 @@ export default function NovaSalesVoiceAgent() {
       if (firstName) currentLead.managerName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
     }
     setLead(currentLead);
+
+    // ── Account verification stage ─────────────────────────────────────────────
+    if (stage === "account_verify") {
+      // Try to extract a PSA number from the text
+      const psaMatch = text.match(/PSA[-\s]?(\d{1,6})/i) ?? text.match(/\b(\d{4})\b/);
+      const lookupKey = psaMatch
+        ? `PSA-${psaMatch[1].padStart(4, "0")}`
+        : text.trim().toUpperCase().startsWith("PSA")
+          ? text.trim().toUpperCase()
+          : null;
+
+      const found = lookupKey ? getAccountByNumber(lookupKey) : null;
+
+      setTimeout(() => {
+        if (found) {
+          const greeting = `Great to see you, ${found.fullName}! 👋 I've verified your account (${found.accountNumber}).\n\nI'm here to help with anything warehouse or work performance related — picking strategies, floor safety, training tips, NOVA system usage, and more.\n\nJust know I can't discuss billing, contracts, or company agreements. For those, contact your account owner directly.\n\nWhat can I help you with today?`;
+          setVerifiedAccount({ fullName: found.fullName, accountNumber: found.accountNumber ?? "", role: found.role });
+          setStage("support");
+          pushMessage("assistant", greeting);
+          speak(`Great to see you, ${found.fullName}! I've verified your account. What can I help you with today?`);
+        } else {
+          const notFound = lookupKey
+            ? `Hmm, I couldn't find an account matching **${lookupKey}**. Double-check the number and try again — it should look like PSA-0001. If you can't find it, contact your supervisor or owner.`
+            : "I need your account number to verify your identity. It looks like PSA-0001 — you can find it on your Selector Portal or in your welcome email.";
+          pushMessage("assistant", notFound);
+          speak("I couldn't verify that account number. Please double-check and try again.");
+        }
+        setIsThinking(false);
+      }, 500);
+      return;
+    }
+
+    // ── Support mode — refuse finance/contract topics ───────────────────────────
+    if (stage === "support") {
+      const t = text.toLowerCase();
+      const isFinanceTopic =
+        t.includes("price") || t.includes("pricing") || t.includes("billing") ||
+        t.includes("invoice") || t.includes("contract") || t.includes("payment") ||
+        t.includes("subscription") || t.includes("refund") || t.includes("cost") ||
+        t.includes("charge") || t.includes("agreement") || t.includes("cancel") ||
+        t.includes("discount") || t.includes("quote");
+
+      if (isFinanceTopic) {
+        setTimeout(() => {
+          const msg = "That's outside what I can help with — billing, contracts, and financial agreements are handled directly by your account owner or our finance team.\n\nIs there anything warehouse or performance related I can help you with?";
+          pushMessage("assistant", msg);
+          speak("Billing and contract questions are handled by your account owner. I can help with warehouse and performance questions instead.");
+          setIsThinking(false);
+        }, 400);
+        return;
+      }
+    }
 
     // Detect "real person" request — always handle locally
     if (isRealPersonTrigger(text)) {
@@ -758,7 +842,7 @@ export default function NovaSalesVoiceAgent() {
               <div className="relative flex h-full w-full items-center justify-center rounded-full border-4 border-yellow-400 bg-slate-950 shadow-[0_0_60px_rgba(250,204,21,0.4)]">
                 <div className="text-center">
                   <p className="text-3xl font-black text-white">NOVA</p>
-                  <p className="text-[10px] text-yellow-400 font-bold tracking-widest">SALES AGENT</p>
+                  <p className="text-[10px] text-yellow-400 font-bold tracking-widest">SUPPORT</p>
                 </div>
               </div>
             </div>
@@ -808,7 +892,7 @@ export default function NovaSalesVoiceAgent() {
           </div>
 
           {/* Label + title */}
-          <h2 className="text-4xl font-black text-white mb-2">Meet NOVA</h2>
+          <h2 className="text-4xl font-black text-white mb-2">NOVA Support</h2>
           <p className="text-xs font-bold tracking-[0.25em] uppercase text-yellow-400 mb-6">Speaking…</p>
 
           {/* What NOVA is saying */}
@@ -851,7 +935,7 @@ export default function NovaSalesVoiceAgent() {
               <Mic className="h-7 w-7 text-slate-950" />
             </div>
           </div>
-          <h2 className="text-4xl font-black text-white mb-2">Meet NOVA</h2>
+          <h2 className="text-4xl font-black text-white mb-2">NOVA Support</h2>
           <p className="text-xs font-bold tracking-[0.25em] uppercase text-yellow-400 mb-6">Listening…</p>
           <p className="text-slate-400 text-sm text-center max-w-xs">Speak now — NOVA is ready for your response</p>
           <button
@@ -966,20 +1050,31 @@ export default function NovaSalesVoiceAgent() {
 
       {/* Header */}
       <div className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-sm px-6 py-4">
-        <div className="mx-auto max-w-6xl flex items-center justify-between">
+        <div className="mx-auto max-w-6xl flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-yellow-400 flex items-center justify-center">
               <span className="text-slate-950 font-black text-sm">N</span>
             </div>
             <div>
-              <p className="font-black text-white leading-none">Meet NOVA</p>
-              <p className="text-xs text-yellow-300 mt-0.5">Sales Voice Agent</p>
+              <p className="font-black text-white leading-none">NOVA Support</p>
+              <p className="text-xs text-yellow-300 mt-0.5">PickSmart Academy Support Agent</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-1 rounded-full bg-yellow-400/10 border border-yellow-400/30 text-yellow-300 text-xs font-bold uppercase tracking-wider capitalize">
-              {stage === "greeting" || stage === "name_ask" ? "getting started" : stage === "reason_ask" ? "listening" : stage.replace("_", " ")}
-            </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Verified account banner */}
+            {verifiedAccount && (
+              <div className="flex items-center gap-2 rounded-xl border border-green-500/40 bg-green-500/10 px-3 py-1.5">
+                <ShieldCheck className="h-3.5 w-3.5 text-green-400 shrink-0" />
+                <span className="text-green-300 text-xs font-bold">{verifiedAccount.accountNumber}</span>
+                <span className="text-green-400/60 text-xs">·</span>
+                <span className="text-green-300 text-xs truncate max-w-[100px]">{verifiedAccount.fullName}</span>
+              </div>
+            )}
+            {!verifiedAccount && stage === "account_verify" && (
+              <span className="px-2 py-1 rounded-full bg-orange-400/10 border border-orange-400/30 text-orange-300 text-xs font-bold uppercase tracking-wider">
+                Awaiting Account #
+              </span>
+            )}
             <button
               onClick={() => { setVoiceOn((v) => !v); if (canSpeak) window.speechSynthesis.cancel(); }}
               className="p-2 rounded-xl border border-slate-700 hover:border-slate-500 text-slate-400 hover:text-white transition"
@@ -994,19 +1089,37 @@ export default function NovaSalesVoiceAgent() {
       <div className="mx-auto max-w-6xl grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)] p-4 md:p-6">
         {/* ── Left sidebar ──────────────────────────────────────────────────── */}
         <aside className="space-y-4 h-fit">
-          {/* NOVA intro card */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <p className="text-xs font-bold uppercase tracking-widest text-yellow-300">What NOVA Does</p>
-            <p className="mt-3 text-slate-300 text-sm leading-6">
-              NOVA gives every selector real-time voice coaching, improves pick accuracy, and gives supervisors live shift control — running during actual picking, not in a classroom.
-            </p>
-            <div className="mt-4 flex flex-col gap-2 text-xs text-slate-400">
-              <span className="flex items-center gap-2"><span className="text-yellow-400">✓</span> Live voice picking guidance</span>
-              <span className="flex items-center gap-2"><span className="text-yellow-400">✓</span> Mistake coaching &amp; safety</span>
-              <span className="flex items-center gap-2"><span className="text-yellow-400">✓</span> Supervisor shift control</span>
-              <span className="flex items-center gap-2"><span className="text-yellow-400">✓</span> 30-day free trial</span>
+          {/* Context card */}
+          {verifiedAccount ? (
+            <div className="rounded-2xl border border-green-500/30 bg-green-500/5 p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <ShieldCheck className="h-4 w-4 text-green-400" />
+                <p className="text-xs font-bold uppercase tracking-widest text-green-400">Verified Account</p>
+              </div>
+              <p className="font-black text-white text-sm">{verifiedAccount.fullName}</p>
+              <p className="text-xs text-slate-400 mt-0.5 capitalize">{verifiedAccount.role} · {verifiedAccount.accountNumber}</p>
+              <div className="mt-4 flex flex-col gap-2 text-xs text-slate-400">
+                <span className="flex items-center gap-2"><span className="text-green-400">✓</span> Picking strategies &amp; tips</span>
+                <span className="flex items-center gap-2"><span className="text-green-400">✓</span> Floor safety &amp; best practices</span>
+                <span className="flex items-center gap-2"><span className="text-green-400">✓</span> Training &amp; onboarding help</span>
+                <span className="flex items-center gap-2"><span className="text-green-400">✓</span> NOVA system usage</span>
+                <span className="flex items-center gap-2"><span className="text-red-400/70">✗</span> Billing / contracts (contact owner)</span>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <p className="text-xs font-bold uppercase tracking-widest text-yellow-300">NOVA Support</p>
+              <p className="mt-3 text-slate-300 text-sm leading-6">
+                I'm here to help with warehouse performance, picking strategies, safety, training tips, and NOVA system questions.
+              </p>
+              <div className="mt-4 flex flex-col gap-2 text-xs text-slate-400">
+                <span className="flex items-center gap-2"><span className="text-yellow-400">✓</span> Picking speed &amp; accuracy</span>
+                <span className="flex items-center gap-2"><span className="text-yellow-400">✓</span> Floor safety practices</span>
+                <span className="flex items-center gap-2"><span className="text-yellow-400">✓</span> Training new hires</span>
+                <span className="flex items-center gap-2"><span className="text-yellow-400">✓</span> NOVA system help</span>
+              </div>
+            </div>
+          )}
 
           {/* Lead snapshot */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
@@ -1060,18 +1173,25 @@ export default function NovaSalesVoiceAgent() {
 
           {/* Quick replies */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-            <p className="text-xs font-bold uppercase tracking-widest text-yellow-300 mb-3">Quick Replies</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-yellow-300 mb-3">
+              {stage === "support" ? "Common Questions" : "Quick Replies"}
+            </p>
             <div className="space-y-2">
-              {QUICK_REPLIES.map((r) => (
+              {(stage === "support" ? SUPPORT_QUICK_REPLIES : QUICK_REPLIES).map((r) => (
                 <button
                   key={r}
                   onClick={() => sendMessage(r)}
-                  disabled={isThinking}
+                  disabled={isThinking || stage === "account_verify"}
                   className="w-full rounded-xl border border-slate-700 bg-slate-800 hover:border-yellow-400 px-3 py-2.5 text-left text-sm text-slate-200 transition disabled:opacity-40"
                 >
                   {r}
                 </button>
               ))}
+              {stage === "account_verify" && (
+                <p className="text-xs text-slate-600 text-center pt-1">
+                  Verify your account number first to unlock quick questions.
+                </p>
+              )}
             </div>
           </div>
 
