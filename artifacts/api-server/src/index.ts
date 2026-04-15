@@ -5,6 +5,7 @@ import { logger } from "./lib/logger.js";
 import { runMigrations } from "stripe-replit-sync";
 import { getStripeSync } from "./lib/stripeClient.js";
 import { startContractCron } from "./lib/contractCron.js";
+import { seedMasterAccount } from "./lib/psaAuth.js";
 
 const rawPort = process.env["PORT"];
 
@@ -30,6 +31,7 @@ server.listen(port, (err?: Error) => {
     process.exit(1);
   }
   logger.info({ port }, "Server listening");
+  seedMasterAccount().catch((e: unknown) => logger.error({ err: e }, "Master seed failed"));
 });
 
 // Initialize Stripe in background — never blocks server startup

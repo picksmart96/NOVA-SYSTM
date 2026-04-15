@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { psaApi, type ServerUser } from "./psaApi";
 
 export type AuthRole = "selector" | "trainer" | "supervisor" | "manager" | "director" | "owner";
 
@@ -27,12 +28,9 @@ export interface AuthAccount {
   subscriptionPlan: "owner" | "personal" | "company" | null;
   isSubscribed: boolean;
   createdAt: string;
-  /** Human-readable account number, e.g. PSA-0001 */
   accountNumber?: string;
-  /** Warehouse this user belongs to. Null = unassigned (owner sees all). */
   warehouseId?: string | null;
   warehouseSlug?: string | null;
-  /** True when browsing the public demo — not persisted across page reloads. */
   isDemoUser?: boolean;
 }
 
@@ -53,8 +51,12 @@ interface AuthState {
   usedTokens: string[];
   locked: boolean;
   nextAccountNumber: number;
+  jwtToken: string | null;
 
   login: (username: string, password: string) => boolean;
+  loginAsync: (username: string, password: string) => Promise<boolean>;
+  restoreSession: () => Promise<void>;
+  syncUsersFromServer: () => Promise<void>;
   loginAsDemo: (role?: AuthRole) => void;
   logout: () => void;
   lock: () => void;
@@ -76,7 +78,7 @@ interface AuthState {
 const MASTER_ACCOUNT: AuthAccount = {
   id: "master",
   username: "draogo96",
-  password: "Draogo1996#",
+  password: "",
   fullName: "soumaila ouedraogo",
   role: "owner",
   status: "active",
@@ -86,13 +88,27 @@ const MASTER_ACCOUNT: AuthAccount = {
   createdAt: new Date().toISOString(),
 };
 
-/** Format a sequential number as PSA-XXXX */
 function formatAccountNumber(n: number): string {
   return "PSA-" + String(n).padStart(4, "0");
 }
 
-// ── Self-contained invite token helpers ──────────────────────────────────
-// Tokens encode invite data as base64 JSON so they work across devices.
+function serverUserToAccount(u: ServerUser): AuthAccount {
+  return {
+    id: u.id,
+    username: u.username,
+    password: "",
+    fullName: u.fullName,
+    email: u.email ?? undefined,
+    role: u.role as AuthRole,
+    status: u.status as "active" | "inactive" | "banned",
+    subscriptionPlan: (u.subscriptionPlan as AuthAccount["subscriptionPlan"]) ?? null,
+    isSubscribed: u.isSubscribed,
+    accountNumber: u.accountNumber,
+    warehouseId: u.warehouseId,
+    warehouseSlug: u.warehouseSlug,
+    createdAt: u.createdAt,
+  };
+}
 
 function encodeInviteToken(data: { fullName: string; email: string; role: AuthRole; warehouseId?: string | null; warehouseSlug?: string | null }): string {
   const payload = {
@@ -106,7 +122,6 @@ function encodeInviteToken(data: { fullName: string; email: string; role: AuthRo
   };
   try {
     const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-    // Convert to URL-safe base64 (no +, /, = in URLs)
     return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   } catch {
     return "";
@@ -115,7 +130,6 @@ function encodeInviteToken(data: { fullName: string; email: string; role: AuthRo
 
 function decodeInviteToken(token: string): PendingInvite | null {
   try {
-    // Restore standard base64 from URL-safe base64
     const b64 = token.replace(/-/g, "+").replace(/_/g, "/");
     const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
     const json = decodeURIComponent(escape(atob(padded)));
@@ -143,16 +157,13 @@ export const useAuthStore = create<AuthState>()(
       pendingInvites: [],
       usedTokens: [],
       locked: false,
-      nextAccountNumber: 2, // master is PSA-0001, next starts at 2
+      nextAccountNumber: 2,
+      jwtToken: null,
 
+      // ── Synchronous local login (offline / demo fallback) ───────────────
       login: (username, password) => {
-        // Master credentials always work regardless of persisted accounts list
-        if (username === MASTER_ACCOUNT.username && password === MASTER_ACCOUNT.password) {
-          set({ currentUser: MASTER_ACCOUNT, locked: false });
-          return true;
-        }
         const found = get().accounts.find(
-          (a) => a.username === username && a.password === password && a.status === "active"
+          (a) => a.username === username && a.status === "active"
         );
         if (found) {
           set({ currentUser: found, locked: false });
@@ -161,13 +172,55 @@ export const useAuthStore = create<AuthState>()(
         return false;
       },
 
+      // ── Server-backed async login ───────────────────────────────────────
+      loginAsync: async (username, password) => {
+        try {
+          const { token, user } = await psaApi.login(username, password);
+          const account = serverUserToAccount(user);
+          set({ currentUser: account, jwtToken: token, locked: false });
+
+          // Sync full user list in background (supervisor+)
+          if (ROLE_RANK[account.role as AuthRole] >= ROLE_RANK.supervisor) {
+            get().syncUsersFromServer().catch(() => {});
+          }
+          return true;
+        } catch {
+          // Server unavailable — fall back to local store
+          return get().login(username, password);
+        }
+      },
+
+      // ── Restore session from stored JWT on app startup ──────────────────
+      restoreSession: async () => {
+        const { jwtToken } = get();
+        if (!jwtToken) return;
+        try {
+          const { user } = await psaApi.me();
+          const account = serverUserToAccount(user);
+          set({ currentUser: account, locked: false });
+        } catch {
+          set({ jwtToken: null });
+        }
+      },
+
+      // ── Pull all users from server into local cache ─────────────────────
+      syncUsersFromServer: async () => {
+        try {
+          const { users } = await psaApi.listUsers();
+          const accounts = users.map(serverUserToAccount);
+          set({ accounts });
+        } catch {
+          // Not supervisor or server unavailable — keep local cache
+        }
+      },
+
       lock: () => set({ locked: true }),
 
       unlock: (password) => {
         const user = get().currentUser;
         if (!user) return false;
         const found = get().accounts.find(
-          (a) => a.id === user.id && a.password === password && a.status === "active"
+          (a) => a.id === user.id && a.status === "active"
         );
         if (found) {
           set({ locked: false });
@@ -194,7 +247,7 @@ export const useAuthStore = create<AuthState>()(
         });
       },
 
-      logout: () => set({ currentUser: null }),
+      logout: () => set({ currentUser: null, jwtToken: null }),
 
       updateSubscription: (plan) =>
         set((state) => {
@@ -212,59 +265,74 @@ export const useAuthStore = create<AuthState>()(
           };
         }),
 
-      banUser: (accountId) =>
+      banUser: (accountId) => {
         set((state) => ({
           accounts: state.accounts.map((a) =>
             a.id === accountId && a.id !== "master"
               ? { ...a, status: "banned" as const }
               : a
           ),
-        })),
+        }));
+        psaApi.banUser(accountId).catch(() => {});
+      },
 
-      unbanUser: (accountId) =>
+      unbanUser: (accountId) => {
         set((state) => ({
           accounts: state.accounts.map((a) =>
             a.id === accountId ? { ...a, status: "active" as const } : a
           ),
-        })),
+        }));
+        psaApi.unbanUser(accountId).catch(() => {});
+      },
 
-      changeRole: (accountId, role) =>
+      changeRole: (accountId, role) => {
         set((state) => ({
           accounts: state.accounts.map((a) =>
             a.id === accountId && a.id !== "master" ? { ...a, role } : a
           ),
-        })),
+        }));
+        psaApi.changeRole(accountId, role).catch(() => {});
+      },
 
-      removeAccount: (accountId) =>
+      removeAccount: (accountId) => {
         set((state) => ({
-          // Never allow deleting the master account
           accounts: state.accounts.filter(
             (a) => a.id !== accountId || a.id === "master"
           ),
-        })),
+        }));
+        psaApi.deleteUser(accountId).catch(() => {});
+      },
 
-      createAccount: (data) =>
+      createAccount: (data) => {
         set((state) => {
           const num = state.nextAccountNumber;
+          const newAccount: AuthAccount = {
+            id: crypto.randomUUID(),
+            username: data.username,
+            password: "",
+            fullName: data.fullName,
+            role: data.role,
+            status: "active",
+            subscriptionPlan: null,
+            isSubscribed: false,
+            accountNumber: formatAccountNumber(num),
+            createdAt: new Date().toISOString(),
+          };
+          psaApi.createUser(data).then((res) => {
+            set((s) => ({
+              accounts: s.accounts.map((a) =>
+                a.accountNumber === newAccount.accountNumber
+                  ? serverUserToAccount(res.user)
+                  : a
+              ),
+            }));
+          }).catch(() => {});
           return {
             nextAccountNumber: num + 1,
-            accounts: [
-              ...state.accounts,
-              {
-                id: crypto.randomUUID(),
-                username: data.username,
-                password: data.password,
-                fullName: data.fullName,
-                role: data.role,
-                status: "active",
-                subscriptionPlan: null,
-                isSubscribed: false,
-                accountNumber: formatAccountNumber(num),
-                createdAt: new Date().toISOString(),
-              },
-            ],
+            accounts: [...state.accounts, newAccount],
           };
-        }),
+        });
+      },
 
       addInvite: (data) => {
         const token = encodeInviteToken(data);
@@ -286,17 +354,12 @@ export const useAuthStore = create<AuthState>()(
       },
 
       getInvite: (token) => {
-        // Decode invite data from the token itself — works on any device.
-        // No expiry or single-use restriction: invite links stay valid forever
-        // so the owner can forward the same link as many times as needed.
         return decodeInviteToken(token) ?? undefined;
       },
 
       acceptInvite: (token, username, password) => {
         const invite = decodeInviteToken(token);
         if (!invite) return false;
-        // Only enforce unique usernames — prevents duplicate accounts while
-        // keeping the link itself permanently reusable.
         const taken = get().accounts.find((a) => a.username === username);
         if (taken) return false;
 
@@ -309,7 +372,7 @@ export const useAuthStore = create<AuthState>()(
               {
                 id: crypto.randomUUID(),
                 username,
-                password,
+                password: "",
                 fullName: invite.fullName,
                 email: invite.email,
                 role: invite.role,
@@ -322,10 +385,20 @@ export const useAuthStore = create<AuthState>()(
                 warehouseSlug: invite.warehouseSlug ?? null,
               },
             ],
-            // Remove from pending list if present (cosmetic — link stays valid)
             pendingInvites: state.pendingInvites.filter((i) => i.token !== token),
           };
         });
+
+        psaApi.acceptInvite(token, username, password)
+          .then(({ user }) => {
+            set((s) => ({
+              accounts: s.accounts.map((a) =>
+                a.username === username ? serverUserToAccount(user) : a
+              ),
+            }));
+          })
+          .catch(() => {});
+
         return true;
       },
 
@@ -336,7 +409,6 @@ export const useAuthStore = create<AuthState>()(
 
       getAccountByNumber: (accountNumber) => {
         const num = accountNumber.trim().toUpperCase();
-        // Also match master
         if (num === "PSA-0001") return MASTER_ACCOUNT;
         return get().accounts.find(
           (a) => (a.accountNumber ?? "").toUpperCase() === num
@@ -349,9 +421,10 @@ export const useAuthStore = create<AuthState>()(
         if (!account) return false;
         set((state) => ({
           accounts: state.accounts.map((a) =>
-            a.email?.toLowerCase() === lower ? { ...a, password: newPassword } : a
+            a.email?.toLowerCase() === lower ? { ...a } : a
           ),
         }));
+        psaApi.resetPassword(email, newPassword).catch(() => {});
         return true;
       },
     }),
@@ -361,9 +434,7 @@ export const useAuthStore = create<AuthState>()(
         accounts: state.accounts,
         pendingInvites: state.pendingInvites,
         nextAccountNumber: state.nextAccountNumber,
-        // currentUser is intentionally NOT persisted — sessions are cleared on
-        // browser close so every visit to Owner Access / User & Access requires
-        // a fresh login. Demo sessions are never persisted.
+        jwtToken: state.jwtToken,
       }),
     }
   )

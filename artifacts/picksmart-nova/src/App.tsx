@@ -421,7 +421,12 @@ function Router() {
 }
 
 function AppInner() {
-  const { locked, currentUser } = useAuthStore();
+  const { locked, currentUser, restoreSession } = useAuthStore();
+
+  useEffect(() => {
+    restoreSession();
+  }, []);
+
   return (
     <>
       <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}>

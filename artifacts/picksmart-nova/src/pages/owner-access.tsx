@@ -7,7 +7,7 @@ const OWNER_TOKEN = import.meta.env.VITE_OWNER_TOKEN as string;
 
 export default function OwnerAccessPage() {
   const [, navigate] = useLocation();
-  const login = useAuthStore((s) => s.login);
+  const loginAsync = useAuthStore((s) => s.loginAsync);
   const attempted = useRef(false);
   const [status, setStatus] = useState<"verifying" | "success" | "failed">("verifying");
 
@@ -19,26 +19,25 @@ export default function OwnerAccessPage() {
     const token = params.get("token");
 
     if (token === OWNER_TOKEN) {
-      const ok = login("draogo96", "Draogo1996#");
-      if (ok) {
-        setStatus("success");
-        // Small delay so state can settle before navigation
-        setTimeout(() => {
-          navigate("/owner", { replace: true });
-        }, 400);
-      } else {
-        setStatus("failed");
-      }
+      loginAsync("draogo96", "Draogo1996#").then((ok) => {
+        if (ok) {
+          setStatus("success");
+          setTimeout(() => {
+            navigate("/owner", { replace: true });
+          }, 400);
+        } else {
+          setStatus("failed");
+        }
+      });
     } else {
       setStatus("failed");
     }
   }, []);
 
   const handleEnter = () => {
-    const ok = login("draogo96", "Draogo1996#");
-    if (ok) {
-      navigate("/owner", { replace: true });
-    }
+    loginAsync("draogo96", "Draogo1996#").then((ok) => {
+      if (ok) navigate("/owner", { replace: true });
+    });
   };
 
   return (

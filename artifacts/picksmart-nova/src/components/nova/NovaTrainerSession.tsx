@@ -4,6 +4,7 @@ import { useVoiceEngine } from "@/hooks/useVoiceEngine";
 import { useHeadphones } from "@/hooks/useHeadphones";
 import { matchCommand } from "@/lib/novaCommandMatcher";
 import { useTrainerStore } from "@/lib/trainerStore";
+import { useAuthStore } from "@/lib/authStore";
 
 /**
  * Convert spoken digit words to numeric digits.
@@ -137,6 +138,7 @@ export default function NovaTrainerSession({
   autoStart?: boolean;
 }) {
   const { logSession } = useTrainerStore();
+  const jwtToken = useAuthStore((s) => s.jwtToken);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -271,6 +273,7 @@ export default function NovaTrainerSession({
           JSON.stringify({
             type: "init",
             lang,
+            ...(jwtToken ? { token: jwtToken } : {}),
             selector: {
               userId: selector.userId,
               novaId: selector.novaId,

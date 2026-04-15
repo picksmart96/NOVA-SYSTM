@@ -1,0 +1,411 @@
+import { Router } from "express";
+import { db } from "@workspace/db";
+import { psaUsers, psaInvites } from "@workspace/db";
+import { eq, and, ne } from "drizzle-orm";
+import {
+  hashPassword,
+  verifyPassword,
+  signToken,
+  nextAccountNumber,
+} from "../lib/psaAuth.js";
+import { requireAuth, requireRole } from "../middleware/requireAuth.js";
+import { logger } from "../lib/logger.js";
+
+const router = Router();
+
+// ── POST /api/auth/login ──────────────────────────────────────────────────────
+router.post("/auth/login", async (req, res) => {
+  const { username, password } = req.body as { username?: string; password?: string };
+  if (!username || !password) {
+    res.status(400).json({ error: "Username and password required" });
+    return;
+  }
+
+  try {
+    const [user] = await db
+      .select()
+      .from(psaUsers)
+      .where(and(eq(psaUsers.username, username), ne(psaUsers.status, "banned")))
+      .limit(1);
+
+    if (!user) {
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
+    }
+
+    const ok = await verifyPassword(password, user.passwordHash);
+    if (!ok) {
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
+    }
+
+    if (user.status === "inactive") {
+      res.status(403).json({ error: "Account deactivated" });
+      return;
+    }
+
+    const token = await signToken({
+      sub: user.id,
+      username: user.username,
+      role: user.role,
+      accountNumber: user.accountNumber,
+    });
+
+    res.json({ token, user: safeUser(user) });
+  } catch (err) {
+    logger.error({ err }, "[Auth] Login error");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ── GET /api/auth/me ──────────────────────────────────────────────────────────
+router.get("/auth/me", requireAuth, async (req, res) => {
+  try {
+    const [user] = await db
+      .select()
+      .from(psaUsers)
+      .where(eq(psaUsers.id, req.psaUser!.sub))
+      .limit(1);
+
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    res.json({ user: safeUser(user) });
+  } catch (err) {
+    logger.error({ err }, "[Auth] /me error");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ── GET /api/auth/users ───────────────────────────────────────────────────────
+router.get("/auth/users", requireRole("supervisor"), async (req, res) => {
+  try {
+    const users = await db.select().from(psaUsers).orderBy(psaUsers.accountNumber);
+    res.json({ users: users.map(safeUser) });
+  } catch (err) {
+    logger.error({ err }, "[Auth] List users error");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ── POST /api/auth/users ──────────────────────────────────────────────────────
+router.post("/auth/users", requireRole("manager"), async (req, res) => {
+  const { username, password, fullName, role, email, warehouseId, warehouseSlug } =
+    req.body as {
+      username?: string;
+      password?: string;
+      fullName?: string;
+      role?: string;
+      email?: string;
+      warehouseId?: string;
+      warehouseSlug?: string;
+    };
+
+  if (!username || !password || !fullName || !role) {
+    res.status(400).json({ error: "username, password, fullName, role required" });
+    return;
+  }
+
+  try {
+    const taken = await db
+      .select({ id: psaUsers.id })
+      .from(psaUsers)
+      .where(eq(psaUsers.username, username))
+      .limit(1);
+
+    if (taken.length > 0) {
+      res.status(409).json({ error: "Username already taken" });
+      return;
+    }
+
+    const passwordHash = await hashPassword(password);
+    const accountNumber = await nextAccountNumber();
+
+    const [user] = await db
+      .insert(psaUsers)
+      .values({
+        username,
+        passwordHash,
+        fullName,
+        role,
+        email: email || null,
+        status: "active",
+        subscriptionPlan: "company",
+        isSubscribed: true,
+        accountNumber,
+        warehouseId: warehouseId ?? null,
+        warehouseSlug: warehouseSlug ?? null,
+      })
+      .returning();
+
+    res.status(201).json({ user: safeUser(user) });
+  } catch (err) {
+    logger.error({ err }, "[Auth] Create user error");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ── PATCH /api/auth/users/:id ─────────────────────────────────────────────────
+router.patch("/auth/users/:id", requireRole("supervisor"), async (req, res) => {
+  const { id } = req.params;
+  const { status, role } = req.body as { status?: string; role?: string };
+
+  try {
+    const [target] = await db
+      .select()
+      .from(psaUsers)
+      .where(eq(psaUsers.id, id))
+      .limit(1);
+
+    if (!target) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    if (target.isMaster) {
+      res.status(403).json({ error: "Cannot modify master account" });
+      return;
+    }
+
+    const updates: Partial<typeof psaUsers.$inferInsert> = {
+      updatedAt: new Date(),
+    };
+    if (status) updates.status = status;
+    if (role) updates.role = role;
+
+    const [updated] = await db
+      .update(psaUsers)
+      .set(updates)
+      .where(eq(psaUsers.id, id))
+      .returning();
+
+    res.json({ user: safeUser(updated) });
+  } catch (err) {
+    logger.error({ err }, "[Auth] Update user error");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ── DELETE /api/auth/users/:id ────────────────────────────────────────────────
+router.delete("/auth/users/:id", requireRole("manager"), async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const [target] = await db
+      .select()
+      .from(psaUsers)
+      .where(eq(psaUsers.id, id))
+      .limit(1);
+
+    if (!target) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    if (target.isMaster) {
+      res.status(403).json({ error: "Cannot delete master account" });
+      return;
+    }
+
+    await db.delete(psaUsers).where(eq(psaUsers.id, id));
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "[Auth] Delete user error");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ── POST /api/auth/invite ─────────────────────────────────────────────────────
+router.post("/auth/invite", requireRole("supervisor"), async (req, res) => {
+  const { fullName, email, role, warehouseId, warehouseSlug } = req.body as {
+    fullName?: string;
+    email?: string;
+    role?: string;
+    warehouseId?: string;
+    warehouseSlug?: string;
+  };
+
+  if (!fullName || !email || !role) {
+    res.status(400).json({ error: "fullName, email, role required" });
+    return;
+  }
+
+  try {
+    const token = crypto.randomUUID() + "-" + Date.now().toString(36);
+    await db.insert(psaInvites).values({
+      token,
+      fullName,
+      email,
+      role,
+      warehouseId: warehouseId ?? null,
+      warehouseSlug: warehouseSlug ?? null,
+    });
+
+    res.status(201).json({ token });
+  } catch (err) {
+    logger.error({ err }, "[Auth] Create invite error");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ── GET /api/auth/invite/:token ───────────────────────────────────────────────
+router.get("/auth/invite/:token", async (req, res) => {
+  try {
+    const [invite] = await db
+      .select()
+      .from(psaInvites)
+      .where(eq(psaInvites.token, req.params.token))
+      .limit(1);
+
+    if (!invite) {
+      res.status(404).json({ error: "Invite not found" });
+      return;
+    }
+
+    res.json({
+      invite: {
+        fullName: invite.fullName,
+        email: invite.email,
+        role: invite.role,
+        warehouseId: invite.warehouseId,
+        warehouseSlug: invite.warehouseSlug,
+        usedAt: invite.usedAt,
+      },
+    });
+  } catch (err) {
+    logger.error({ err }, "[Auth] Get invite error");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ── POST /api/auth/invite/accept ──────────────────────────────────────────────
+router.post("/auth/invite/accept", async (req, res) => {
+  const { token, username, password } = req.body as {
+    token?: string;
+    username?: string;
+    password?: string;
+  };
+
+  if (!token || !username || !password) {
+    res.status(400).json({ error: "token, username, password required" });
+    return;
+  }
+
+  try {
+    const [invite] = await db
+      .select()
+      .from(psaInvites)
+      .where(eq(psaInvites.token, token))
+      .limit(1);
+
+    if (!invite) {
+      res.status(404).json({ error: "Invite not found or expired" });
+      return;
+    }
+
+    const taken = await db
+      .select({ id: psaUsers.id })
+      .from(psaUsers)
+      .where(eq(psaUsers.username, username))
+      .limit(1);
+
+    if (taken.length > 0) {
+      res.status(409).json({ error: "Username already taken" });
+      return;
+    }
+
+    const passwordHash = await hashPassword(password);
+    const accountNumber = await nextAccountNumber();
+
+    const [user] = await db
+      .insert(psaUsers)
+      .values({
+        username,
+        passwordHash,
+        fullName: invite.fullName,
+        email: invite.email,
+        role: invite.role,
+        status: "active",
+        subscriptionPlan: "company",
+        isSubscribed: true,
+        accountNumber,
+        warehouseId: invite.warehouseId,
+        warehouseSlug: invite.warehouseSlug,
+      })
+      .returning();
+
+    await db
+      .update(psaInvites)
+      .set({ usedAt: new Date() })
+      .where(eq(psaInvites.token, token));
+
+    const jwtToken = await signToken({
+      sub: user.id,
+      username: user.username,
+      role: user.role,
+      accountNumber: user.accountNumber,
+    });
+
+    res.status(201).json({ token: jwtToken, user: safeUser(user) });
+  } catch (err) {
+    logger.error({ err }, "[Auth] Accept invite error");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ── POST /api/auth/reset-password ─────────────────────────────────────────────
+router.post("/auth/reset-password", async (req, res) => {
+  const { email, newPassword } = req.body as { email?: string; newPassword?: string };
+  if (!email || !newPassword) {
+    res.status(400).json({ error: "email and newPassword required" });
+    return;
+  }
+
+  try {
+    const [user] = await db
+      .select({ id: psaUsers.id })
+      .from(psaUsers)
+      .where(eq(psaUsers.email, email.toLowerCase()))
+      .limit(1);
+
+    if (!user) {
+      res.json({ ok: true });
+      return;
+    }
+
+    const passwordHash = await hashPassword(newPassword);
+    await db
+      .update(psaUsers)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(psaUsers.id, user.id));
+
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "[Auth] Reset password error");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ── GET /api/auth/invites ─────────────────────────────────────────────────────
+router.get("/auth/invites", requireRole("supervisor"), async (req, res) => {
+  try {
+    const invites = await db
+      .select()
+      .from(psaInvites)
+      .orderBy(psaInvites.createdAt);
+    res.json({ invites });
+  } catch (err) {
+    logger.error({ err }, "[Auth] List invites error");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+function safeUser(user: typeof psaUsers.$inferSelect) {
+  const { passwordHash: _, ...safe } = user;
+  return safe;
+}
+
+export default router;

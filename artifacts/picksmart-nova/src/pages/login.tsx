@@ -14,7 +14,7 @@ const ROLE_HOME: Record<AuthRole, string> = {
 
 export default function LoginPage() {
   const [, navigate] = useLocation();
-  const { login } = useAuthStore();
+  const { loginAsync } = useAuthStore();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -32,7 +32,7 @@ export default function LoginPage() {
 
     await new Promise((r) => setTimeout(r, 400));
 
-    const ok = login(username.trim(), password);
+    const ok = await loginAsync(username.trim(), password);
     setLoading(false);
 
     if (ok) {

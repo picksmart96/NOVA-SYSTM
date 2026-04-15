@@ -3,6 +3,7 @@ import type { IncomingMessage, Server } from "node:http";
 import { createNovaTrainerSession, type NovaTrainerSession, type Lang } from "./novaTrainerStateMachine.js";
 import { ASSIGNMENTS, ASSIGNMENT_STOPS } from "./assignmentData.js";
 import { logger } from "./logger.js";
+import { verifyToken } from "./psaAuth.js";
 
 const sessions = new Map<string, NovaTrainerSession>();
 
@@ -14,10 +15,17 @@ export function attachNovaRealtimeServer(httpServer: Server) {
 
   wss.on("connection", (ws: WebSocket, _req: IncomingMessage) => {
     let sessionId: string | null = null;
+    let authenticated = false;
 
-    ws.on("message", (raw) => {
+    ws.on("message", async (raw) => {
       try {
-        const msg = JSON.parse(String(raw)) as { type: string; selector?: { userId: string; novaId: string; fullName?: string }; lang?: Lang; text?: string };
+        const msg = JSON.parse(String(raw)) as {
+          type: string;
+          token?: string;
+          selector?: { userId: string; novaId: string; fullName?: string };
+          lang?: Lang;
+          text?: string;
+        };
 
         // Keepalive ping — silently ignore, no response needed
         if (msg.type === "ping") return;
@@ -27,6 +35,25 @@ export function attachNovaRealtimeServer(httpServer: Server) {
           if (!selector?.userId || !selector?.novaId) {
             ws.send(JSON.stringify({ type: "error", error: "Invalid selector." }));
             return;
+          }
+
+          // Verify JWT token when provided; skip check for demo/anonymous sessions
+          if (msg.token) {
+            const payload = await verifyToken(msg.token);
+            if (!payload) {
+              ws.send(JSON.stringify({ type: "error", error: "Unauthorized." }));
+              ws.close(1008, "Unauthorized");
+              return;
+            }
+            authenticated = true;
+          } else {
+            // Allow unauthenticated only for demo user IDs
+            if (!selector.userId.startsWith("demo")) {
+              ws.send(JSON.stringify({ type: "error", error: "Authorization token required." }));
+              ws.close(1008, "Unauthorized");
+              return;
+            }
+            authenticated = true;
           }
 
           sessionId = `${selector.userId}:${selector.novaId}`;
