@@ -149,7 +149,18 @@ export function useVoiceEngine({
 
   useEffect(() => { onHeardRef.current = onHeard; });
   useEffect(() => { langRef.current = lang; }, [lang]);
-  useEffect(() => { preferredMicRef.current = preferredMicDeviceId; }, [preferredMicDeviceId]);
+
+  // When the preferred mic device changes (e.g. Bluetooth headphones connected),
+  // drop the current stream so the next VAD cycle opens a fresh one on the new device.
+  useEffect(() => {
+    const prev = preferredMicRef.current;
+    preferredMicRef.current = preferredMicDeviceId;
+    if (prev !== preferredMicDeviceId && micStreamRef.current) {
+      console.log("[NOVA voice] preferred mic changed →", preferredMicDeviceId ?? "default", "— restarting stream");
+      micStreamRef.current.getTracks().forEach((t) => t.stop());
+      micStreamRef.current = null;
+    }
+  }, [preferredMicDeviceId]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const clearSilenceTimer = useCallback(() => {

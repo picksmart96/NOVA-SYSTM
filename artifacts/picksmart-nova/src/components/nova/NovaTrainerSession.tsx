@@ -45,9 +45,6 @@ function wordsToDigits(text: string): string {
     (w) => DIGIT_MAP[w] ?? w);
 }
 
-// Regex to detect built-in / default mics (anything else is likely external / BT)
-const BUILTIN_PATTERN_STR = /built.?in|internal|default|communications/i;
-
 // Mobile / iOS browsers require a user gesture before AudioContext + speech APIs
 // are unlocked. Detect here so we can show a tap-to-start gate.
 const IS_MOBILE =
@@ -172,14 +169,11 @@ export default function NovaTrainerSession({
   const [trainerState, setTrainerState] = useState<TrainerState>(DEFAULT_STATE);
   // On mobile, require one tap before starting (unlocks iOS AudioContext + TTS)
   const [mobileTapGate, setMobileTapGate] = useState(autoStart && IS_MOBILE);
-  // Manual mic selection — overrides auto-detected headphone mic
-  const [manualMicId, setManualMicId] = useState<string | undefined>(undefined);
-  const [showDevicePicker, setShowDevicePicker] = useState(false);
 
   const headphones = useHeadphones();
 
   const voice = useVoiceEngine({
-    preferredMicDeviceId: manualMicId ?? headphones.preferredMicId,
+    preferredMicDeviceId: headphones.preferredMicId,
     onHeard: async (_heard: string, raw: string) => {
       const text = raw || _heard;
       const heard = _heard || text;
@@ -509,65 +503,6 @@ export default function NovaTrainerSession({
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
 
-      {/* Bluetooth device picker dropdown */}
-      {showDevicePicker && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4" onClick={() => setShowDevicePicker(false)}>
-          <div
-            className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl p-4 space-y-3"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-black text-white">🎧 Select Microphone</p>
-              <button onClick={() => setShowDevicePicker(false)} className="text-slate-500 hover:text-white text-xs">✕ Close</button>
-            </div>
-            <p className="text-xs text-slate-500">
-              Choose your Bluetooth or wired headphone mic. NOVA will use it for voice input.
-            </p>
-            {headphones.allMicDevices.length === 0 && (
-              <p className="text-xs text-slate-600 text-center py-3">
-                No microphone devices found. Grant mic permission first, then tap here.
-              </p>
-            )}
-            <div className="space-y-1.5">
-              {/* Auto-detect option */}
-              <button
-                onClick={() => { setManualMicId(undefined); setShowDevicePicker(false); }}
-                className={`w-full text-left rounded-xl px-3 py-2.5 text-sm transition flex items-center gap-2 ${
-                  !manualMicId
-                    ? "bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 font-bold"
-                    : "border border-slate-700 text-slate-300 hover:border-slate-500"
-                }`}
-              >
-                <span>🔄</span>
-                <span>Auto-detect {headphones.connected ? `(${headphones.label || "Headphones"})` : "(Built-in mic)"}</span>
-                {!manualMicId && <span className="ml-auto text-xs text-cyan-400">✓ Active</span>}
-              </button>
-              {headphones.allMicDevices.map((dev) => (
-                <button
-                  key={dev.deviceId}
-                  onClick={() => { setManualMicId(dev.deviceId); setShowDevicePicker(false); }}
-                  className={`w-full text-left rounded-xl px-3 py-2.5 text-sm transition flex items-center gap-2 ${
-                    manualMicId === dev.deviceId
-                      ? "bg-yellow-400/10 border border-yellow-400/40 text-yellow-300 font-bold"
-                      : "border border-slate-700 text-slate-300 hover:border-slate-500"
-                  }`}
-                >
-                  <span>{BUILTIN_PATTERN_STR.test(dev.label) ? "🎙️" : "🎧"}</span>
-                  <span className="truncate">{dev.label}</span>
-                  {manualMicId === dev.deviceId && <span className="ml-auto text-xs text-yellow-400 shrink-0">✓ Active</span>}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => { headphones.refresh(); }}
-              className="w-full rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-400 hover:border-slate-500 transition"
-            >
-              🔄 Rescan for Bluetooth devices
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Thin top bar — only selector name + exit */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800/60">
         <div className="flex items-center gap-2">
@@ -579,33 +514,11 @@ export default function NovaTrainerSession({
               🇪🇸 ES
             </span>
           )}
-          {/* Bluetooth / headphone status + device picker */}
-          {headphones.connected && !manualMicId && (
-            <button
-              onClick={() => setShowDevicePicker((v) => !v)}
-              className="ml-1 rounded-full bg-cyan-500/15 border border-cyan-400/30 px-2 py-0.5 text-xs font-bold text-cyan-300 flex items-center gap-1 hover:bg-cyan-500/25 transition"
-              title="Click to switch Bluetooth device"
-            >
-              🎧 {headphones.label ? headphones.label.split(" ").slice(0, 3).join(" ") : "Headphones"} ▾
-            </button>
-          )}
-          {manualMicId && (
-            <button
-              onClick={() => setShowDevicePicker((v) => !v)}
-              className="ml-1 rounded-full bg-yellow-400/15 border border-yellow-400/30 px-2 py-0.5 text-xs font-bold text-yellow-300 flex items-center gap-1 hover:bg-yellow-400/25 transition"
-              title="Click to change mic device"
-            >
-              🎧 Custom mic ▾
-            </button>
-          )}
-          {!headphones.connected && headphones.allMicDevices.length > 1 && (
-            <button
-              onClick={() => { headphones.refresh(); setShowDevicePicker((v) => !v); }}
-              className="ml-1 rounded-full bg-slate-700/50 border border-slate-600 px-2 py-0.5 text-xs font-bold text-slate-400 flex items-center gap-1 hover:border-slate-500 transition"
-              title="Select Bluetooth mic"
-            >
-              🎙️ Select mic ▾
-            </button>
+          {/* Auto-detected headphone / Bluetooth badge */}
+          {headphones.connected && (
+            <span className="ml-1 rounded-full bg-cyan-500/15 border border-cyan-400/30 px-2 py-0.5 text-xs font-bold text-cyan-300">
+              🎧 {headphones.label ? headphones.label.split(" ").slice(0, 3).join(" ") : "Headphones"}
+            </span>
           )}
         </div>
         <div className="flex items-center gap-3">
