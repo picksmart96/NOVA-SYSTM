@@ -369,7 +369,7 @@ export default function NovaHelpPage() {
       addLog("NOVA", msg);
       setAnswer(msg);
       setPhase("speaking");
-      speakText(msg, ttsLang, () => { navigate("/meet-nova"); });
+      speakText(msg, ttsLang, () => { navigate("/meet-nova?from=support"); });
       return;
     }
 
@@ -562,7 +562,7 @@ export default function NovaHelpPage() {
             ? "¡Conectándote ahora con NOVA!"
             : "Connecting you to NOVA now!",
           ttsLang,
-          () => { navigate("/meet-nova"); }
+          () => { navigate("/meet-nova?from=support"); }
         );
         return;
       }
@@ -809,9 +809,9 @@ export default function NovaHelpPage() {
       return;
     }
 
-    // Human request → go straight to NOVA Sales Agent
+    // Human request → go straight to NOVA Support Agent
     if (isHumanRequestTrigger(q)) {
-      navigate("/meet-nova");
+      navigate("/meet-nova?from=support");
       return;
     }
 
@@ -1036,7 +1036,7 @@ export default function NovaHelpPage() {
                     : "NOVA couldn't fully answer that. Let me connect you with our sales agent."}
                 </p>
                 <button
-                  onClick={() => navigate("/meet-nova")}
+                  onClick={() => navigate("/meet-nova?from=support")}
                   className="flex items-center gap-2 rounded-xl bg-yellow-400 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-yellow-300 transition"
                 >
                   <MessageCircle className="h-4 w-4" />
@@ -1258,7 +1258,7 @@ export default function NovaHelpPage() {
                 : "You've used your free questions. NOVA, our sales agent, can give you everything you need."}
             </p>
             <button
-              onClick={() => navigate("/meet-nova")}
+              onClick={() => navigate("/meet-nova?from=support")}
               className="inline-flex items-center gap-2 rounded-xl bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300 transition"
             >
               {isSpanish ? "Hablar con NOVA ahora →" : "Talk to NOVA now →"}
@@ -1266,10 +1266,10 @@ export default function NovaHelpPage() {
           </div>
         )}
 
-        {/* Persistent "Talk to a person" button → routes to NOVA Sales Agent */}
+        {/* Persistent "Talk to a person" button → routes to NOVA Support Agent */}
         {sessionActive && !lockedOut && (
           <button
-            onClick={() => navigate("/meet-nova")}
+            onClick={() => navigate("/meet-nova?from=support")}
             className="w-full flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/3 py-2.5 text-xs font-semibold text-slate-400 hover:border-yellow-400/40 hover:text-yellow-300 transition"
           >
             <MessageCircle className="h-3.5 w-3.5" />
