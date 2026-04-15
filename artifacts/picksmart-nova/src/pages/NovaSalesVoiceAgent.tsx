@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Mic, MicOff, Volume2, VolumeX, Send, BarChart3, TrendingUp, UserRound, CheckCircle2 } from "lucide-react";
+import { Mic, MicOff, Volume2, VolumeX, Send, BarChart3, TrendingUp, UserRound, CheckCircle2, ShieldCheck } from "lucide-react";
 import { novaSpeak, pickNovaVoice } from "@/lib/novaSpeech";
+import { useAuthStore } from "@/lib/authStore";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type SalesStage = "greeting" | "name_ask" | "reason_ask" | "open" | "discovery" | "pitch" | "demo" | "trial" | "close";
+type SalesStage = "greeting" | "name_ask" | "reason_ask" | "open" | "discovery" | "pitch" | "demo" | "trial" | "close" | "account_verify" | "support";
 
 interface Message {
   id: string;

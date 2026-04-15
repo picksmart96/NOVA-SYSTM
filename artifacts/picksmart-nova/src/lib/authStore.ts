@@ -27,6 +27,8 @@ export interface AuthAccount {
   subscriptionPlan: "owner" | "personal" | "company" | null;
   isSubscribed: boolean;
   createdAt: string;
+  /** Human-readable account number, e.g. PSA-0001 */
+  accountNumber?: string;
   /** Warehouse this user belongs to. Null = unassigned (owner sees all). */
   warehouseId?: string | null;
   warehouseSlug?: string | null;
@@ -50,6 +52,7 @@ interface AuthState {
   pendingInvites: PendingInvite[];
   usedTokens: string[];
   locked: boolean;
+  nextAccountNumber: number;
 
   login: (username: string, password: string) => boolean;
   loginAsDemo: (role?: AuthRole) => void;
@@ -66,6 +69,7 @@ interface AuthState {
   acceptInvite: (token: string, username: string, password: string) => boolean;
   getInvite: (token: string) => PendingInvite | undefined;
   getUserByEmail: (email: string) => AuthAccount | undefined;
+  getAccountByNumber: (accountNumber: string) => AuthAccount | undefined;
   resetPassword: (email: string, newPassword: string) => boolean;
 }
 
@@ -78,8 +82,14 @@ const MASTER_ACCOUNT: AuthAccount = {
   status: "active",
   subscriptionPlan: "owner",
   isSubscribed: true,
+  accountNumber: "PSA-0001",
   createdAt: new Date().toISOString(),
 };
+
+/** Format a sequential number as PSA-XXXX */
+function formatAccountNumber(n: number): string {
+  return "PSA-" + String(n).padStart(4, "0");
+}
 
 // ── Self-contained invite token helpers ──────────────────────────────────
 // Tokens encode invite data as base64 JSON so they work across devices.
@@ -133,6 +143,7 @@ export const useAuthStore = create<AuthState>()(
       pendingInvites: [],
       usedTokens: [],
       locked: false,
+      nextAccountNumber: 2, // master is PSA-0001, next starts at 2
 
       login: (username, password) => {
         // Master credentials always work regardless of persisted accounts list
@@ -233,22 +244,27 @@ export const useAuthStore = create<AuthState>()(
         })),
 
       createAccount: (data) =>
-        set((state) => ({
-          accounts: [
-            ...state.accounts,
-            {
-              id: crypto.randomUUID(),
-              username: data.username,
-              password: data.password,
-              fullName: data.fullName,
-              role: data.role,
-              status: "active",
-              subscriptionPlan: null,
-              isSubscribed: false,
-              createdAt: new Date().toISOString(),
-            },
-          ],
-        })),
+        set((state) => {
+          const num = state.nextAccountNumber;
+          return {
+            nextAccountNumber: num + 1,
+            accounts: [
+              ...state.accounts,
+              {
+                id: crypto.randomUUID(),
+                username: data.username,
+                password: data.password,
+                fullName: data.fullName,
+                role: data.role,
+                status: "active",
+                subscriptionPlan: null,
+                isSubscribed: false,
+                accountNumber: formatAccountNumber(num),
+                createdAt: new Date().toISOString(),
+              },
+            ],
+          };
+        }),
 
       addInvite: (data) => {
         const token = encodeInviteToken(data);
@@ -284,33 +300,47 @@ export const useAuthStore = create<AuthState>()(
         const taken = get().accounts.find((a) => a.username === username);
         if (taken) return false;
 
-        set((state) => ({
-          accounts: [
-            ...state.accounts,
-            {
-              id: crypto.randomUUID(),
-              username,
-              password,
-              fullName: invite.fullName,
-              email: invite.email,
-              role: invite.role,
-              status: "active",
-              subscriptionPlan: "company" as const,
-              isSubscribed: true,
-              createdAt: new Date().toISOString(),
-              warehouseId: invite.warehouseId ?? null,
-              warehouseSlug: invite.warehouseSlug ?? null,
-            },
-          ],
-          // Remove from pending list if present (cosmetic — link stays valid)
-          pendingInvites: state.pendingInvites.filter((i) => i.token !== token),
-        }));
+        set((state) => {
+          const num = state.nextAccountNumber;
+          return {
+            nextAccountNumber: num + 1,
+            accounts: [
+              ...state.accounts,
+              {
+                id: crypto.randomUUID(),
+                username,
+                password,
+                fullName: invite.fullName,
+                email: invite.email,
+                role: invite.role,
+                status: "active",
+                subscriptionPlan: "company" as const,
+                isSubscribed: true,
+                accountNumber: formatAccountNumber(num),
+                createdAt: new Date().toISOString(),
+                warehouseId: invite.warehouseId ?? null,
+                warehouseSlug: invite.warehouseSlug ?? null,
+              },
+            ],
+            // Remove from pending list if present (cosmetic — link stays valid)
+            pendingInvites: state.pendingInvites.filter((i) => i.token !== token),
+          };
+        });
         return true;
       },
 
       getUserByEmail: (email) => {
         const lower = email.toLowerCase();
         return get().accounts.find((a) => a.email?.toLowerCase() === lower);
+      },
+
+      getAccountByNumber: (accountNumber) => {
+        const num = accountNumber.trim().toUpperCase();
+        // Also match master
+        if (num === "PSA-0001") return MASTER_ACCOUNT;
+        return get().accounts.find(
+          (a) => (a.accountNumber ?? "").toUpperCase() === num
+        );
       },
 
       resetPassword: (email, newPassword) => {
@@ -330,6 +360,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         accounts: state.accounts,
         pendingInvites: state.pendingInvites,
+        nextAccountNumber: state.nextAccountNumber,
         // currentUser is intentionally NOT persisted — sessions are cleared on
         // browser close so every visit to Owner Access / User & Access requires
         // a fresh login. Demo sessions are never persisted.

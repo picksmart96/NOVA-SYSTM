@@ -208,16 +208,32 @@ export default function SelectorPortalPage() {
                 {selectorProfile.novaId} · {selectorProfile.level}
               </p>
             )}
+            {currentUser?.role && (
+              <p className="text-slate-500 text-xs mt-1 capitalize">{currentUser.role}</p>
+            )}
           </div>
-          {selectorProfile?.novaPin && (
-            <div className="rounded-2xl border border-yellow-400/30 bg-yellow-400/5 px-5 py-3 flex items-center gap-3">
-              <KeyRound className="h-5 w-5 text-yellow-400 shrink-0" />
-              <div>
-                <p className="text-xs text-yellow-400 font-bold uppercase tracking-widest">Your NOVA ID</p>
-                <p className="text-2xl font-black text-white tracking-[0.2em]">{selectorProfile.novaPin}</p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* Account Number card — always shown */}
+            {currentUser?.accountNumber && (
+              <div className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 flex items-center gap-3">
+                <KeyRound className="h-5 w-5 text-slate-400 shrink-0" />
+                <div>
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Account #</p>
+                  <p className="text-xl font-black text-white tracking-[0.15em]">{currentUser.accountNumber}</p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+            {/* NOVA Pin if available */}
+            {selectorProfile?.novaPin && (
+              <div className="rounded-2xl border border-yellow-400/30 bg-yellow-400/5 px-5 py-3 flex items-center gap-3">
+                <KeyRound className="h-5 w-5 text-yellow-400 shrink-0" />
+                <div>
+                  <p className="text-xs text-yellow-400 font-bold uppercase tracking-widest">Your NOVA ID</p>
+                  <p className="text-2xl font-black text-white tracking-[0.2em]">{selectorProfile.novaPin}</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ── 🎧 Ask NOVA Voice Panel ─────────────────────────────────────── */}

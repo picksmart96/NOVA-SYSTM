@@ -232,6 +232,70 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 // ── User Management ───────────────────────────────────────────────────────────
+// ── Account Number Lookup ─────────────────────────────────────────────────────
+function AccountNumberLookup({ accounts }: { accounts: AuthAccount[] }) {
+  const [query, setQuery] = useState("");
+  const [result, setResult] = useState<AuthAccount | null | "not_found">(null);
+
+  function lookup() {
+    const q = query.trim().toUpperCase();
+    if (!q) return;
+    const found = accounts.find(
+      (a) => (a.accountNumber ?? "").toUpperCase() === q ||
+              (a.accountNumber ?? "").toUpperCase().includes(q.replace("PSA-", ""))
+    );
+    setResult(found ?? "not_found");
+  }
+
+  const roleColors: Record<string, string> = {
+    owner: "text-yellow-400",
+    director: "text-purple-400",
+    manager: "text-blue-400",
+    supervisor: "text-green-400",
+    trainer: "text-cyan-400",
+    selector: "text-slate-300",
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        <input
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setResult(null); }}
+          onKeyDown={(e) => e.key === "Enter" && lookup()}
+          placeholder="PSA-0002"
+          className="flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-mono text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 uppercase"
+        />
+        <button
+          onClick={lookup}
+          className="rounded-xl bg-yellow-400 px-4 py-2 text-sm font-black text-slate-950 hover:bg-yellow-300 transition"
+        >
+          Look Up
+        </button>
+      </div>
+
+      {result === "not_found" && (
+        <p className="text-red-400 text-sm font-bold">No account found for that number.</p>
+      )}
+      {result && result !== "not_found" && (
+        <div className="rounded-xl border border-yellow-400/30 bg-yellow-400/5 px-4 py-3 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-full bg-yellow-400/20 flex items-center justify-center text-lg font-black text-yellow-400 shrink-0">
+            {result.fullName[0]?.toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-black text-white">{result.fullName}</p>
+            <p className="text-xs text-slate-500">@{result.username}</p>
+          </div>
+          <div className="text-right shrink-0">
+            <p className={`text-sm font-black capitalize ${roleColors[result.role] ?? "text-slate-300"}`}>{result.role}</p>
+            <p className="text-xs font-bold text-yellow-400">{result.accountNumber}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function UserManagement() {
   const { accounts, banUser, unbanUser, changeRole, removeAccount } = useAuthStore();
   const [search, setSearch] = useState("");
@@ -296,6 +360,12 @@ function UserManagement() {
         </select>
       </div>
 
+      {/* Account lookup */}
+      <div className="mb-5 rounded-2xl border border-slate-700 bg-slate-950 p-4">
+        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Look up by Account Number</p>
+        <AccountNumberLookup accounts={filtered} />
+      </div>
+
       {/* User rows */}
       <div className="space-y-3">
         {filtered.length === 0 && (
@@ -307,6 +377,11 @@ function UserManagement() {
               <div>
                 <p className="font-bold text-white">{u.fullName}</p>
                 <p className="text-xs text-slate-500">@{u.username}</p>
+                {u.accountNumber && (
+                  <span className="inline-block mt-1 rounded-lg border border-slate-700 bg-slate-900 px-2 py-0.5 text-xs font-black text-yellow-400 tracking-widest">
+                    {u.accountNumber}
+                  </span>
+                )}
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 <RoleBadge role={u.role} />
