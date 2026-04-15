@@ -23,6 +23,7 @@ type UseVoiceEngineOptions = {
   onHeard?: (heard: string, raw: string) => void | Promise<void>;
   lang?: string;
   silenceTimeoutMs?: number;
+  preferredMicDeviceId?: string;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -94,6 +95,7 @@ export function useVoiceEngine({
   onHeard,
   lang = "en-US",
   silenceTimeoutMs = 7000,
+  preferredMicDeviceId,
 }: UseVoiceEngineOptions = {}) {
 
   // ── Core refs ─────────────────────────────────────────────────────────────
@@ -109,6 +111,7 @@ export function useVoiceEngine({
   const modeRef              = useRef<"wake" | "active">("wake");
   const langRef              = useRef(lang);
   const onHeardRef           = useRef(onHeard);
+  const preferredMicRef      = useRef(preferredMicDeviceId);
   const startRecognitionRef  = useRef<((mode: "wake" | "active") => void) | null>(null);
   // When we intentionally stop recognition (e.g. before TTS), the browser fires
   // an "aborted" error. This flag lets onerror ignore that expected event so it
@@ -146,6 +149,7 @@ export function useVoiceEngine({
 
   useEffect(() => { onHeardRef.current = onHeard; });
   useEffect(() => { langRef.current = lang; }, [lang]);
+  useEffect(() => { preferredMicRef.current = preferredMicDeviceId; }, [preferredMicDeviceId]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const clearSilenceTimer = useCallback(() => {
@@ -211,9 +215,13 @@ export function useVoiceEngine({
         console.log("[NOVA VAD] reusing existing mic stream");
       } else {
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const micId = preferredMicRef.current;
+          const audioConstraint: MediaTrackConstraints | boolean = micId
+            ? { deviceId: { ideal: micId }, echoCancellation: true, noiseSuppression: true }
+            : { echoCancellation: true, noiseSuppression: true };
+          stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint });
           micStreamRef.current = stream;
-          console.log("[NOVA VAD] acquired new mic stream");
+          console.log("[NOVA VAD] acquired mic stream, deviceId:", micId ?? "default");
         } catch (err) {
           console.error("[NOVA VAD] mic error:", err);
           setError("Microphone unavailable.");

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVoiceEngine } from "@/hooks/useVoiceEngine";
+import { useHeadphones } from "@/hooks/useHeadphones";
 import { matchCommand } from "@/lib/novaCommandMatcher";
 import { useTrainerStore } from "@/lib/trainerStore";
 
@@ -169,7 +170,10 @@ export default function NovaTrainerSession({
   // On mobile, require one tap before starting (unlocks iOS AudioContext + TTS)
   const [mobileTapGate, setMobileTapGate] = useState(autoStart && IS_MOBILE);
 
+  const headphones = useHeadphones();
+
   const voice = useVoiceEngine({
+    preferredMicDeviceId: headphones.preferredMicId,
     onHeard: async (_heard: string, raw: string) => {
       const text = raw || _heard;
       const heard = _heard || text;
@@ -505,6 +509,11 @@ export default function NovaTrainerSession({
           {lang === "es" && (
             <span className="ml-1 rounded-full bg-yellow-400/15 border border-yellow-400/30 px-2 py-0.5 text-xs font-bold text-yellow-300">
               🇪🇸 ES
+            </span>
+          )}
+          {headphones.connected && (
+            <span className="ml-1 rounded-full bg-cyan-500/15 border border-cyan-400/30 px-2 py-0.5 text-xs font-bold text-cyan-300 flex items-center gap-1">
+              🎧 {headphones.label ? headphones.label.split(" ").slice(0, 2).join(" ") : "Headphones"}
             </span>
           )}
         </div>
