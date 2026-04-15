@@ -1,28 +1,32 @@
 import { Router } from "express";
-import { stripe } from "../lib/stripe.js";
+import { getUncachableStripeClient } from "../lib/stripeClient.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
+// POST /create-checkout  — creates a Stripe Checkout session
+// Body: { email, billing: "monthly"|"yearly" }
 router.post("/create-checkout", async (req, res) => {
-  if (!stripe) {
-    res.status(503).json({ error: "Stripe is not configured. Add STRIPE_SECRET_KEY to environment variables." });
-    return;
-  }
-
-  const { companyName, email, weeklyRate = 1660 } = req.body as {
-    companyName: string;
-    email: string;
-    weeklyRate?: number;
+  const { email, billing = "monthly" } = req.body as {
+    email?: string;
+    billing?: string;
   };
 
-  if (!companyName || !email) {
-    res.status(400).json({ error: "companyName and email are required." });
+  if (!email) {
+    res.status(400).json({ error: "email is required" });
     return;
   }
 
-  const appUrl = process.env.APP_URL ?? "https://nova-warehouse-control.replit.app";
+  const isYearly = billing === "yearly";
+  const unitAmount = isYearly ? 25000 : 2500; // $250/yr or $25/mo in cents
+  const interval   = isYearly ? "year" : "month";
+
+  const appUrl =
+    process.env.APP_URL ?? "https://nova-warehouse-control.replit.app";
 
   try {
+    const stripe = await getUncachableStripeClient();
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "subscription",
@@ -32,24 +36,26 @@ router.post("/create-checkout", async (req, res) => {
           price_data: {
             currency: "usd",
             product_data: {
-              name: `PickSmart NOVA — ${companyName}`,
-              description: "Full platform access: NOVA Trainer, Trainer & Supervisor Dashboards, selector management",
+              name: "PickSmart NOVA — Professional Single",
+              description:
+                "Full platform: Training, NOVA Help, NOVA Trainer, Leaderboard, Common Mistakes, Selector Breaking News",
             },
-            unit_amount: Math.round(weeklyRate * 100),
-            recurring: { interval: "week" },
+            unit_amount: unitAmount,
+            recurring: { interval },
           },
           quantity: 1,
         },
       ],
-      success_url: `${appUrl}/payment-success`,
+      success_url: `${appUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:  `${appUrl}/payment-cancel`,
+      metadata: { billing, email },
     });
 
-    console.log(`[Stripe] Checkout session created for ${companyName} <${email}> — $${weeklyRate}/week`);
+    logger.info(`[Stripe] Checkout session created — ${email} — $${unitAmount / 100}/${interval}`);
     res.json({ url: session.url });
   } catch (err: unknown) {
-    console.error("[Stripe] createCheckout error:", err);
     const msg = err instanceof Error ? err.message : "Unknown error";
+    logger.error({ err }, "[Stripe] createCheckout error");
     res.status(500).json({ error: msg });
   }
 });

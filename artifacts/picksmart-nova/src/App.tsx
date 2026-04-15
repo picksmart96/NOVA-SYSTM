@@ -74,6 +74,8 @@ import RequestAccessPage from "@/pages/RequestAccessPage";
 import DealDetailPage from "@/pages/deal-detail";
 import DealSignPage from "@/pages/deal-sign";
 import NovaSalesVoiceAgent from "@/pages/NovaSalesVoiceAgent";
+import PaymentSuccessPage from "@/pages/payment-success";
+import PaymentCancelPage from "@/pages/payment-cancel";
 
 function RedirectToOwner() {
   const [, navigate] = useLocation();
@@ -189,6 +191,12 @@ function Router() {
       </Route>
       <Route path="/meet-nova">
         <NovaSalesVoiceAgent />
+      </Route>
+      <Route path="/payment-success">
+        <PaymentSuccessPage />
+      </Route>
+      <Route path="/payment-cancel">
+        <PaymentCancelPage />
       </Route>
 
       {/* ── Gated — requires active subscription to view any content ── */}
