@@ -164,7 +164,9 @@ function Router() {
         <DownloadPage />
       </Route>
       <Route path="/command">
-        <CommandPage />
+        <SubscriptionRoute path="/command" requiredRole="owner">
+          <CommandPage />
+        </SubscriptionRoute>
       </Route>
       <Route path="/">
         <Layout><HomePage /></Layout>

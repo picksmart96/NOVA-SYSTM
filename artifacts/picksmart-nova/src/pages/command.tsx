@@ -234,16 +234,18 @@ function QuickInvite() {
 
 // ─── Main page ───────────────────────────────────────────────────────────────
 export default function CommandPage() {
-  const { currentUser, login } = useAuthStore();
+  const { currentUser } = useAuthStore();
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
 
-  // Auto-login as owner the moment this page opens — no subscription prompt ever
+  // Guard: owner-only page
   useEffect(() => {
     if (!currentUser) {
-      login("draogo96", "Draogo1996#");
+      navigate("/login?redirect=/command", { replace: true });
+    } else if (currentUser.role !== "owner") {
+      navigate("/", { replace: true });
     }
-  }, []);
+  }, [currentUser]);
 
   const filtered = PAGES.map(s => ({
     ...s,
