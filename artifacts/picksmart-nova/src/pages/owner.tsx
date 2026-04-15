@@ -3957,76 +3957,104 @@ type ContractRecord = {
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
   status: string;
+  startDate: string | null;
+  endDate: string | null;
+  autoRenew: boolean;
+  renewalAlertSent: boolean;
   createdAt: string;
 };
 
 function ContractStatusBadge({ status }: { status: string }) {
-  if (status === "active")
-    return <span className="px-2 py-0.5 rounded-full text-xs font-black bg-green-500/20 text-green-400 border border-green-500/30">Active</span>;
-  if (status === "canceled")
-    return <span className="px-2 py-0.5 rounded-full text-xs font-black bg-red-500/20 text-red-400 border border-red-500/30">Canceled</span>;
-  return <span className="px-2 py-0.5 rounded-full text-xs font-black bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">Pending</span>;
+  const map: Record<string, { label: string; cls: string }> = {
+    active:    { label: "Active",     cls: "bg-green-500/20 text-green-400 border-green-500/30" },
+    pending:   { label: "Pending",    cls: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
+    paused:    { label: "Paused",     cls: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+    canceling: { label: "Canceling",  cls: "bg-orange-500/20 text-orange-400 border-orange-500/30" },
+    canceled:  { label: "Canceled",   cls: "bg-red-500/20 text-red-400 border-red-500/30" },
+    expired:   { label: "Expired",    cls: "bg-slate-500/20 text-slate-400 border-slate-500/30" },
+    past_due:  { label: "Past Due",   cls: "bg-red-500/20 text-red-400 border-red-500/30" },
+  };
+  const s = map[status] ?? { label: status, cls: "bg-slate-500/20 text-slate-400 border-slate-500/30" };
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-xs font-black border ${s.cls}`}>
+      {s.label}
+    </span>
+  );
+}
+
+function daysLeft(endDate: string | null): number | null {
+  if (!endDate) return null;
+  return Math.floor((new Date(endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
 function ContractsTab() {
-  const [contracts, setContracts] = useState<ContractRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [contracts, setContracts]   = useState<ContractRecord[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState<string | null>(null);
+  const [actionMsg, setActionMsg]   = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const base = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
-  useEffect(() => {
+  function reload() {
+    setLoading(true);
     fetch(`${base}/api/contracts`)
       .then((r) => r.json())
       .then((data) => { setContracts(Array.isArray(data) ? data : []); setLoading(false); })
       .catch(() => { setError("Failed to load contracts."); setLoading(false); });
-  }, []);
+  }
 
-  const active   = contracts.filter((c) => c.status === "active").length;
-  const pending  = contracts.filter((c) => c.status === "pending").length;
+  useEffect(() => { reload(); }, []);
 
-  const totalRevenue = contracts
+  async function contractAction(endpoint: string, body: object, successMsg: string) {
+    setActionMsg(null);
+    try {
+      const res = await fetch(`${base}/api/contracts/${endpoint}`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(body),
+      });
+      const data = await res.json() as { ok?: boolean; url?: string; error?: string; message?: string };
+      if (data.url) { window.open(data.url, "_blank"); return; }
+      if (data.error) { setActionMsg(`Error: ${data.error}`); return; }
+      setActionMsg(data.message ?? successMsg);
+      setTimeout(reload, 1500);
+    } catch {
+      setActionMsg("Request failed — check API server");
+    }
+  }
+
+  const active        = contracts.filter((c) => c.status === "active").length;
+  const pending       = contracts.filter((c) => c.status === "pending").length;
+  const totalRevenue  = contracts
     .filter((c) => c.status === "active")
     .reduce((sum, c) => sum + Number(c.weeklyPrice ?? 0), 0);
 
   const dealSignUrl = `${window.location.origin}${base}/deal-sign`;
-
   const [copiedLink, setCopiedLink] = useState(false);
-  function copyDealLink() {
-    navigator.clipboard.writeText(dealSignUrl);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2500);
-  }
 
   return (
     <div className="space-y-6">
+
       {/* Header + deal link */}
       <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
           <div>
             <h2 className="text-xl font-black text-white">Company Contracts</h2>
-            <p className="text-slate-400 text-sm mt-1">Track all signed company agreements and their payment status.</p>
+            <p className="text-slate-400 text-sm mt-1">Track all signed agreements, billing status, and renewal dates.</p>
           </div>
           <div className="sm:ml-auto flex items-center gap-2">
-            <a
-              href={dealSignUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2 text-sm font-bold text-slate-300 hover:text-yellow-400 hover:border-yellow-400/40 transition"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Open Deal Sign Page
+            <a href={dealSignUrl} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2 text-sm font-bold text-slate-300 hover:text-yellow-400 hover:border-yellow-400/40 transition">
+              <ExternalLink className="h-4 w-4" /> Open Page
             </a>
             <button
-              onClick={copyDealLink}
-              className="flex items-center gap-2 rounded-xl bg-yellow-400 px-4 py-2 text-sm font-black text-slate-950 hover:bg-yellow-300 transition"
-            >
+              onClick={() => { navigator.clipboard.writeText(dealSignUrl); setCopiedLink(true); setTimeout(() => setCopiedLink(false), 2500); }}
+              className="flex items-center gap-2 rounded-xl bg-yellow-400 px-4 py-2 text-sm font-black text-slate-950 hover:bg-yellow-300 transition">
               {copiedLink ? <><Check className="h-4 w-4" /> Copied!</> : <><Copy className="h-4 w-4" /> Copy Link</>}
             </button>
           </div>
         </div>
-
-        {/* Deal sign URL display */}
         <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 flex items-center gap-3">
           <LucideLink className="h-4 w-4 text-yellow-400 flex-shrink-0" />
           <span className="text-slate-400 text-sm font-mono truncate">{dealSignUrl}</span>
@@ -4036,10 +4064,10 @@ function ContractsTab() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: "Total Contracts", value: contracts.length },
-          { label: "Active",          value: active,   color: "text-green-400" },
-          { label: "Pending",         value: pending,  color: "text-yellow-400" },
-          { label: "Weekly Revenue",  value: `$${totalRevenue.toLocaleString()}`, color: "text-white" },
+          { label: "Total",         value: contracts.length },
+          { label: "Active",        value: active,  color: "text-green-400" },
+          { label: "Pending",       value: pending, color: "text-yellow-400" },
+          { label: "Weekly Revenue",value: `$${totalRevenue.toLocaleString()}`, color: "text-white" },
         ].map(({ label, value, color }) => (
           <div key={label} className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{label}</p>
@@ -4048,63 +4076,147 @@ function ContractsTab() {
         ))}
       </div>
 
-      {/* Contracts table */}
+      {actionMsg && (
+        <div className="rounded-xl border border-yellow-400/30 bg-yellow-400/10 px-4 py-3 text-yellow-300 text-sm font-bold">
+          {actionMsg}
+        </div>
+      )}
+
+      {/* Contracts list */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-8 w-8 text-yellow-400 animate-spin" />
         </div>
       ) : error ? (
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-center text-red-400">
-          {error}
-        </div>
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-center text-red-400">{error}</div>
       ) : contracts.length === 0 ? (
         <div className="rounded-3xl border border-slate-800 bg-slate-900 p-12 text-center space-y-3">
           <FileText className="h-12 w-12 text-slate-700 mx-auto" />
           <p className="text-white font-bold text-lg">No contracts yet</p>
-          <p className="text-slate-400 text-sm">Share the deal sign link with companies to get started.</p>
+          <p className="text-slate-400 text-sm">Share the deal sign link to get started.</p>
         </div>
       ) : (
-        <div className="rounded-3xl border border-slate-800 bg-slate-900 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-500 text-xs uppercase tracking-widest">
-                  <th className="text-left px-5 py-3 font-bold">Company</th>
-                  <th className="text-left px-5 py-3 font-bold">Term</th>
-                  <th className="text-left px-5 py-3 font-bold">Total Value</th>
-                  <th className="text-left px-5 py-3 font-bold">Weekly Rate</th>
-                  <th className="text-left px-5 py-3 font-bold">Signed By</th>
-                  <th className="text-left px-5 py-3 font-bold">Signed</th>
-                  <th className="text-left px-5 py-3 font-bold">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {contracts.map((c, i) => (
-                  <tr
-                    key={c.id}
-                    className={`border-b border-slate-800/60 hover:bg-slate-800/40 transition ${i % 2 === 0 ? "" : "bg-slate-900/30"}`}
-                  >
-                    <td className="px-5 py-3.5">
-                      <p className="font-bold text-white">{c.companyName}</p>
-                      {c.email && <p className="text-slate-500 text-xs mt-0.5">{c.email}</p>}
-                    </td>
-                    <td className="px-5 py-3.5 font-bold text-yellow-400">{c.contractTerm}</td>
-                    <td className="px-5 py-3.5 font-bold text-white">
-                      {c.totalContractValue ? `$${Number(c.totalContractValue).toLocaleString()}` : "—"}
-                    </td>
-                    <td className="px-5 py-3.5 text-slate-300">${Number(c.weeklyPrice).toLocaleString()}/wk</td>
-                    <td className="px-5 py-3.5 text-slate-300">{c.signedName ?? "—"}</td>
-                    <td className="px-5 py-3.5 text-slate-400 text-xs">
-                      {c.signedAt ? new Date(c.signedAt).toLocaleDateString() : "—"}
-                    </td>
-                    <td className="px-5 py-3.5">
+        <div className="space-y-3">
+          {contracts.map((c) => {
+            const days    = daysLeft(c.endDate);
+            const isOpen  = expandedId === c.id;
+            const canAct  = !!c.stripeSubscriptionId;
+
+            return (
+              <div key={c.id} className="rounded-3xl border border-slate-800 bg-slate-900 overflow-hidden">
+
+                {/* Summary row */}
+                <button
+                  onClick={() => setExpandedId(isOpen ? null : c.id)}
+                  className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-slate-800/40 transition"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-black text-white">{c.companyName}</p>
                       <ContractStatusBadge status={c.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      {c.renewalAlertSent && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-black bg-orange-500/20 text-orange-400 border border-orange-500/30">Alert Sent</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-400 flex-wrap">
+                      <span className="text-yellow-400 font-bold">{c.contractTerm}</span>
+                      <span>${Number(c.weeklyPrice).toLocaleString()}/wk</span>
+                      {c.totalContractValue && <span>Total: ${Number(c.totalContractValue).toLocaleString()}</span>}
+                      {days !== null && (
+                        <span className={days <= 7 ? "text-orange-400 font-bold" : days <= 30 ? "text-yellow-400" : "text-slate-400"}>
+                          {days > 0 ? `${days}d left` : days === 0 ? "Expires today" : `Expired ${Math.abs(days)}d ago`}
+                        </span>
+                      )}
+                      {c.autoRenew && <span className="text-green-400">↻ Auto-renew</span>}
+                    </div>
+                  </div>
+                  <ChevronDown className={`h-4 w-4 text-slate-500 flex-shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {/* Expanded details + actions */}
+                {isOpen && (
+                  <div className="border-t border-slate-800 px-5 py-5 space-y-5">
+
+                    {/* Details grid */}
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+                      {[
+                        ["Contact",    c.contactName ?? "—"],
+                        ["Email",      c.email ?? "—"],
+                        ["Signed by",  c.signedName ?? "—"],
+                        ["Start date", c.startDate ? new Date(c.startDate).toLocaleDateString() : "—"],
+                        ["End date",   c.endDate   ? new Date(c.endDate).toLocaleDateString() : "—"],
+                        ["Auto-renew", c.autoRenew ? "Yes" : "No"],
+                      ].map(([label, val]) => (
+                        <div key={label} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5">
+                          <p className="text-slate-500 text-xs uppercase tracking-widest mb-0.5">{label}</p>
+                          <p className="text-white font-bold">{val}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Action buttons */}
+                    <div>
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Subscription Actions</p>
+                      <div className="flex flex-wrap gap-2">
+                        {canAct ? (
+                          <>
+                            <button
+                              onClick={() => contractAction("billing-portal", { customerId: c.stripeCustomerId }, "Opening portal…")}
+                              className="flex items-center gap-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-xs font-bold text-white transition"
+                            >
+                              <CreditCard className="h-3.5 w-3.5" /> Billing Portal
+                            </button>
+
+                            {c.status === "active" && (
+                              <button
+                                onClick={() => contractAction("pause-subscription", { subscriptionId: c.stripeSubscriptionId }, "Billing paused")}
+                                className="flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 px-3 py-1.5 text-xs font-bold text-white transition"
+                              >
+                                ⏸ Pause
+                              </button>
+                            )}
+
+                            {c.status === "paused" && (
+                              <button
+                                onClick={() => contractAction("resume-subscription", { subscriptionId: c.stripeSubscriptionId }, "Billing resumed")}
+                                className="flex items-center gap-1.5 rounded-xl bg-green-600 hover:bg-green-500 px-3 py-1.5 text-xs font-bold text-white transition"
+                              >
+                                ▶ Resume
+                              </button>
+                            )}
+
+                            {(c.status === "active" || c.status === "paused") && (
+                              <button
+                                onClick={() => {
+                                  if (!confirm(`Cancel contract for ${c.companyName}? They will keep access until end of billing period.`)) return;
+                                  contractAction("cancel-subscription", { subscriptionId: c.stripeSubscriptionId, contractId: c.id }, "Subscription will cancel at end of billing period");
+                                }}
+                                className="flex items-center gap-1.5 rounded-xl bg-red-700 hover:bg-red-600 px-3 py-1.5 text-xs font-bold text-white transition"
+                              >
+                                <X className="h-3.5 w-3.5" /> Cancel
+                              </button>
+                            )}
+
+                            {c.stripeCustomerId && (
+                              <button
+                                onClick={() => contractAction("billing-portal", { customerId: c.stripeCustomerId }, "Opening invoices…")}
+                                className="flex items-center gap-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-xs font-bold text-white transition"
+                              >
+                                <FileText className="h-3.5 w-3.5" /> Invoices
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-xs text-slate-500 italic">No Stripe subscription linked yet — actions available after payment.</p>
+                        )}
+                      </div>
+                    </div>
+
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

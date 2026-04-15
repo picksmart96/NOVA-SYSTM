@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, numeric, boolean } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -17,6 +17,10 @@ export const contractsTable = pgTable("contracts", {
   stripeSubscriptionId: text("stripe_subscription_id"),
   stripeSessionId:      text("stripe_session_id"),
   status:               text("status").notNull().default("pending"),
+  startDate:            timestamp("start_date").defaultNow(),
+  endDate:              timestamp("end_date"),
+  autoRenew:            boolean("auto_renew").notNull().default(true),
+  renewalAlertSent:     boolean("renewal_alert_sent").notNull().default(false),
   createdAt:            timestamp("created_at").notNull().defaultNow(),
 });
 

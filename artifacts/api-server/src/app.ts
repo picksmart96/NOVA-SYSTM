@@ -71,6 +71,25 @@ app.post(
           }
         }
 
+        if (event.type === "customer.subscription.updated") {
+          const sub = event.data.object as { id?: string; status?: string; pause_collection?: unknown };
+          if (sub.id) {
+            let newStatus: string | null = null;
+            if (sub.status === "active" && !sub.pause_collection) newStatus = "active";
+            else if (sub.status === "active" && sub.pause_collection) newStatus = "paused";
+            else if (sub.status === "canceled") newStatus = "canceled";
+            else if (sub.status === "past_due") newStatus = "past_due";
+
+            if (newStatus) {
+              await db
+                .update(contractsTable)
+                .set({ status: newStatus })
+                .where(eq(contractsTable.stripeSubscriptionId, sub.id));
+              logger.info(`[Contracts] Sub ${sub.id} → status "${newStatus}"`);
+            }
+          }
+        }
+
         if (event.type === "customer.subscription.deleted") {
           const sub = event.data.object as { id?: string };
           if (sub.id) {

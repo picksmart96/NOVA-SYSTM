@@ -4,6 +4,7 @@ import { attachNovaRealtimeServer } from "./lib/novaRealtimeServer.js";
 import { logger } from "./lib/logger.js";
 import { runMigrations } from "stripe-replit-sync";
 import { getStripeSync } from "./lib/stripeClient.js";
+import { startContractCron } from "./lib/contractCron.js";
 
 const rawPort = process.env["PORT"];
 
@@ -58,3 +59,6 @@ async function initStripe() {
 }
 
 initStripe();
+
+// Start daily contract renewal cron
+startContractCron();

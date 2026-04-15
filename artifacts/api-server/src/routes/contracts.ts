@@ -7,7 +7,8 @@ import { eq } from "drizzle-orm";
 
 const router = Router();
 
-// Contract term → total contract value map
+// ─── constants ────────────────────────────────────────────────────────────────
+
 const CONTRACT_VALUES: Record<string, number> = {
   "Weekly":   1660,
   "Monthly":  6400,
@@ -18,8 +19,19 @@ const CONTRACT_VALUES: Record<string, number> = {
   "10 Years": 450000,
 };
 
-// POST /api/contracts/create-checkout
-// Body: { companyName, contactName, email, contractTerm, signedName }
+function getEndDate(term: string): Date {
+  const d = new Date();
+  if (term === "1 Year")    d.setFullYear(d.getFullYear() + 1);
+  else if (term === "2 Years")  d.setFullYear(d.getFullYear() + 2);
+  else if (term === "3 Years")  d.setFullYear(d.getFullYear() + 3);
+  else if (term === "5 Years")  d.setFullYear(d.getFullYear() + 5);
+  else if (term === "10 Years") d.setFullYear(d.getFullYear() + 10);
+  else d.setFullYear(d.getFullYear() + 1);
+  return d;
+}
+
+// ─── POST /api/contracts/create-checkout ─────────────────────────────────────
+
 router.post("/contracts/create-checkout", async (req, res) => {
   const { companyName, contactName, email, contractTerm = "1 Year", signedName } = req.body as {
     companyName?: string;
@@ -36,27 +48,30 @@ router.post("/contracts/create-checkout", async (req, res) => {
 
   const weeklyPrice = 1660;
   const totalValue  = CONTRACT_VALUES[contractTerm] ?? 69000;
-
-  const appUrl = process.env.APP_URL ?? "https://nova-warehouse-control.replit.app";
+  const startDate   = new Date();
+  const endDate     = getEndDate(contractTerm);
+  const appUrl      = process.env.APP_URL ?? "https://nova-warehouse-control.replit.app";
 
   try {
-    // Save contract as pending before Stripe checkout
     const [contract] = await db
       .insert(contractsTable)
       .values({
         companyName,
-        contactName: contactName ?? null,
-        email:       email ?? null,
+        contactName:        contactName ?? null,
+        email:              email ?? null,
         contractTerm,
         weeklyPrice:        String(weeklyPrice),
         totalContractValue: String(totalValue),
-        signedName:  signedName ?? null,
-        signedAt:    signedName ? new Date() : null,
-        status:      "pending",
+        signedName:         signedName ?? null,
+        signedAt:           signedName ? new Date() : null,
+        status:             "pending",
+        startDate,
+        endDate,
+        autoRenew:          true,
+        renewalAlertSent:   false,
       })
       .returning();
 
-    // Create Stripe checkout
     const stripe = await getUncachableStripeClient();
 
     const session = await stripe.checkout.sessions.create({
@@ -96,7 +111,8 @@ router.post("/contracts/create-checkout", async (req, res) => {
   }
 });
 
-// GET /api/contracts — list all contracts (owner only in prod; no auth middleware here)
+// ─── GET /api/contracts ───────────────────────────────────────────────────────
+
 router.get("/contracts", async (_req, res) => {
   try {
     const contracts = await db
@@ -111,7 +127,8 @@ router.get("/contracts", async (_req, res) => {
   }
 });
 
-// PATCH /api/contracts/:id/activate  — called by webhook
+// ─── PATCH /api/contracts/:id/activate  (webhook helper) ─────────────────────
+
 router.patch("/contracts/:id/activate", async (req, res) => {
   const { id } = req.params;
   const { stripeCustomerId, stripeSubscriptionId } = req.body as {
@@ -130,6 +147,120 @@ router.patch("/contracts/:id/activate", async (req, res) => {
     res.json({ ok: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ error: msg });
+  }
+});
+
+// ─── PATCH /api/contracts/:id/auto-renew ─────────────────────────────────────
+
+router.patch("/contracts/:id/auto-renew", async (req, res) => {
+  const { id } = req.params;
+  const { autoRenew } = req.body as { autoRenew: boolean };
+  try {
+    await db
+      .update(contractsTable)
+      .set({ autoRenew })
+      .where(eq(contractsTable.id, id));
+    res.json({ ok: true });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    res.status(500).json({ error: msg });
+  }
+});
+
+// ─── POST /api/contracts/cancel-subscription ─────────────────────────────────
+
+router.post("/contracts/cancel-subscription", async (req, res) => {
+  const { subscriptionId, contractId } = req.body as {
+    subscriptionId: string;
+    contractId?: string;
+  };
+  try {
+    const stripe = await getUncachableStripeClient();
+    await stripe.subscriptions.update(subscriptionId, {
+      cancel_at_period_end: true,
+    });
+    if (contractId) {
+      await db
+        .update(contractsTable)
+        .set({ status: "canceling" })
+        .where(eq(contractsTable.id, contractId));
+    }
+    logger.info(`[Contracts] Marked cancel_at_period_end: ${subscriptionId}`);
+    res.json({ ok: true, message: "Subscription will cancel at end of billing period" });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    logger.error({ err }, "[Contracts] cancel-subscription error");
+    res.status(500).json({ error: msg });
+  }
+});
+
+// ─── POST /api/contracts/pause-subscription ──────────────────────────────────
+
+router.post("/contracts/pause-subscription", async (req, res) => {
+  const { subscriptionId } = req.body as { subscriptionId: string };
+  try {
+    const stripe = await getUncachableStripeClient();
+    await stripe.subscriptions.update(subscriptionId, {
+      pause_collection: { behavior: "mark_uncollectible" },
+    });
+    logger.info(`[Contracts] Paused: ${subscriptionId}`);
+    res.json({ ok: true, message: "Billing paused" });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    logger.error({ err }, "[Contracts] pause-subscription error");
+    res.status(500).json({ error: msg });
+  }
+});
+
+// ─── POST /api/contracts/resume-subscription ─────────────────────────────────
+
+router.post("/contracts/resume-subscription", async (req, res) => {
+  const { subscriptionId } = req.body as { subscriptionId: string };
+  try {
+    const stripe = await getUncachableStripeClient();
+    await stripe.subscriptions.update(subscriptionId, {
+      pause_collection: "" as any, // null = resume
+    });
+    logger.info(`[Contracts] Resumed: ${subscriptionId}`);
+    res.json({ ok: true, message: "Billing resumed" });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    logger.error({ err }, "[Contracts] resume-subscription error");
+    res.status(500).json({ error: msg });
+  }
+});
+
+// ─── POST /api/contracts/billing-portal ──────────────────────────────────────
+
+router.post("/contracts/billing-portal", async (req, res) => {
+  const { customerId } = req.body as { customerId: string };
+  const appUrl = process.env.APP_URL ?? "https://nova-warehouse-control.replit.app";
+  try {
+    const stripe = await getUncachableStripeClient();
+    const session = await stripe.billingPortal.sessions.create({
+      customer:   customerId,
+      return_url: `${appUrl}/owner`,
+    });
+    res.json({ url: session.url });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    logger.error({ err }, "[Contracts] billing-portal error");
+    res.status(500).json({ error: msg });
+  }
+});
+
+// ─── POST /api/contracts/invoices ────────────────────────────────────────────
+
+router.post("/contracts/invoices", async (req, res) => {
+  const { customerId } = req.body as { customerId: string };
+  try {
+    const stripe = await getUncachableStripeClient();
+    const invoices = await stripe.invoices.list({ customer: customerId, limit: 20 });
+    res.json(invoices.data);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    logger.error({ err }, "[Contracts] invoices error");
     res.status(500).json({ error: msg });
   }
 });
