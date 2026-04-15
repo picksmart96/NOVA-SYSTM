@@ -6,7 +6,9 @@ import { detectStopWord } from "@/lib/novaModeRouter";
 import { NovaVoiceStatus, type VoiceStateKey } from "@/components/nova/NovaVoiceStatus";
 import LockedAction from "@/components/paywall/LockedAction";
 import { useTalkRequestStore } from "@/lib/talkRequestStore";
-import { MessageCircle, X, CheckCircle2, Send } from "lucide-react";
+import { MessageCircle, X, CheckCircle2, Send, Mic } from "lucide-react";
+import { useAuthStore } from "@/lib/authStore";
+import { usePerformanceStore } from "@/lib/performanceStore";
 
 // ─── Detect "speak to someone" requests ──────────────────────────────────────
 function isHumanRequestTrigger(text: string): boolean {
@@ -53,6 +55,55 @@ function isSafetyDeny(text: string): boolean {
   const t = text.toLowerCase().trim().replace(/[.,!?;:]+$/, "");
   return t === "no"||t.startsWith("no ")||t.includes("nope")||t.includes("negative")||
     t.includes("fail")||t.includes("bad")||t.includes("broken")||t.includes("not okay")||t.includes("not ok");
+}
+
+// ─── Mood detection ──────────────────────────────────────────────────────────
+function isNegativeMood(text: string): boolean {
+  const t = text.toLowerCase();
+  return (
+    t.includes("tired") || t.includes("exhausted") || t.includes("bad") ||
+    t.includes("rough") || t.includes("hard") || t.includes("tough") ||
+    t.includes("not good") || t.includes("not great") || t.includes("struggling") ||
+    t.includes("stressed") || t.includes("anxious") || t.includes("sore") ||
+    t.includes("hurt") || t.includes("pain") || t.includes("sick") ||
+    t.includes("sad") || t.includes("depressed") || t.includes("frustrated") ||
+    t.includes("worried") || t.includes("nervous") || t.includes("scared") ||
+    t.includes("terrible") || t.includes("awful") || t.includes("horrible") ||
+    t.includes("down") || t.includes("low") || t.includes("unmotivated") ||
+    t.includes("don't want") || t.includes("dont want") || t.includes("can't do") ||
+    t.includes("cant do") || t.includes("not feeling") || t.includes("feeling off") ||
+    t.includes("cansado") || t.includes("mal") || t.includes("cansada") ||
+    t.includes("estresado") || t.includes("difícil") || t.includes("difícil")
+  );
+}
+
+function isPositiveMood(text: string): boolean {
+  const t = text.toLowerCase();
+  return (
+    t.includes("good") || t.includes("great") || t.includes("amazing") ||
+    t.includes("awesome") || t.includes("fantastic") || t.includes("excellent") ||
+    t.includes("ready") || t.includes("motivated") || t.includes("pumped") ||
+    t.includes("energized") || t.includes("focused") || t.includes("strong") ||
+    t.includes("confident") || t.includes("happy") || t.includes("excited") ||
+    t.includes("let's go") || t.includes("lets go") || t.includes("let's do") ||
+    t.includes("bien") || t.includes("listo") || t.includes("genial")
+  );
+}
+
+function getNegativeMoodResponse(firstName: string, goalRate: number | null, isSpanish: boolean): string {
+  const goal = goalRate ? `${goalRate}%` : "your best";
+  if (isSpanish) {
+    return `Oye ${firstName}, lo entiendo — a veces el día empieza pesado. Pero escúchame bien: tú estás aquí, eso ya dice mucho. Eso muestra que tienes carácter. Toma una respiración profunda, mantén el enfoque, muévete con seguridad, y deja que tu cuerpo tome el ritmo. Tu meta esta semana es ${goal}. No tienes que ser perfecto hoy — solo mejor que ayer. ¡Tú puedes! ¡Pica inteligente y cuídate!`;
+  }
+  return `Hey ${firstName}, I hear you — some days just start that way, and that's okay. What matters is you showed up. That already takes strength. Take a deep breath, stay focused on one pick at a time, and let your body find its rhythm. Your goal this week is ${goal}. You don't need to be perfect today — just a little better than yesterday. I'm in your corner all day. Pick smart and stay safe out there!`;
+}
+
+function getPositiveMoodResponse(firstName: string, goalRate: number | null, isSpanish: boolean): string {
+  const goal = goalRate ? `${goalRate}%` : "your goal";
+  if (isSpanish) {
+    return `¡Eso es lo que quiero escuchar, ${firstName}! Con esa energía vas a tener un día increíble. Tu meta es ${goal} esta semana — tú puedes superar eso. Mantén el ritmo, muévete con seguridad, y recuerda: ¡Pica inteligente! Estoy aquí si necesitas algo.`;
+  }
+  return `That's what I like to hear, ${firstName}! With that energy you're going to have a great day. Your goal is ${goal} this week — and with that attitude you can crush it. Keep that pace up, stay safe out there, and remember — pick smart! I'm here whenever you need me.`;
 }
 
 // ─── Speech Recognition helper ───────────────────────────────────────────────
@@ -177,6 +228,16 @@ export default function NovaHelpPage() {
   const ttsLang   = isSpanish ? "es-ES" : "en-US";
   const [, navigate] = useLocation();
 
+  // ── User + performance data ──────────────────────────────────────────────
+  const { currentUser } = useAuthStore();
+  const { getYesterdayLog, getGoal, getWeekAvg } = usePerformanceStore();
+  const firstName   = currentUser?.fullName?.split(" ")[0] ?? currentUser?.username ?? "";
+  const username    = currentUser?.username ?? "";
+  const yestLog     = username ? getYesterdayLog(username) : null;
+  const userGoal    = username ? getGoal(username) : null;
+  const weekAvg     = username ? getWeekAvg(username) : null;
+  const isRealUser  = !!currentUser && !currentUser.isDemoUser;
+
   // ── Question counter + soft lock ──────────────────────────────────────────
   const [questionCount, setQuestionCount] = useState(0);
   const [lockedOut, setLockedOut]         = useState(false);
@@ -212,6 +273,7 @@ export default function NovaHelpPage() {
   const safetyModeRef     = useRef(false);
   const safetyIndexRef    = useRef(0);
   const ttsUnlockedRef    = useRef(false);
+  const moodCheckActiveRef = useRef(false);
 
   // Forward refs for cross-callback use
   const handleQuestionRef        = useRef<((t: string) => Promise<void>) | null>(null);
@@ -306,6 +368,39 @@ export default function NovaHelpPage() {
       setAnswer(msg);
       setPhase("speaking");
       speakText(msg, ttsLang, () => { navigate("/meet-nova"); });
+      return;
+    }
+
+    // ── Mood check — fires right after the opening greeting ──────────────────
+    if (moodCheckActiveRef.current) {
+      moodCheckActiveRef.current = false;
+      const goalRate = userGoal?.targetRate ?? null;
+      let moodReply: string;
+
+      if (isNegativeMood(trimmed)) {
+        moodReply = getNegativeMoodResponse(firstName, goalRate, isSpanish);
+      } else if (isPositiveMood(trimmed)) {
+        moodReply = getPositiveMoodResponse(firstName, goalRate, isSpanish);
+      } else {
+        // Neutral — acknowledge and encourage
+        moodReply = isSpanish
+          ? `Está bien, ${firstName}. Lo importante es que estás aquí. Un pick a la vez, con seguridad y enfoque — y llegarás. Tu meta es ${goalRate ? goalRate + "%" : "hacerlo lo mejor posible"} esta semana. ¡Pica inteligente!`
+          : `Got it, ${firstName}. The important thing is you're here and ready. One pick at a time, stay focused, stay safe — and you'll get there. Your goal is ${goalRate ? goalRate + "%" : "doing your best"} this week. Pick smart!`;
+      }
+
+      addLog("NOVA", moodReply);
+      setAnswer(moodReply);
+      setPhase("speaking");
+      speakText(moodReply, ttsLang, () => {
+        if (sessionActiveRef.current) {
+          const followUp = isSpanish
+            ? "Sesión activa. Di 'NOVA' para preguntarme algo."
+            : "Session active. Say 'NOVA' to ask me anything.";
+          addLog("NOVA", followUp);
+          setPhase("wake_listening");
+          startWakeRef.current?.();
+        }
+      });
       return;
     }
 
@@ -565,6 +660,43 @@ export default function NovaHelpPage() {
   useEffect(() => { handleSafetyCheckInputRef.current = handleSafetyCheckInput; }, [handleSafetyCheckInput]);
   useEffect(() => { startSafetyCheckRef.current      = startSafetyCheck;      }, [startSafetyCheck]);
 
+  // ── Build personalized greeting ───────────────────────────────────────────
+  const buildGreeting = (): string => {
+    const name   = firstName || "there";
+    const goal   = userGoal?.targetRate ?? null;
+    const yRate  = yestLog?.pickRate ?? null;
+    const yHours = yestLog?.hours ?? null;
+    const avg    = weekAvg;
+
+    if (isSpanish) {
+      let g = `¡Hola, ${name}! Bienvenido de vuelta, yo soy NOVA, tu entrenadora de almacén.`;
+      if (yRate !== null) {
+        g += ` Ayer pick​easte al ${yRate}% en ${yHours ?? "?"} horas — `;
+        if (goal && yRate >= goal) g += `¡superaste tu meta, excelente trabajo!`;
+        else if (goal) g += `casi llegas a tu meta de ${goal}%, hoy puedes lograrlo.`;
+        else g += `buen número, sigue así.`;
+      }
+      if (avg !== null) g += ` Tu promedio de esta semana es ${avg}%.`;
+      if (goal) g += ` Tu objetivo esta semana es ${goal}% — ¡tú puedes llegar ahí!`;
+      else g += ` Log​ea tu meta en el Leaderboard para que pueda ayudarte mejor.`;
+      g += ` Recuerda: muévete con seguridad, piensa cada pick, y ¡Pica Inteligente! Ahora dime, ¿cómo te sientes hoy?`;
+      return g;
+    }
+
+    let g = `Hey ${name}! Welcome back — I'm NOVA, your personal warehouse coach.`;
+    if (yRate !== null) {
+      g += ` Yesterday you hit ${yRate}% in ${yHours ?? "?"} hours — `;
+      if (goal && yRate >= goal) g += `that's above your goal, amazing work!`;
+      else if (goal) g += `you're ${goal - yRate}% away from your goal of ${goal}%, let's close that gap today.`;
+      else g += `solid performance, keep that up.`;
+    }
+    if (avg !== null) g += ` Your 7-day average is sitting at ${avg}%.`;
+    if (goal) g += ` Your target this week is ${goal}% — I believe you can hit it.`;
+    else g += ` Head over to the Leaderboard to set a weekly goal so I can track it with you.`;
+    g += ` Always be safe out there, pick smart, and let's make today count. Now tell me — how are you feeling today?`;
+    return g;
+  };
+
   // ── Session start ─────────────────────────────────────────────────────────
   const startSession = () => {
     // Unlock TTS synchronously on this user gesture
@@ -572,6 +704,7 @@ export default function NovaHelpPage() {
 
     sessionActiveRef.current = true;
     safetyModeRef.current = false;
+    moodCheckActiveRef.current = false;
     setSafetyMode(false);
     setSafetyIndex(0);
     setSessionActive(true);
@@ -581,17 +714,34 @@ export default function NovaHelpPage() {
     setErrorMsg("");
     setLog([]);
 
-    const hint = isSpanish
-      ? "Sesión activa. Di 'NOVA' para que te escuche."
-      : "Session active. Say 'NOVA' anytime to wake me.";
-    addLog("NOVA", hint);
-    setPhase("speaking");
-    speakText(hint, ttsLang, () => {
-      if (sessionActiveRef.current) {
-        setPhase("wake_listening");
-        startWakeRef.current?.();
-      }
-    });
+    // Personalized greeting for logged-in users
+    if (isRealUser && firstName) {
+      const greeting = buildGreeting();
+      addLog("NOVA", greeting);
+      setAnswer(greeting);
+      setPhase("speaking");
+      moodCheckActiveRef.current = true;
+      speakText(greeting, ttsLang, () => {
+        if (sessionActiveRef.current) {
+          // After greeting, listen for mood response
+          setPhase("listening");
+          startQuestionListenRef.current?.();
+        }
+      });
+    } else {
+      const hint = isSpanish
+        ? "Sesión activa. Di 'NOVA' para que te escuche."
+        : "Session active. Say 'NOVA' anytime to wake me.";
+      addLog("NOVA", hint);
+      setAnswer(hint);
+      setPhase("speaking");
+      speakText(hint, ttsLang, () => {
+        if (sessionActiveRef.current) {
+          setPhase("wake_listening");
+          startWakeRef.current?.();
+        }
+      });
+    }
   };
 
   // ── Session end ───────────────────────────────────────────────────────────
@@ -1048,11 +1198,40 @@ export default function NovaHelpPage() {
 
         {/* Start / text input */}
         {!sessionActive ? (
-          <LockedAction onAllowedClick={startSession} className="w-full">
-            <button className="w-full py-5 rounded-xl bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-bold text-lg tracking-wide transition-all duration-200 shadow-[0_0_30px_rgba(139,92,246,0.35)]">
-              {isSpanish ? "Iniciar Sesión" : "Start Session"}
-            </button>
-          </LockedAction>
+          <div className="w-full space-y-3">
+            {/* Personalized greeting card for logged-in users */}
+            {isRealUser && firstName && (
+              <div className="rounded-2xl border border-violet-500/30 bg-violet-950/40 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-7 h-7 rounded-full bg-violet-600 flex items-center justify-center text-xs font-bold">N</div>
+                  <span className="text-violet-300 text-xs font-bold uppercase tracking-wider">NOVA</span>
+                </div>
+                <p className="text-white text-sm leading-relaxed mb-1">
+                  <span className="font-bold text-yellow-300">Hey {firstName}!</span> Welcome back.
+                  {yestLog
+                    ? <> Yesterday you hit <span className="font-bold text-green-400">{yestLog.pickRate}%</span> in {yestLog.hours}h.{" "}
+                        {userGoal
+                          ? yestLog.pickRate >= userGoal.targetRate
+                            ? <span className="text-green-400">Above your goal — amazing!</span>
+                            : <span className="text-yellow-400">Your goal is {userGoal.targetRate}% — let's close that gap today.</span>
+                          : null}
+                      </>
+                    : userGoal
+                      ? <> Your goal this week is <span className="font-bold text-yellow-400">{userGoal.targetRate}%</span>. Let's go after it.</>
+                      : <> Log your performance on the Leaderboard so I can track it with you.</>}
+                </p>
+                <p className="text-slate-400 text-xs mt-2">Tap the button below — NOVA will greet you by voice and ask how you're feeling today.</p>
+              </div>
+            )}
+            <LockedAction onAllowedClick={startSession} className="w-full">
+              <button className="w-full py-5 rounded-xl bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-bold text-lg tracking-wide transition-all duration-200 shadow-[0_0_30px_rgba(139,92,246,0.35)] flex items-center justify-center gap-3">
+                <Mic className="h-5 w-5" />
+                {isRealUser && firstName
+                  ? (isSpanish ? `¡Hola ${firstName}! Toca para activar NOVA` : `Tap to Hear NOVA Greet You`)
+                  : (isSpanish ? "Iniciar Sesión" : "Start Session")}
+              </button>
+            </LockedAction>
+          </div>
         ) : (
           <form onSubmit={handleTextSubmit} className="w-full flex gap-3">
             <input
