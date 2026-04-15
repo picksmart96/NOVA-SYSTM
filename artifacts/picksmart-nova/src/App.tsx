@@ -76,6 +76,7 @@ import DealSignPage from "@/pages/deal-sign";
 import NovaSalesVoiceAgent from "@/pages/NovaSalesVoiceAgent";
 import PaymentSuccessPage from "@/pages/payment-success";
 import PaymentCancelPage from "@/pages/payment-cancel";
+import RegisterPage from "@/pages/register";
 
 function RedirectToOwner() {
   const [, navigate] = useLocation();
@@ -197,6 +198,9 @@ function Router() {
       </Route>
       <Route path="/payment-cancel">
         <PaymentCancelPage />
+      </Route>
+      <Route path="/register">
+        <RegisterPage />
       </Route>
 
       {/* ── Gated — requires active subscription to view any content ── */}

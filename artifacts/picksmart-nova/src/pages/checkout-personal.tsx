@@ -1,45 +1,46 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useAuthStore } from "@/lib/authStore";
 
 export default function PersonalCheckoutPage() {
   const [, navigate] = useLocation();
-  const { currentUser } = useAuthStore();
 
-  const params = new URLSearchParams(window.location.search);
+  const params  = new URLSearchParams(window.location.search);
   const billing = (params.get("billing") || "monthly") as "monthly" | "yearly";
 
   const plan =
     billing === "yearly"
-      ? { label: "Professional Single — Yearly", price: "$250", period: "/year" }
-      : { label: "Professional Single — Monthly", price: "$25", period: "/month" };
+      ? { label: "Professional Single — Yearly",  price: "$250", period: "/year"  }
+      : { label: "Professional Single — Monthly", price: "$25",  period: "/month" };
 
+  const [email,   setEmail]   = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
+  const [error,   setError]   = useState<string | null>(null);
 
   const startCheckout = async () => {
-    if (!currentUser) {
-      navigate(`/login?redirect=/checkout/personal?billing=${billing}`);
+    if (!email.includes("@")) {
+      setError("Please enter a valid email address.");
       return;
     }
 
     setLoading(true);
     setError(null);
 
+    // Save email so the register page can pre-fill it
+    sessionStorage.setItem("psn_checkout_email", email);
+    sessionStorage.setItem("psn_checkout_billing", billing);
+
     try {
-      const res = await fetch("/api/create-checkout", {
+      const res  = await fetch("/api/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: currentUser.email, billing }),
+        body: JSON.stringify({ email, billing }),
       });
-
       const data = await res.json();
 
       if (!res.ok || !data.url) {
         throw new Error(data.error || "Could not start checkout. Please try again.");
       }
 
-      // Redirect to Stripe hosted checkout
       window.location.href = data.url;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -61,7 +62,7 @@ export default function PersonalCheckoutPage() {
         <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
           <p className="text-sm font-semibold uppercase tracking-[0.22em] text-yellow-400">Checkout</p>
           <h1 className="mt-3 text-4xl font-black">{plan.label}</h1>
-          <p className="mt-4 text-slate-300">Individual selector access — training, NOVA tools, leaderboard, and more.</p>
+          <p className="mt-3 text-slate-300">Individual selector access — training, NOVA tools, leaderboard, and more.</p>
 
           {/* Price box */}
           <div className="mt-6 rounded-2xl border border-slate-700 bg-slate-950 p-5 flex items-end gap-2">
@@ -69,7 +70,7 @@ export default function PersonalCheckoutPage() {
             <p className="text-slate-400 pb-1">{plan.period}</p>
           </div>
 
-          {/* Toggle billing */}
+          {/* Billing toggle */}
           <div className="mt-4 flex gap-3 text-sm">
             <button
               onClick={() => navigate("/checkout/personal?billing=monthly")}
@@ -86,7 +87,7 @@ export default function PersonalCheckoutPage() {
           </div>
 
           {/* Features */}
-          <ul className="mt-8 space-y-2 text-slate-300">
+          <ul className="mt-7 space-y-2 text-slate-300">
             {[
               "All training modules",
               "NOVA Help — AI voice warehouse coach",
@@ -101,18 +102,21 @@ export default function PersonalCheckoutPage() {
             ))}
           </ul>
 
-          {/* Sign-in prompt */}
-          {!currentUser && (
-            <div className="mt-6 rounded-xl bg-amber-500/10 border border-amber-500/30 px-4 py-3 text-sm text-amber-300">
-              You need to be signed in to subscribe.{" "}
-              <button
-                onClick={() => navigate(`/login?redirect=/checkout/personal?billing=${billing}`)}
-                className="underline font-bold"
-              >
-                Sign in now
-              </button>
-            </div>
-          )}
+          {/* Email input */}
+          <div className="mt-8">
+            <label className="block text-sm text-slate-400 mb-2">
+              Your email address <span className="text-slate-500">(for receipt &amp; account setup)</span>
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && startCheckout()}
+              placeholder="you@example.com"
+              autoFocus
+              className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition placeholder:text-slate-600"
+            />
+          </div>
 
           {/* Error */}
           {error && (
@@ -124,8 +128,8 @@ export default function PersonalCheckoutPage() {
           {/* CTA */}
           <button
             onClick={startCheckout}
-            disabled={loading}
-            className="mt-8 w-full rounded-2xl bg-yellow-400 px-6 py-4 text-lg font-bold text-slate-950 transition hover:bg-yellow-300 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+            disabled={loading || !email}
+            className="mt-6 w-full rounded-2xl bg-yellow-400 px-6 py-4 text-lg font-bold text-slate-950 transition hover:bg-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
           >
             {loading ? (
               <>
@@ -136,12 +140,12 @@ export default function PersonalCheckoutPage() {
                 Opening secure checkout…
               </>
             ) : (
-              <>🔒 Subscribe — {plan.price}{plan.period}</>
+              <>🔒 Pay {plan.price} — Start my subscription</>
             )}
           </button>
 
           <p className="mt-4 text-center text-xs text-slate-500">
-            Powered by Stripe — 256-bit encrypted · Cancel anytime
+            Secure checkout powered by Stripe · Cancel any time · You'll create your account after payment
           </p>
         </div>
 
