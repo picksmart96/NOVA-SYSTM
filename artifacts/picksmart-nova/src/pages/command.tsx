@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Users, Mic, Shield, UserPlus,
   Check, Copy, Send, Zap, HelpCircle,
   ClipboardList, Warehouse, LogOut, ChevronRight,
+  Mail, Building2, User,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/authStore";
 
@@ -160,6 +161,123 @@ function QuickInvite() {
   );
 }
 
+// ─── Send Trial Link ──────────────────────────────────────────────────────────
+function SendTrialLink({ senderName }: { senderName: string }) {
+  const [companyName, setCompanyName] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [email,       setEmail]       = useState("");
+  const [sending,     setSending]     = useState(false);
+  const [sent,        setSent]        = useState(false);
+  const [copied,      setCopied]      = useState(false);
+  const [err,         setErr]         = useState("");
+
+  const trialUrl = `${APP_URL}/trial`;
+
+  async function send() {
+    if (!email || !companyName) { setErr("Company name and email are required."); return; }
+    setErr(""); setSending(true);
+    try {
+      const r = await fetch(`${BASE}/api/trial/send-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyName, contactName, email, senderName }),
+      });
+      if (r.ok) {
+        setSent(true);
+        setCompanyName(""); setContactName(""); setEmail("");
+        setTimeout(() => setSent(false), 4000);
+      } else {
+        const d = await r.json().catch(() => ({})) as { error?: string };
+        setErr(d.error ?? "Failed to send — copy the link instead.");
+      }
+    } catch {
+      setErr("Network error — copy the link below instead.");
+    } finally { setSending(false); }
+  }
+
+  function copy() {
+    navigator.clipboard.writeText(trialUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-black text-white flex items-center gap-2">
+          <Mail className="h-4 w-4 text-yellow-400" /> Send Trial Link
+        </h2>
+        <button
+          onClick={copy}
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-yellow-400 transition"
+        >
+          {copied ? <><Check className="h-3.5 w-3.5 text-green-400" /> Copied!</> : <><Copy className="h-3.5 w-3.5" /> Copy link</>}
+        </button>
+      </div>
+
+      <p className="text-xs text-slate-500 leading-relaxed">
+        Send a branded email with a 30-day free trial invite directly to any company.
+      </p>
+
+      <div className="space-y-3">
+        <div className="relative">
+          <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+          <input
+            value={companyName}
+            onChange={e => { setCompanyName(e.target.value); setErr(""); }}
+            placeholder="Company name *"
+            className="w-full rounded-xl bg-slate-950 border border-slate-800 pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition"
+          />
+        </div>
+        <div className="relative">
+          <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+          <input
+            value={contactName}
+            onChange={e => setContactName(e.target.value)}
+            placeholder="Contact first name (optional)"
+            className="w-full rounded-xl bg-slate-950 border border-slate-800 pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition"
+          />
+        </div>
+        <div className="relative">
+          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+          <input
+            type="email"
+            value={email}
+            onChange={e => { setEmail(e.target.value); setErr(""); }}
+            placeholder="Email address *"
+            className="w-full rounded-xl bg-slate-950 border border-slate-800 pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-yellow-400 transition"
+          />
+        </div>
+      </div>
+
+      {err && <p className="text-xs text-red-400">{err}</p>}
+
+      <button
+        onClick={send}
+        disabled={!email || !companyName || sending}
+        className="w-full rounded-xl bg-yellow-400 text-slate-950 font-black py-2.5 text-sm hover:bg-yellow-300 transition disabled:opacity-40 flex items-center justify-center gap-2"
+      >
+        {sending ? (
+          <><span className="animate-spin h-4 w-4 rounded-full border-2 border-slate-950/30 border-t-slate-950 inline-block" /> Sending…</>
+        ) : sent ? (
+          <><Check className="h-4 w-4" /> Sent!</>
+        ) : (
+          <><Send className="h-4 w-4" /> Send Trial Invite</>
+        )}
+      </button>
+
+      {/* Link preview */}
+      <div className="rounded-xl bg-slate-950 border border-slate-800 px-3 py-2.5 flex items-center gap-3">
+        <span className="text-xs text-yellow-400 font-mono flex-1 truncate">{trialUrl}</span>
+        <button onClick={copy} className="text-slate-500 hover:text-white transition shrink-0">
+          {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function CommandPage() {
   const { currentUser, logout } = useAuthStore();
@@ -232,24 +350,8 @@ export default function CommandPage() {
               </div>
             ))}
 
-            {/* ── Trial link share box ── */}
-            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6">
-              <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Share Trial</p>
-              <p className="text-sm text-slate-400 mb-3">
-                Send this link to any company to start a free 30-day trial — no card required.
-              </p>
-              <div className="flex items-center gap-3 rounded-xl bg-slate-950 border border-slate-800 px-4 py-3">
-                <span className="text-sm text-yellow-400 font-mono flex-1 truncate">
-                  {APP_URL}/trial
-                </span>
-                <button
-                  onClick={() => navigator.clipboard.writeText(`${APP_URL}/trial`)}
-                  className="text-slate-500 hover:text-white transition shrink-0"
-                >
-                  <Copy className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
+            {/* ── Send Trial Link ── */}
+            <SendTrialLink senderName={currentUser.fullName ?? currentUser.username} />
           </div>
 
           {/* ── Right: invite ── */}
