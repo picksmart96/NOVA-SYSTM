@@ -7,6 +7,7 @@ import {
   Mail, Building2, User, RefreshCw, Clock,
   TrendingUp, AlertTriangle, CheckCircle2, XCircle,
   PlayCircle, Activity, FileText,
+  Plus, Upload, Shuffle, ChevronDown, Trash2,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/authStore";
 
@@ -35,8 +36,7 @@ const NAV_SECTIONS = [
   {
     label: "Tools",
     items: [
-      { label: "Assignment Builder", path: "/assignment-builder", icon: ClipboardList, desc: "Build & upload pick assignments", color: "orange" },
-      { label: "Warehouse Setup",    path: "/warehouse-setup",    icon: Warehouse,     desc: "Configure zones & locations",   color: "orange" },
+      { label: "Warehouse Setup", path: "/warehouse-setup", icon: Warehouse, desc: "Configure zones & locations", color: "orange" },
     ],
   },
   {
@@ -489,6 +489,317 @@ function SendTrialLink({ senderName }: { senderName: string }) {
   );
 }
 
+// ─── Helpers for assignment builder ──────────────────────────────────────────
+interface Stop { aisle: string; slot: string; qty: string; checkCode: string; }
+type BuildMode = "csv" | "manual" | "random";
+
+function genRandom(count: number, s = 10, e = 30): Stop[] {
+  return Array.from({ length: count }, () => ({
+    aisle: String(Math.floor(s + Math.random() * (e - s + 1))),
+    slot:  String(Math.floor(Math.random() * 200) + 1),
+    qty:   String(Math.floor(Math.random() * 10) + 1),
+    checkCode: String(Math.floor(100 + Math.random() * 900)),
+  })).sort((a, b) => Number(a.aisle) - Number(b.aisle) || Number(a.slot) - Number(b.slot));
+}
+
+function parseCSV(text: string): Stop[] {
+  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+  const start = lines[0]?.toLowerCase().includes("aisle") ? 1 : 0;
+  return lines.slice(start).map(line => {
+    const p = line.split(",");
+    return { aisle: (p[0] ?? "").trim(), slot: (p[1] ?? "").trim(), qty: (p[2] ?? "").trim(), checkCode: (p[3] ?? "").trim() };
+  }).filter(s => s.aisle && s.slot);
+}
+
+interface Assignment { id: string; title: string; totalCases: number; status: string; trainerUserId?: string | null; startAisle?: number; endAisle?: number; }
+interface Trainer { id: string; username: string; fullName: string | null; }
+
+// ─── Assignment Manager ───────────────────────────────────────────────────────
+function AssignmentManager() {
+  const jwtToken = useAuthStore(s => s.jwtToken);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [trainers,    setTrainers]    = useState<Trainer[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [showCreate,  setShowCreate]  = useState(false);
+  const [assigningId, setAssigningId] = useState<string | null>(null);
+
+  // Create form state
+  const [title,       setTitle]       = useState("");
+  const [goalMin,     setGoalMin]     = useState("");
+  const [mode,        setMode]        = useState<BuildMode>("random");
+  const [stops,       setStops]       = useState<Stop[]>([]);
+  const [randCount,   setRandCount]   = useState("20");
+  const [randStart,   setRandStart]   = useState("10");
+  const [randEnd,     setRandEnd]     = useState("30");
+  const [csvErr,      setCsvErr]      = useState("");
+  const [saving,      setSaving]      = useState(false);
+  const [saveErr,     setSaveErr]     = useState("");
+
+  const headers = { "Content-Type": "application/json", Authorization: `Bearer ${jwtToken}` };
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [aRes, uRes] = await Promise.all([
+        fetch(`${BASE}/api/assignments`, { headers }),
+        fetch(`${BASE}/api/auth/users`,  { headers }),
+      ]);
+      if (aRes.ok) {
+        const data = await aRes.json() as Assignment[];
+        setAssignments(Array.isArray(data) ? data.sort((a, b) => new Date(b.status).getTime() - new Date(a.status).getTime()) : []);
+      }
+      if (uRes.ok) {
+        const d = await uRes.json() as { users?: Trainer[] } | Trainer[];
+        const list: Trainer[] = Array.isArray(d) ? d : (d.users ?? []);
+        setTrainers(list.filter(u => (u as any).role === "trainer" || (u as any).role === "owner" || (u as any).role === "manager"));
+      }
+    } finally { setLoading(false); }
+  }, [jwtToken]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleAssign(assignmentId: string, trainerId: string) {
+    await fetch(`${BASE}/api/assignments/${assignmentId}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ trainerUserId: trainerId || null }),
+    });
+    setAssigningId(null);
+    load();
+  }
+
+  async function handleCreate() {
+    if (stops.length === 0) { setSaveErr("Add at least one stop."); return; }
+    setSaving(true); setSaveErr("");
+    try {
+      const sorted = [...stops].sort((a, b) => Number(a.aisle) - Number(b.aisle));
+      const aisles = sorted.map(s => Number(s.aisle));
+      const totalCases = stops.reduce((sum, s) => sum + (Number(s.qty) || 0), 0);
+      const aRes = await fetch(`${BASE}/api/assignments`, {
+        method: "POST", headers,
+        body: JSON.stringify({
+          assignmentNumber: Math.floor(1000 + Math.random() * 9000),
+          title: title.trim() || `Training Run ${new Date().toLocaleDateString()}`,
+          startAisle: Math.min(...aisles), endAisle: Math.max(...aisles),
+          totalCases, totalCube: 0, totalPallets: 1, doorNumber: 1,
+          status: "pending", voiceMode: "training",
+          goalTimeMinutes: goalMin ? Number(goalMin) : null, percentComplete: 0,
+        }),
+      });
+      if (!aRes.ok) throw new Error("Failed to create assignment");
+      const asgn = await aRes.json() as { id: string };
+      await fetch(`${BASE}/api/assignments/${asgn.id}/stops/bulk`, {
+        method: "POST", headers,
+        body: JSON.stringify({ stops: sorted.map((s, i) => ({
+          aisle: Number(s.aisle), slot: Number(s.slot), qty: Number(s.qty),
+          checkCode: s.checkCode.trim(), stopOrder: i,
+        })) }),
+      });
+      setShowCreate(false);
+      setTitle(""); setGoalMin(""); setStops([]); setMode("random");
+      load();
+    } catch (err: any) {
+      setSaveErr(err.message ?? "Failed to save.");
+    } finally { setSaving(false); }
+  }
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return;
+    setCsvErr("");
+    const reader = new FileReader();
+    reader.onload = evt => {
+      try {
+        const parsed = parseCSV(evt.target?.result as string);
+        if (!parsed.length) { setCsvErr("No valid rows found. Expected: aisle,slot,qty,check"); return; }
+        setStops(parsed);
+      } catch { setCsvErr("Failed to parse CSV."); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
+  const isValid = stops.length > 0 && stops.every(s => s.aisle && s.slot && s.qty && s.checkCode);
+
+  return (
+    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-black text-white flex items-center gap-2">
+          <ClipboardList className="h-4 w-4 text-yellow-400" /> Assignment Manager
+        </h2>
+        <div className="flex items-center gap-2">
+          <button onClick={load} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-white transition"><RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /></button>
+          <button
+            onClick={() => { setShowCreate(s => !s); setSaveErr(""); setStops([]); }}
+            className="flex items-center gap-1.5 rounded-xl bg-yellow-400 text-slate-950 font-black px-3 py-1.5 text-xs hover:bg-yellow-300 transition"
+          >
+            <Plus className="h-3.5 w-3.5" /> New Assignment
+          </button>
+        </div>
+      </div>
+
+      {/* ── Create Form ── */}
+      {showCreate && (
+        <div className="rounded-2xl border border-yellow-400/20 bg-yellow-400/5 p-5 space-y-4">
+          <p className="text-sm font-black text-yellow-400">Create Assignment</p>
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Assignment Title</label>
+              <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Morning Shift — Wing A"
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder-slate-600 outline-none focus:ring-2 focus:ring-yellow-400/40" />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Goal Time (min)</label>
+              <input type="number" value={goalMin} onChange={e => setGoalMin(e.target.value)} placeholder="60" min="1"
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder-slate-600 outline-none focus:ring-2 focus:ring-yellow-400/40" />
+            </div>
+          </div>
+
+          {/* Mode selector */}
+          <div className="flex gap-2">
+            {(["random", "csv", "manual"] as BuildMode[]).map(m => (
+              <button key={m} onClick={() => { setMode(m); setStops([]); }}
+                className={`flex-1 rounded-xl border py-2 text-xs font-bold transition ${mode === m ? "border-yellow-400 bg-yellow-400/10 text-yellow-400" : "border-slate-700 text-slate-500 hover:border-slate-500"}`}>
+                {m === "random" ? <><Shuffle className="h-3 w-3 inline mr-1" />Random</> : m === "csv" ? <><Upload className="h-3 w-3 inline mr-1" />CSV</> : <><Plus className="h-3 w-3 inline mr-1" />Manual</>}
+              </button>
+            ))}
+          </div>
+
+          {/* Mode inputs */}
+          {mode === "random" && (
+            <div className="grid grid-cols-3 gap-2">
+              {[["Stops", randCount, setRandCount], ["Start Aisle", randStart, setRandStart], ["End Aisle", randEnd, setRandEnd]].map(([lbl, val, setter]) => (
+                <div key={lbl as string}>
+                  <label className="block text-xs text-slate-500 mb-1">{lbl as string}</label>
+                  <input type="number" value={val as string} onChange={e => (setter as Function)(e.target.value)} min="1"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-yellow-400/40" />
+                </div>
+              ))}
+              <div className="col-span-3">
+                <button onClick={() => setStops(genRandom(Number(randCount) || 20, Number(randStart) || 10, Number(randEnd) || 30))}
+                  className="w-full rounded-xl border border-yellow-400/40 bg-yellow-400/10 text-yellow-400 font-bold py-2 text-sm hover:bg-yellow-400/20 transition flex items-center justify-center gap-2">
+                  <Shuffle className="h-4 w-4" /> Generate {randCount} Stops
+                </button>
+              </div>
+            </div>
+          )}
+
+          {mode === "csv" && (
+            <div className="space-y-2">
+              <p className="text-xs text-slate-500">Format: <code className="text-yellow-400">aisle,slot,qty,check</code></p>
+              <label className="block rounded-xl border border-dashed border-slate-700 p-4 text-center cursor-pointer hover:border-slate-500 transition">
+                <Upload className="h-5 w-5 text-slate-500 mx-auto mb-1" />
+                <span className="text-xs text-slate-500">Click to upload CSV file</span>
+                <input type="file" accept=".csv,.txt" className="hidden" onChange={handleFile} />
+              </label>
+              {csvErr && <p className="text-xs text-red-400">{csvErr}</p>}
+            </div>
+          )}
+
+          {mode === "manual" && (
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              {stops.map((s, i) => (
+                <div key={i} className="grid grid-cols-5 gap-1">
+                  {(["aisle", "slot", "qty", "checkCode"] as (keyof Stop)[]).map(k => (
+                    <input key={k} value={s[k]} onChange={e => setStops(p => p.map((r, idx) => idx === i ? { ...r, [k]: e.target.value } : r))}
+                      placeholder={k === "checkCode" ? "chk" : k}
+                      className="col-span-1 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-white outline-none focus:ring-1 focus:ring-yellow-400/40" />
+                  ))}
+                  <button onClick={() => setStops(p => p.filter((_, idx) => idx !== i))} className="rounded-lg border border-slate-800 text-slate-600 hover:text-red-400 hover:border-red-400/30 transition flex items-center justify-center">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+              <button onClick={() => setStops(p => [...p, { aisle: "", slot: "", qty: "", checkCode: "" }])}
+                className="w-full rounded-xl border border-dashed border-slate-700 py-2 text-xs text-slate-500 hover:border-slate-500 hover:text-white transition flex items-center justify-center gap-1">
+                <Plus className="h-3.5 w-3.5" /> Add Stop
+              </button>
+            </div>
+          )}
+
+          {stops.length > 0 && (
+            <p className="text-xs text-green-400 font-bold">{stops.length} stops ready · {stops.reduce((sum, s) => sum + (Number(s.qty) || 0), 0)} total cases</p>
+          )}
+          {saveErr && <p className="text-xs text-red-400">{saveErr}</p>}
+          <div className="flex gap-2">
+            <button onClick={() => { setShowCreate(false); setStops([]); }} className="flex-1 rounded-xl border border-slate-700 text-slate-400 py-2.5 text-sm font-bold hover:border-slate-500 transition">Cancel</button>
+            <button onClick={handleCreate} disabled={!isValid || saving}
+              className="flex-1 rounded-xl bg-yellow-400 text-slate-950 font-black py-2.5 text-sm hover:bg-yellow-300 transition disabled:opacity-40 flex items-center justify-center gap-2">
+              {saving ? <><RefreshCw className="h-4 w-4 animate-spin" /> Saving…</> : <><CheckCircle2 className="h-4 w-4" /> Save Assignment</>}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Assignment List ── */}
+      {loading ? (
+        <div className="space-y-2">{[...Array(3)].map((_, i) => <div key={i} className="h-14 rounded-xl bg-slate-800/50 animate-pulse" />)}</div>
+      ) : assignments.length === 0 ? (
+        <div className="text-center py-8">
+          <ClipboardList className="h-8 w-8 text-slate-700 mx-auto mb-2" />
+          <p className="text-slate-500 text-sm">No assignments yet.</p>
+          <p className="text-slate-600 text-xs mt-1">Click "New Assignment" to create one for your NOVA trainers.</p>
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+          {assignments.map(a => {
+            const assignedTrainer = trainers.find(t => t.id === a.trainerUserId);
+            const isOpen = assigningId === a.id;
+            return (
+              <div key={a.id} className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center shrink-0">
+                    <ClipboardList className="h-4 w-4 text-yellow-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-white truncate">{a.title}</p>
+                    <p className="text-xs text-slate-500">
+                      {a.totalCases} cases
+                      {a.startAisle != null && ` · Aisles ${a.startAisle}–${a.endAisle}`}
+                      <span className={`ml-2 font-bold ${a.status === "completed" ? "text-green-400" : a.status === "active" ? "text-blue-400" : "text-slate-500"}`}>
+                        {a.status}
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* Assign button */}
+                  <button
+                    onClick={() => setAssigningId(isOpen ? null : a.id)}
+                    className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition ${assignedTrainer ? "border-green-500/30 bg-green-500/10 text-green-400" : "border-slate-700 text-slate-400 hover:border-yellow-400 hover:text-yellow-400"}`}
+                  >
+                    {assignedTrainer ? `→ ${assignedTrainer.fullName ?? assignedTrainer.username}` : "Assign Trainer"}
+                    <ChevronDown className={`h-3 w-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                  </button>
+                </div>
+
+                {/* Trainer dropdown */}
+                {isOpen && (
+                  <div className="mt-2 ml-12 space-y-1">
+                    <button onClick={() => handleAssign(a.id, "")}
+                      className="w-full text-left rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-500 hover:border-slate-500 hover:text-white transition">
+                      — Unassign —
+                    </button>
+                    {trainers.length === 0 ? (
+                      <p className="text-xs text-slate-600 px-3 py-2">No trainers in system yet. Invite a trainer first.</p>
+                    ) : trainers.map(t => (
+                      <button key={t.id} onClick={() => handleAssign(a.id, t.id)}
+                        className={`w-full text-left rounded-lg border px-3 py-2 text-xs font-bold transition ${a.trainerUserId === t.id ? "border-green-500/30 bg-green-500/10 text-green-400" : "border-slate-700 text-white hover:border-yellow-400 hover:bg-yellow-400/5"}`}>
+                        {t.fullName ?? t.username}
+                        {a.trainerUserId === t.id && <span className="ml-2 text-green-400 font-normal">✓ Assigned</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── NOVA Activity Panel ──────────────────────────────────────────────────────
 interface NovaLaunch {
   id: string;
@@ -678,6 +989,14 @@ export default function CommandPage() {
           <div>
             <QuickInvite />
           </div>
+        </div>
+
+        {/* ── Full-width: Assignments ── */}
+        <div className="mt-8">
+          <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">
+            Assignment Control
+          </p>
+          <AssignmentManager />
         </div>
 
         {/* ── Full-width: Trial Signups ── */}
