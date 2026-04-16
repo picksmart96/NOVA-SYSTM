@@ -3,8 +3,10 @@ import { persist } from "zustand/middleware";
 
 export interface DailyLog {
   date: string;         // "YYYY-MM-DD"
-  pickRate: number;     // e.g. 98 (percent)
-  hours: number;        // e.g. 8.5
+  pickRate: number;     // efficiency % (e.g. 98)
+  hours: number;        // hours worked (e.g. 8.5)
+  cases?: number;       // total cases picked
+  uph?: number;         // units per hour
   note?: string;
 }
 
@@ -21,7 +23,7 @@ interface PerformanceState {
   userLogs: Record<string, DailyLog[]>;
   userGoals: Record<string, WeeklyGoal | null>;
 
-  logToday: (username: string, pickRate: number, hours: number, note?: string) => void;
+  logToday: (username: string, pickRate: number, hours: number, note?: string, cases?: number, uph?: number) => void;
   setGoal: (username: string, targetRate: number) => void;
   getRecentLogs: (username: string, days?: number) => DailyLog[];
   getYesterdayLog: (username: string) => DailyLog | null;
@@ -50,7 +52,7 @@ export const usePerformanceStore = create<PerformanceState>()(
       userLogs: {},
       userGoals: {},
 
-      logToday(username, pickRate, hours, note) {
+      logToday(username, pickRate, hours, note, cases, uph) {
         const date = todayStr();
         set((s) => {
           const existing = s.userLogs[username] ?? [];
@@ -58,7 +60,7 @@ export const usePerformanceStore = create<PerformanceState>()(
           return {
             userLogs: {
               ...s.userLogs,
-              [username]: [...filtered, { date, pickRate, hours, note }].sort(
+              [username]: [...filtered, { date, pickRate, hours, note, cases, uph }].sort(
                 (a, b) => a.date.localeCompare(b.date)
               ),
             },

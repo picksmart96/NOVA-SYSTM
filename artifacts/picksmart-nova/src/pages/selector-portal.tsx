@@ -4,12 +4,15 @@ import { useTranslation } from "react-i18next";
 import { useAuthStore } from "@/lib/authStore";
 import { useTrainerStore } from "@/lib/trainerStore";
 import { useSupervisorPostStore } from "@/lib/supervisorPostStore";
+import { usePerformanceStore } from "@/lib/performanceStore";
 import { novaSpeak, novaRecogLang, NOVA_TEXT, matchNovaCommand } from "@/lib/novaSpeech";
 import {
   Headphones, BookOpen, HelpCircle, TrendingUp, Star, AlertTriangle, KeyRound,
   DoorOpen, Mic, MicOff, Volume2, VolumeX, Megaphone, ShieldCheck, Zap,
-  ChevronRight,
+  ChevronRight, ClipboardList, CheckCircle2, Clock, Target,
 } from "lucide-react";
+
+const STANDARD_UPH = 90;
 
 function PortalCard({ href, icon, title, description, accent = false }: {
   href: string;
@@ -54,6 +57,31 @@ export default function SelectorPortalPage() {
   const assignedAssignment = selectorProfile?.assignedAssignmentId
     ? assignments.find((a) => a.id === selectorProfile.assignedAssignmentId)
     : null;
+
+  // ── Performance logging ────────────────────────────────────────────────────
+  const { logToday, getRecentLogs, getTodayLog, getGoal } = usePerformanceStore();
+  const username = currentUser?.username ?? "";
+  const todayLog = username ? getTodayLog(username) : null;
+  const recentLogs = username ? getRecentLogs(username, 7) : [];
+  const goal = username ? getGoal(username) : null;
+
+  const [logCases, setLogCases] = useState(todayLog?.cases?.toString() ?? "");
+  const [logHours, setLogHours] = useState(todayLog?.hours?.toString() ?? "");
+  const [logNote, setLogNote]   = useState(todayLog?.note ?? "");
+  const [logSaved, setLogSaved] = useState(false);
+
+  const logCasesNum = parseFloat(logCases) || 0;
+  const logHoursNum = parseFloat(logHours) || 0;
+  const liveUPH     = logHoursNum > 0 ? Math.round(logCasesNum / logHoursNum) : 0;
+  const liveEff     = liveUPH > 0 ? Math.round((liveUPH / STANDARD_UPH) * 100) : 0;
+
+  const handleSaveLog = () => {
+    if (!username || logCasesNum <= 0 || logHoursNum <= 0) return;
+    const eff = Math.round((liveUPH / STANDARD_UPH) * 100);
+    logToday(username, eff, logHoursNum, logNote.trim() || undefined, logCasesNum, liveUPH);
+    setLogSaved(true);
+    setTimeout(() => setLogSaved(false), 3000);
+  };
 
   // ── Voice / Speech state ───────────────────────────────────────────────────
   const [muted, setMuted] = useState(false);
@@ -321,6 +349,163 @@ export default function SelectorPortalPage() {
           <p className="mt-4 text-xs text-slate-600">
             Voice commands: <span className="text-slate-500">"today's focus"</span> · <span className="text-slate-500">"my assignment"</span> · <span className="text-slate-500">"supervisor update"</span>
           </p>
+        </div>
+
+        {/* ── Performance Log ──────────────────────────────────────────────── */}
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-yellow-400/10 border border-yellow-400/30 flex items-center justify-center shrink-0">
+              <ClipboardList className="h-5 w-5 text-yellow-400" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-white">Log Today's Performance</h2>
+              <p className="text-slate-400 text-sm">
+                {todayLog
+                  ? `Last saved: ${todayLog.cases ?? "—"} cases · ${todayLog.hours}h · ${todayLog.uph ?? "—"} UPH`
+                  : "Enter your cases and hours to track your shift."}
+              </p>
+            </div>
+          </div>
+
+          {/* Input row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1.5">
+                Cases Picked
+              </label>
+              <input
+                type="number"
+                min="0"
+                placeholder="e.g. 720"
+                value={logCases}
+                onChange={(e) => setLogCases(e.target.value)}
+                className="w-full rounded-xl bg-slate-800 border border-slate-700 focus:border-yellow-400/60 outline-none text-white font-black text-xl px-4 py-3 placeholder:text-slate-600 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1.5">
+                Hours Worked
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.25"
+                placeholder="e.g. 8.5"
+                value={logHours}
+                onChange={(e) => setLogHours(e.target.value)}
+                className="w-full rounded-xl bg-slate-800 border border-slate-700 focus:border-yellow-400/60 outline-none text-white font-black text-xl px-4 py-3 placeholder:text-slate-600 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+              />
+            </div>
+          </div>
+
+          {/* Live calculated stats */}
+          {liveUPH > 0 && (
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-2xl bg-slate-800 border border-slate-700 px-4 py-3 text-center">
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <Zap className="h-3.5 w-3.5 text-yellow-400" />
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">UPH</p>
+                </div>
+                <p className="text-2xl font-black text-white">{liveUPH}</p>
+                <p className="text-[10px] text-slate-600 mt-0.5">std {STANDARD_UPH}</p>
+              </div>
+              <div className={`rounded-2xl border px-4 py-3 text-center ${
+                liveEff >= 100 ? "bg-green-500/10 border-green-500/30" :
+                liveEff >= 85  ? "bg-yellow-400/10 border-yellow-400/30" :
+                                 "bg-red-500/10 border-red-500/30"
+              }`}>
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <Target className="h-3.5 w-3.5 text-slate-400" />
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Eff%</p>
+                </div>
+                <p className={`text-2xl font-black ${
+                  liveEff >= 100 ? "text-green-400" :
+                  liveEff >= 85  ? "text-yellow-400" : "text-red-400"
+                }`}>{liveEff}%</p>
+                <p className="text-[10px] text-slate-600 mt-0.5">target 100%</p>
+              </div>
+              <div className="rounded-2xl bg-slate-800 border border-slate-700 px-4 py-3 text-center">
+                <div className="flex items-center justify-center gap-1.5 mb-1">
+                  <Clock className="h-3.5 w-3.5 text-slate-400" />
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Goal</p>
+                </div>
+                <p className="text-2xl font-black text-white">
+                  {goal?.targetRate ? `${goal.targetRate}%` : "—"}
+                </p>
+                <p className="text-[10px] text-slate-600 mt-0.5">weekly target</p>
+              </div>
+            </div>
+          )}
+
+          {/* Optional note */}
+          <input
+            type="text"
+            placeholder="Note (optional) — e.g. short break, equipment issue"
+            value={logNote}
+            onChange={(e) => setLogNote(e.target.value)}
+            className="w-full rounded-xl bg-slate-800 border border-slate-700 focus:border-slate-600 outline-none text-white px-4 py-2.5 text-sm placeholder:text-slate-600"
+          />
+
+          {/* Save button */}
+          <button
+            onClick={handleSaveLog}
+            disabled={logCasesNum <= 0 || logHoursNum <= 0}
+            className={`w-full rounded-2xl py-3.5 text-base font-black transition flex items-center justify-center gap-2 ${
+              logSaved
+                ? "bg-green-500/20 text-green-400 border border-green-500/30"
+                : logCasesNum > 0 && logHoursNum > 0
+                ? "bg-yellow-400 text-slate-950 hover:bg-yellow-300"
+                : "bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-700"
+            }`}
+          >
+            {logSaved
+              ? <><CheckCircle2 className="h-5 w-5" /> Saved!</>
+              : "Save Today's Log"}
+          </button>
+
+          {/* Recent history */}
+          {recentLogs.length > 0 && (
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-600 mb-3">Last 7 Days</p>
+              <div className="space-y-2">
+                {recentLogs.map((log) => {
+                  const isToday = log.date === new Date().toISOString().slice(0, 10);
+                  const effColor =
+                    log.pickRate >= 100 ? "text-green-400" :
+                    log.pickRate >= 85  ? "text-yellow-400" : "text-red-400";
+                  const dateLabel = isToday ? "Today" : new Date(log.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                  return (
+                    <div key={log.date} className={`flex items-center justify-between rounded-2xl px-4 py-3 border ${
+                      isToday ? "border-yellow-400/20 bg-yellow-400/5" : "border-slate-800 bg-slate-800/50"
+                    }`}>
+                      <div>
+                        <p className={`text-sm font-bold ${isToday ? "text-yellow-400" : "text-white"}`}>{dateLabel}</p>
+                        {log.note && <p className="text-xs text-slate-500 mt-0.5 truncate max-w-[160px]">{log.note}</p>}
+                      </div>
+                      <div className="flex items-center gap-4 text-right">
+                        <div>
+                          <p className="text-xs text-slate-500">Cases</p>
+                          <p className="text-sm font-black text-white">{log.cases ?? "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">Hours</p>
+                          <p className="text-sm font-black text-white">{log.hours}h</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">UPH</p>
+                          <p className="text-sm font-black text-white">{log.uph ?? "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">Eff%</p>
+                          <p className={`text-sm font-black ${effColor}`}>{log.pickRate}%</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Today's Assignment ───────────────────────────────────────────── */}
