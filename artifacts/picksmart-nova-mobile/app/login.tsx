@@ -30,14 +30,14 @@ export default function LoginScreen() {
     }
     setLoading(true);
     setError("");
-    const ok = await login(username.trim(), password);
+    const result = await login(username.trim(), password);
     setLoading(false);
-    if (ok) {
+    if (result.ok) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace("/(tabs)");
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError("Incorrect username or password.");
+      setError(result.error ?? "Incorrect username or password.");
     }
   };
 

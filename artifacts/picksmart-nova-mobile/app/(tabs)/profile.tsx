@@ -138,7 +138,7 @@ export default function ProfileScreen() {
           {isES ? "ACERCA DE" : "ABOUT"}
         </Text>
         <View style={styles.section}>
-          <Row icon="zap" label="NOVA Version" value="ES3 Mobile" />
+          <Row icon="zap" label="NOVA Version" value="NOVA Mobile" />
           <Row icon="info" label="PickSmart Academy" value="v1.0" />
         </View>
 
