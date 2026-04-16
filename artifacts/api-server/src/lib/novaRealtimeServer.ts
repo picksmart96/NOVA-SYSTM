@@ -4,6 +4,9 @@ import { createNovaTrainerSession, type NovaTrainerSession, type Lang } from "./
 import { ASSIGNMENTS, ASSIGNMENT_STOPS } from "./assignmentData.js";
 import { logger } from "./logger.js";
 import { verifyToken } from "./psaAuth.js";
+import { db } from "@workspace/db";
+import { warehouseProfilesTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const sessions = new Map<string, NovaTrainerSession>();
 
@@ -38,6 +41,7 @@ export function attachNovaRealtimeServer(httpServer: Server) {
           }
 
           // Verify JWT token when provided; skip check for demo/anonymous sessions
+          let companyId: string | null = null;
           if (msg.token) {
             const payload = await verifyToken(msg.token);
             if (!payload) {
@@ -46,6 +50,7 @@ export function attachNovaRealtimeServer(httpServer: Server) {
               return;
             }
             authenticated = true;
+            companyId = payload.sub ?? null;
           } else {
             // Allow unauthenticated only for demo user IDs
             if (!selector.userId.startsWith("demo")) {
@@ -54,6 +59,21 @@ export function attachNovaRealtimeServer(httpServer: Server) {
               return;
             }
             authenticated = true;
+          }
+
+          // Look up warehouse profile to get checkMethod
+          let checkMethod = "check-digits";
+          if (companyId) {
+            try {
+              const [profile] = await db
+                .select({ checkMethod: warehouseProfilesTable.checkMethod })
+                .from(warehouseProfilesTable)
+                .where(eq(warehouseProfilesTable.companyId, companyId))
+                .limit(1);
+              if (profile?.checkMethod) checkMethod = profile.checkMethod;
+            } catch {
+              // Fall back to default if DB lookup fails
+            }
           }
 
           sessionId = `${selector.userId}:${selector.novaId}`;
@@ -68,6 +88,7 @@ export function attachNovaRealtimeServer(httpServer: Server) {
             assignments: ASSIGNMENTS,
             assignmentStops: ASSIGNMENT_STOPS,
             lang,
+            checkMethod,
           });
 
           sessions.set(sessionId, session);

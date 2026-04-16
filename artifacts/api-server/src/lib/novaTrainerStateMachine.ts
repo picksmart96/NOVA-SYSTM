@@ -252,11 +252,13 @@ export function createNovaTrainerSession({
   assignments,
   assignmentStops,
   lang = "en",
+  checkMethod = "check-digits",
 }: {
   selector: Selector;
   assignments: ServerAssignment[];
   assignmentStops: Record<string, ServerStop[]>;
   lang?: Lang;
+  checkMethod?: string;
 }) {
   const myAssignments = assignments.filter(
     (a) => !a.archived && a.selectorUserId === selector.userId
@@ -351,12 +353,27 @@ export function createNovaTrainerSession({
     return setPrompt(P.loadSummary(assignment));
   }
 
+  const skipCheckCode = checkMethod === "scan" || checkMethod === "none";
+
   function moveToNextStop(): TrainerSnapshot {
     const stops = currentStops();
     if (state.currentStopIndex < stops.length - 1) {
       state.currentStopIndex += 1;
-      state.phase = PHASES.PICK_CHECK;
       const stop = currentStop()!;
+
+      // When check code is not required, skip straight to PICK_READY with grab prompt
+      if (skipCheckCode) {
+        state.phase = PHASES.PICK_READY;
+        const nextIndex = state.currentStopIndex + 1;
+        const upNext = stops[nextIndex] ?? null;
+        const nextCall = upNext ? P.nextAisle(upNext) : P.lastStop;
+        const prompt = `${P.newAisle(stop)} ${P.grab(stop, nextCall)}`;
+        state.prompt = prompt;
+        log("NOVA", prompt);
+        return { ...snapshot(), autoAdvance: true, autoAdvanceDelayMs: 1200 };
+      }
+
+      state.phase = PHASES.PICK_CHECK;
       return setPrompt(P.newAisle(stop));
     }
     state.phase = PHASES.COMPLETE_DOOR;
@@ -499,9 +516,21 @@ export function createNovaTrainerSession({
 
     if (state.phase === PHASES.SETUP_BRAVO) {
       if (isReady(input)) {
-        state.phase = PHASES.PICK_CHECK;
         const stop = currentStop();
         if (!stop) return setPrompt(P.noStops);
+
+        if (skipCheckCode) {
+          state.phase = PHASES.PICK_READY;
+          const stops = currentStops();
+          const upNext = stops[1] ?? null;
+          const nextCall = upNext ? P.nextAisle(upNext) : P.lastStop;
+          const prompt = `${P.newAisle(stop)} ${P.grab(stop, nextCall)}`;
+          state.prompt = prompt;
+          log("NOVA", prompt);
+          return { ...snapshot(), autoAdvance: true, autoAdvanceDelayMs: 1200 };
+        }
+
+        state.phase = PHASES.PICK_CHECK;
         return setPrompt(P.newAisle(stop));
       }
       return setPrompt(P.posBravo);
@@ -510,6 +539,19 @@ export function createNovaTrainerSession({
     if (state.phase === PHASES.PICK_CHECK) {
       const stop = currentStop();
       if (!stop) return snapshot();
+
+      // ── Barcode scan or no-verification mode: skip check code entirely ──
+      const skipCheckCode = checkMethod === "scan" || checkMethod === "none";
+      if (skipCheckCode) {
+        state.phase = PHASES.PICK_READY;
+        const nextIndex = state.currentStopIndex + 1;
+        const upNext = currentStops()[nextIndex] ?? null;
+        const nextCall = upNext ? P.nextAisle(upNext) : P.lastStop;
+        const prompt = P.grab(stop, nextCall);
+        state.prompt = prompt;
+        log("NOVA", prompt);
+        return { ...snapshot(), autoAdvance: true, autoAdvanceDelayMs: 700 };
+      }
 
       if (input === "repeat" || input === "repite" || input === "repetir") {
         // repeatAisle now appends "Say check code." so TTS is long enough for
