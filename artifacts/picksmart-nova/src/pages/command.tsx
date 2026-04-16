@@ -220,6 +220,7 @@ function TrialSignups() {
   const [err,       setErr]       = useState("");
   const [sending,   setSending]   = useState<string | null>(null);
   const [sentMap,   setSentMap]   = useState<Record<string, boolean>>({});
+  const [selected,  setSelected]  = useState<TrialSignup | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setErr("");
@@ -321,7 +322,8 @@ function TrialSignups() {
             return (
               <div
                 key={s.id}
-                className={`rounded-xl border p-3 flex items-center gap-3 transition ${
+                onClick={() => setSelected(s)}
+                className={`rounded-xl border p-3 flex items-center gap-3 transition cursor-pointer hover:border-yellow-400/40 hover:bg-slate-800/60 ${
                   isConv   ? "border-yellow-400/20 bg-yellow-400/5" :
                   isExp    ? "border-slate-800 bg-slate-950/50 opacity-60" :
                   isUrgent ? "border-orange-500/20 bg-orange-500/5" :
@@ -348,10 +350,10 @@ function TrialSignups() {
                   {statusIcon} {statusText}
                 </div>
 
-                {/* Action */}
+                {/* Send button — stop propagation so click doesn't open modal */}
                 {!isConv && s.email && (
                   <button
-                    onClick={() => sendUpgrade(s)}
+                    onClick={e => { e.stopPropagation(); sendUpgrade(s); }}
                     disabled={sending === s.id}
                     title={isExp ? "Re-send trial link" : "Send upgrade nudge"}
                     className="shrink-0 rounded-lg border border-slate-700 bg-slate-800 hover:border-yellow-400 hover:text-yellow-400 text-slate-400 p-1.5 transition"
@@ -367,6 +369,88 @@ function TrialSignups() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ── Detail Modal ── */}
+      {selected && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={() => setSelected(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl border border-slate-700 bg-slate-900 p-6 space-y-5 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`h-12 w-12 rounded-2xl flex items-center justify-center text-lg font-black shrink-0 ${
+                  selected.isSubscribed ? "bg-yellow-400 text-slate-950" : "bg-slate-800 text-slate-300"
+                }`}>
+                  {(selected.companyName ?? selected.fullName ?? "?")[0].toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-base font-black text-white">{selected.companyName ?? selected.fullName}</p>
+                  <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
+                    selected.isSubscribed
+                      ? "bg-yellow-400/10 text-yellow-300 border-yellow-400/30"
+                      : daysLeft(selected.trialEndsAt) <= 0
+                      ? "bg-red-500/10 text-red-400 border-red-500/30"
+                      : daysLeft(selected.trialEndsAt) <= 5
+                      ? "bg-orange-500/10 text-orange-300 border-orange-500/30"
+                      : "bg-green-500/10 text-green-300 border-green-500/30"
+                  }`}>
+                    {selected.isSubscribed
+                      ? `Subscribed${selected.subscriptionPlan ? ` · ${selected.subscriptionPlan}` : ""}`
+                      : daysLeft(selected.trialEndsAt) <= 0
+                      ? "Expired"
+                      : `${daysLeft(selected.trialEndsAt)} days left`}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelected(null)}
+                className="text-slate-500 hover:text-white transition p-1"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Detail rows */}
+            <div className="space-y-3 divide-y divide-slate-800">
+              {[
+                { label: "Full Name",  value: selected.fullName    || "—", icon: <User    className="h-3.5 w-3.5" /> },
+                { label: "Username",   value: selected.username    || "—", icon: <Shield  className="h-3.5 w-3.5" /> },
+                { label: "Email",      value: selected.email       || "—", icon: <Mail    className="h-3.5 w-3.5" /> },
+                { label: "Company",    value: selected.companyName || "—", icon: <Building2 className="h-3.5 w-3.5" /> },
+                { label: "Joined",     value: new Date(selected.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }), icon: <Clock className="h-3.5 w-3.5" /> },
+              ].map(row => (
+                <div key={row.label} className="flex items-start justify-between gap-3 pt-3 first:pt-0">
+                  <span className="flex items-center gap-1.5 text-xs text-slate-500 shrink-0">
+                    {row.icon} {row.label}
+                  </span>
+                  <span className="text-xs font-bold text-white text-right break-all">{row.value}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Actions */}
+            {!selected.isSubscribed && selected.email && (
+              <button
+                onClick={() => { sendUpgrade(selected); }}
+                disabled={sending === selected.id}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-yellow-400 text-slate-950 font-black px-4 py-2.5 text-sm hover:bg-yellow-300 transition disabled:opacity-50"
+              >
+                {sentMap[selected.id]
+                  ? <><Check className="h-4 w-4" /> Sent!</>
+                  : sending === selected.id
+                  ? <><RefreshCw className="h-4 w-4 animate-spin" /> Sending…</>
+                  : <><Send className="h-4 w-4" /> Send Upgrade Email</>
+                }
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
