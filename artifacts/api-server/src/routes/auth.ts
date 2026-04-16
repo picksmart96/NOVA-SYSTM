@@ -10,14 +10,32 @@ import {
 } from "../lib/psaAuth.js";
 import { requireAuth, requireRole } from "../middleware/requireAuth.js";
 import { logger } from "../lib/logger.js";
+import {
+  authRateLimit,
+  signupRateLimit,
+  recordLoginFail,
+  isLoginLocked,
+  clearLoginFails,
+} from "../middleware/security.js";
 
 const router = Router();
 
-// ── POST /api/auth/login ──────────────────────────────────────────────────────
-router.post("/auth/login", async (req, res) => {
+// ── POST /api/auth/login — rate-limited + brute-force locked ──────────────────
+router.post("/auth/login", authRateLimit, async (req, res) => {
   const { username, password } = req.body as { username?: string; password?: string };
   if (!username || !password) {
     res.status(400).json({ error: "Username and password required" });
+    return;
+  }
+
+  const ip = req.ip ?? "unknown";
+
+  // Check lockout BEFORE hitting the database
+  if (isLoginLocked(ip, username)) {
+    logger.warn({ ip, username }, "[Auth] Login blocked — account locked");
+    res.status(429).json({
+      error: "Too many failed attempts. This account is locked for 20 minutes.",
+    });
     return;
   }
 
@@ -29,13 +47,25 @@ router.post("/auth/login", async (req, res) => {
       .limit(1);
 
     if (!user) {
+      // Record fail even for unknown usernames (prevents username enumeration timing attacks)
+      recordLoginFail(ip, username);
       res.status(401).json({ error: "Invalid credentials" });
       return;
     }
 
     const ok = await verifyPassword(password, user.passwordHash);
     if (!ok) {
-      res.status(401).json({ error: "Invalid credentials" });
+      const { locked, remaining } = recordLoginFail(ip, username);
+      logger.warn({ ip, username, remaining }, "[Auth] Failed login attempt");
+      if (locked) {
+        res.status(429).json({
+          error: "Too many failed attempts. Account locked for 20 minutes.",
+        });
+      } else {
+        res.status(401).json({
+          error: `Invalid credentials. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining before lockout.`,
+        });
+      }
       return;
     }
 
@@ -44,6 +74,9 @@ router.post("/auth/login", async (req, res) => {
       return;
     }
 
+    // Successful login — clear any recorded failures
+    clearLoginFails(ip, username);
+
     const token = await signToken({
       sub: user.id,
       username: user.username,
@@ -51,6 +84,7 @@ router.post("/auth/login", async (req, res) => {
       accountNumber: user.accountNumber,
     });
 
+    logger.info({ username, role: user.role }, "[Auth] Successful login");
     res.json({ token, user: safeUser(user) });
   } catch (err) {
     logger.error({ err }, "[Auth] Login error");

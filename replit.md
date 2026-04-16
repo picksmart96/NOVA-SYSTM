@@ -217,6 +217,24 @@ training, nova-help, common-mistakes, leaderboard, selector-breaking-news, train
 - **Quick chips**: Changes to warehouse-focused chips after verification
 - **Sidebar**: Shows green "Verified Account" card with full name, role, and capabilities list when verified
 
+## Security Hardening (API Server)
+
+All protections live in `artifacts/api-server/src/middleware/security.ts`:
+
+| Layer | Detail |
+|---|---|
+| **Helmet headers** | CSP, HSTS (1 yr + preload), X-Frame-Options DENY, noSniff, referrer policy, hidePoweredBy |
+| **CORS lockdown** | Allows only `picksmartacademy.net`, `nova-warehouse-control.replit.app`, `*.replit.dev`, `*.expo.dev`; any other origin blocked in production |
+| **General rate limit** | 300 req / 1 min per IP on all `/api` routes |
+| **Auth rate limit** | 15 req / 15 min per IP on `POST /api/auth/login` |
+| **Signup rate limit** | 20 req / 1 hour per IP on `POST /api/auth/trial` |
+| **Brute-force lockout** | 6 failed logins → 20-min IP+username lockout; window resets on success |
+| **Bot/scanner detector** | Blocks sqlmap, nikto, masscan, wget, python-requests, etc. Returns 403 |
+| **Probe path detector** | Blocks /.env, /wp-admin, /.git, /phpmyadmin, /actuator, etc. Returns 404 |
+| **Input sanitization** | Strips null bytes, caps string fields at 10 000 chars |
+| **Payload cap** | `express.json({ limit: "1mb" })` prevents request bombing |
+| **Raw Stripe webhook** | Applied before JSON middleware so `stripe-signature` verification works |
+
 ## Architecture Notes
 - Frontend is pure Vite SPA, no SSR
 - API is OpenAPI-first, codegen via Orval

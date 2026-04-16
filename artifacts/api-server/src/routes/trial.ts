@@ -6,6 +6,7 @@ import { hashPassword, signToken, nextAccountNumber } from "../lib/psaAuth.js";
 import { logger } from "../lib/logger.js";
 import { ReplitConnectors } from "@replit/connectors-sdk";
 import { requireAuth, requireRole } from "../middleware/requireAuth.js";
+import { signupRateLimit } from "../middleware/security.js";
 
 const router = Router();
 
@@ -15,8 +16,8 @@ function safeUser(u: typeof psaUsers.$inferSelect) {
 }
 
 // ── POST /api/auth/trial ──────────────────────────────────────────────────────
-// Public — no auth required. Creates a company trial account (30 days).
-router.post("/auth/trial", async (req, res) => {
+// Public — rate-limited to prevent mass fake signups
+router.post("/auth/trial", signupRateLimit, async (req, res) => {
   const { username, password, fullName, email, companyName } = req.body as {
     username?: string;
     password?: string;

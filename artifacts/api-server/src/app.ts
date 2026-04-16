@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import helmet from "helmet";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
@@ -7,31 +8,74 @@ import { WebhookHandlers } from "./lib/webhookHandlers.js";
 import { db } from "@workspace/db";
 import { contractsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import {
+  corsOptions,
+  generalRateLimit,
+  botDetector,
+  sanitizeBody,
+} from "./middleware/security.js";
 
 const app: Express = express();
 
+// ── Trust Replit's proxy so req.ip reflects the real client IP ────────────────
+app.set("trust proxy", 1);
+
+// ── Request logging ───────────────────────────────────────────────────────────
 app.use(
   pinoHttp({
     logger,
     serializers: {
       req(req) {
-        return {
-          id: req.id,
-          method: req.method,
-          url: req.url?.split("?")[0],
-        };
+        return { id: req.id, method: req.method, url: req.url?.split("?")[0] };
       },
       res(res) {
-        return {
-          statusCode: res.statusCode,
-        };
+        return { statusCode: res.statusCode };
       },
     },
   }),
 );
-app.use(cors());
 
-// Stripe webhook MUST receive the raw body BEFORE express.json() runs
+// ── Security headers (Helmet) ─────────────────────────────────────────────────
+app.use(
+  helmet({
+    // Prevent browsers from MIME-sniffing responses
+    noSniff: true,
+    // Prevent clickjacking
+    frameguard: { action: "deny" },
+    // Force HTTPS for 1 year
+    hsts: { maxAge: 31_536_000, includeSubDomains: true, preload: true },
+    // Hide server fingerprint
+    hidePoweredBy: true,
+    // Block dangerous cross-origin requests
+    crossOriginEmbedderPolicy: false, // disabled — needed for Stripe/Expo embeds
+    // Content Security Policy
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc:  ["'self'", "'unsafe-inline'", "https://js.stripe.com"],
+        styleSrc:   ["'self'", "'unsafe-inline'"],
+        imgSrc:     ["'self'", "data:", "https:"],
+        connectSrc: ["'self'", "https://api.stripe.com", "wss:", "ws:"],
+        frameSrc:   ["https://js.stripe.com", "https://hooks.stripe.com"],
+        objectSrc:  ["'none'"],
+        baseUri:    ["'self'"],
+      },
+    },
+    // Prevent XSS attacks via referrer leakage
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  }),
+);
+
+// ── CORS — locked to known domains ───────────────────────────────────────────
+app.use(cors(corsOptions()));
+
+// ── Bot / probe detector ──────────────────────────────────────────────────────
+app.use(botDetector);
+
+// ── General API rate limit (300 req / min per IP) ────────────────────────────
+app.use("/api", generalRateLimit);
+
+// ── Stripe webhook — raw body BEFORE express.json() ──────────────────────────
 app.post(
   "/api/stripe/webhook",
   express.raw({ type: "application/json" }),
@@ -45,7 +89,6 @@ app.post(
       const sig = Array.isArray(signature) ? signature[0] : signature;
       await WebhookHandlers.processWebhook(req.body as Buffer, sig);
 
-      // Also parse the event to handle contract activation
       try {
         const rawBody = req.body as Buffer;
         const eventStr = rawBody.toString("utf8");
@@ -101,7 +144,7 @@ app.post(
           }
         }
       } catch (_parseErr) {
-        // Non-fatal: stripe-replit-sync already handled the main event
+        // Non-fatal
       }
 
       res.status(200).json({ received: true });
@@ -110,12 +153,17 @@ app.post(
       logger.error({ err }, "Stripe webhook error");
       res.status(400).json({ error: msg });
     }
-  }
+  },
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// ── Body parsing — 1 MB cap prevents payload bombing ─────────────────────────
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
+// ── Input sanitization ────────────────────────────────────────────────────────
+app.use(sanitizeBody);
+
+// ── Routes ────────────────────────────────────────────────────────────────────
 app.use("/api", router);
 
 export default app;
