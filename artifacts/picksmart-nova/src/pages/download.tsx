@@ -4,16 +4,17 @@ import { useState, useEffect } from "react";
 import QRCodeLib from "qrcode";
 import { useAuthStore } from "@/lib/authStore";
 
-const APP_URL = "https://nova-warehouse-control.replit.app";
-const IOS_URL  = "https://apps.apple.com/app/picksmart-nova";
+const APP_URL      = "https://nova-warehouse-control.replit.app";
+const IOS_URL      = "https://apps.apple.com/app/picksmart-nova";
+const ANDROID_URL  = "https://play.google.com/store/apps/details?id=com.picksmartacademy.nova";
 
 export default function DownloadPage() {
   const [, navigate]    = useLocation();
   const { currentUser } = useAuthStore();
   const [qrSrc, setQrSrc] = useState("");
 
-  const params     = new URLSearchParams(window.location.search);
-  const isWelcome  = params.get("welcome") === "1";
+  const params    = new URLSearchParams(window.location.search);
+  const isWelcome = params.get("welcome") === "1";
 
   useEffect(() => {
     QRCodeLib.toDataURL(APP_URL, { width: 200, margin: 2, color: { dark: "#0d1118", light: "#f5c200" } })
@@ -35,7 +36,7 @@ export default function DownloadPage() {
           </span>
         </div>
 
-        {/* Welcome banner — only shown after registration */}
+        {/* Welcome banner */}
         {isWelcome && (
           <div className="mb-8 rounded-2xl border border-green-500/30 bg-green-500/10 p-6">
             <p className="text-green-400 text-xs font-bold uppercase tracking-wide mb-1">Step 2 of 2 — You're almost in!</p>
@@ -44,7 +45,7 @@ export default function DownloadPage() {
               <div className="h-1.5 flex-1 rounded-full bg-green-500" />
             </div>
             <h2 className="text-xl font-black text-white mb-1">
-              Account created{currentUser ? `, ${currentUser.fullName.split(" ")[0]}` : ""}! 🎉
+              Account created{currentUser ? `, ${currentUser.fullName.split(" ")[0]}` : ""}!
             </h2>
             <p className="text-slate-300 text-sm">
               Your subscription is active. Download the app below or open the web version — then sign in with your username and password.
@@ -61,7 +62,7 @@ export default function DownloadPage() {
           </div>
         )}
 
-        {/* Sign-in credentials reminder — only for post-registration */}
+        {/* Credentials reminder */}
         {isWelcome && currentUser && (
           <div className="mb-6 rounded-2xl border border-yellow-400/30 bg-yellow-400/5 p-5">
             <p className="text-yellow-400 text-xs font-bold uppercase tracking-wide mb-3">Your sign-in credentials</p>
@@ -84,20 +85,43 @@ export default function DownloadPage() {
         {/* Download options */}
         <div className="grid gap-4 sm:grid-cols-2 mb-8">
 
-          {/* iOS App */}
+          {/* iOS */}
           <a
             href={IOS_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="rounded-2xl border border-slate-700 bg-slate-900 p-6 hover:border-yellow-400/50 hover:bg-slate-800 transition group"
           >
-            <Smartphone className="h-8 w-8 text-yellow-400 mb-4" />
+            <div className="flex items-center gap-2 mb-4">
+              <Smartphone className="h-7 w-7 text-yellow-400" />
+              <span className="text-xs font-bold text-slate-500 bg-slate-800 rounded-full px-2.5 py-1">iOS</span>
+            </div>
             <h2 className="text-lg font-bold mb-1 group-hover:text-yellow-400 transition">iPhone / iPad</h2>
             <p className="text-slate-400 text-sm mb-4">
-              Download from the App Store for the full native voice experience with NOVA.
+              Download from the App Store for the full native NOVA voice experience.
             </p>
             <span className="inline-flex items-center gap-2 text-yellow-400 font-bold text-sm">
               App Store <ExternalLink className="h-4 w-4" />
+            </span>
+          </a>
+
+          {/* Android */}
+          <a
+            href={ANDROID_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-2xl border border-slate-700 bg-slate-900 p-6 hover:border-yellow-400/50 hover:bg-slate-800 transition group"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <Smartphone className="h-7 w-7 text-green-400" />
+              <span className="text-xs font-bold text-green-700 bg-green-900/40 rounded-full px-2.5 py-1">Android</span>
+            </div>
+            <h2 className="text-lg font-bold mb-1 group-hover:text-yellow-400 transition">Android</h2>
+            <p className="text-slate-400 text-sm mb-4">
+              Download from Google Play for the full native NOVA voice experience on your Android device.
+            </p>
+            <span className="inline-flex items-center gap-2 text-green-400 font-bold text-sm">
+              Google Play <ExternalLink className="h-4 w-4" />
             </span>
           </a>
 
@@ -108,10 +132,10 @@ export default function DownloadPage() {
             rel="noopener noreferrer"
             className="rounded-2xl border border-yellow-400/40 bg-slate-900 p-6 hover:border-yellow-400 hover:bg-slate-800 transition group"
           >
-            <Chrome className="h-8 w-8 text-yellow-400 mb-4" />
+            <Chrome className="h-7 w-7 text-yellow-400 mb-4" />
             <h2 className="text-lg font-bold mb-1 group-hover:text-yellow-400 transition">Web Browser</h2>
             <p className="text-slate-400 text-sm mb-4">
-              Open in Chrome on any computer or Android. Full NOVA voice coaching included. No install needed.
+              Open in Chrome on any computer or phone. Full NOVA voice coaching included — no install required.
             </p>
             <span className="inline-flex items-center gap-2 text-yellow-400 font-bold text-sm">
               Open Now <ExternalLink className="h-4 w-4" />
@@ -119,17 +143,17 @@ export default function DownloadPage() {
           </a>
 
           {/* Desktop PWA */}
-          <div className="rounded-2xl border border-slate-700 bg-slate-900 p-6 sm:col-span-2">
-            <Monitor className="h-8 w-8 text-yellow-400 mb-4" />
-            <h2 className="text-lg font-bold mb-1">Install on Desktop (Windows / Mac)</h2>
+          <div className="rounded-2xl border border-slate-700 bg-slate-900 p-6">
+            <Monitor className="h-7 w-7 text-yellow-400 mb-4" />
+            <h2 className="text-lg font-bold mb-1">Install on Desktop</h2>
             <p className="text-slate-400 text-sm mb-4">
-              Open <span className="text-white font-mono text-xs bg-slate-800 px-2 py-0.5 rounded">{APP_URL}</span> in Chrome, then click the install icon (⬇) in the address bar to install as a desktop app.
+              Open the web app in Chrome, then click the install icon (⬇) in the address bar — works on Windows and Mac.
             </p>
             <a
               href={APP_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl bg-yellow-400 px-5 py-2.5 text-slate-950 font-bold text-sm hover:bg-yellow-300 transition"
+              className="inline-flex items-center gap-2 rounded-xl bg-yellow-400 px-4 py-2 text-slate-950 font-bold text-sm hover:bg-yellow-300 transition"
             >
               Open in Chrome <ExternalLink className="h-4 w-4" />
             </a>
@@ -157,11 +181,11 @@ export default function DownloadPage() {
             </li>
             <li className="flex gap-3">
               <span className="w-6 h-6 rounded-full bg-yellow-400/20 border border-yellow-400/40 text-yellow-400 font-black text-xs flex items-center justify-center shrink-0">2</span>
-              Click <strong>Sign In</strong> in the top right
+              Tap <strong>Sign In</strong> and enter your username and password
             </li>
             <li className="flex gap-3">
               <span className="w-6 h-6 rounded-full bg-yellow-400/20 border border-yellow-400/40 text-yellow-400 font-black text-xs flex items-center justify-center shrink-0">3</span>
-              Enter your username and password — you're in!
+              You're in — NOVA will guide you from there!
             </li>
           </ol>
         </div>
