@@ -31,7 +31,7 @@ const WEEKLY_API = `${BASE_URL}api/social/weekly-reports`;
 export default function SupervisorPage() {
   const { t } = useTranslation();
   const [, navigate] = useLocation();
-  const { logout, accounts, removeAccount, banUser, unbanUser, addInvite, currentUser } = useAuthStore();
+  const { logout, accounts, removeAccount, banUser, unbanUser, currentUser } = useAuthStore();
   const { trainerInviteRequests, novaSessions, stopNovaSession } = useAccessStore();
   const { selectors, sessions, assignments, removeSelector } = useTrainerStore();
   const { posts: supervisorPosts, addPost, deletePost } = useSupervisorPostStore();
@@ -82,12 +82,35 @@ export default function SupervisorPage() {
     navigate("/login");
   };
 
-  const handleSendInvite = () => {
+  const handleSendInvite = async () => {
     if (!trainerName.trim() || !trainerEmail.trim()) return;
-    const token = addInvite({ fullName: trainerName.trim(), email: trainerEmail.trim(), role: "trainer" });
-    setInviteToken(token);
-    setTrainerName("");
-    setTrainerEmail("");
+    try {
+      const res = await fetch("/api/auth/invite", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(() => {
+            try {
+              const raw = localStorage.getItem("picksmart-auth-store");
+              const jwt = raw ? (JSON.parse(raw) as { state?: { jwtToken?: string } })?.state?.jwtToken : null;
+              return jwt ? { Authorization: `Bearer ${jwt}` } : {};
+            } catch { return {}; }
+          })(),
+        },
+        body: JSON.stringify({
+          fullName: trainerName.trim(),
+          email: trainerEmail.trim(),
+          role: "trainer",
+          warehouseId: currentUser?.warehouseId ?? null,
+          warehouseSlug: currentUser?.warehouseSlug ?? null,
+        }),
+      });
+      if (!res.ok) return;
+      const { token } = await res.json() as { token: string };
+      setInviteToken(token);
+      setTrainerName("");
+      setTrainerEmail("");
+    } catch { /* silent — user can retry */ }
   };
 
   const generatedInviteUrl = inviteToken ? `${window.location.origin}/invite/${inviteToken}` : null;

@@ -252,7 +252,9 @@ router.delete("/auth/users/:id", requireRole("manager"), async (req, res) => {
 });
 
 // ── POST /api/auth/invite ─────────────────────────────────────────────────────
-router.post("/auth/invite", requireRole("supervisor"), async (req, res) => {
+// Any authenticated user can create an invite (trainers invite selectors,
+// supervisors invite trainers, owners/managers invite any role).
+router.post("/auth/invite", requireAuth, async (req, res) => {
   const { fullName, email, role, warehouseId, warehouseSlug } = req.body as {
     fullName?: string;
     email?: string;
@@ -316,10 +318,12 @@ router.get("/auth/invite/:token", async (req, res) => {
 
 // ── POST /api/auth/invite/accept ──────────────────────────────────────────────
 router.post("/auth/invite/accept", async (req, res) => {
-  const { token, username, password } = req.body as {
+  const { token, username, password, email: emailOverride, fullName: nameOverride } = req.body as {
     token?: string;
     username?: string;
     password?: string;
+    email?: string;       // used when invite is "open" (no pre-set email)
+    fullName?: string;    // used when invite is "open" (no pre-set name)
   };
 
   if (!token || !username || !password) {
@@ -339,6 +343,11 @@ router.post("/auth/invite/accept", async (req, res) => {
       return;
     }
 
+    if (invite.usedAt) {
+      res.status(409).json({ error: "This invite link has already been used." });
+      return;
+    }
+
     const taken = await db
       .select({ id: psaUsers.id })
       .from(psaUsers)
@@ -350,6 +359,10 @@ router.post("/auth/invite/accept", async (req, res) => {
       return;
     }
 
+    // For open invites (no pre-set email/name), use the values submitted by the user
+    const effectiveEmail    = (invite.email    && invite.email.trim())    ? invite.email    : (emailOverride ?? null);
+    const effectiveFullName = (invite.fullName && invite.fullName !== "Team Member") ? invite.fullName : (nameOverride ?? invite.fullName);
+
     const passwordHash = await hashPassword(password);
     const accountNumber = await nextAccountNumber();
 
@@ -358,8 +371,8 @@ router.post("/auth/invite/accept", async (req, res) => {
       .values({
         username,
         passwordHash,
-        fullName: invite.fullName,
-        email: invite.email,
+        fullName: effectiveFullName,
+        email: effectiveEmail || null,
         role: invite.role,
         status: "active",
         subscriptionPlan: "company",

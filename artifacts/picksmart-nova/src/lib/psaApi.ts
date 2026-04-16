@@ -107,6 +107,18 @@ export const psaApi = {
       body: JSON.stringify({ email, newPassword }),
     }),
 
+  createInvite: (data: {
+    fullName: string;
+    email: string;
+    role: string;
+    warehouseId?: string | null;
+    warehouseSlug?: string | null;
+  }) =>
+    request<{ token: string }>("/auth/invite", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
   getInvite: (token: string) =>
     request<{
       invite: {
@@ -118,4 +130,16 @@ export const psaApi = {
         usedAt: string | null;
       };
     }>(`/auth/invite/${token}`),
+
+  acceptInviteOpen: (data: {
+    token: string;
+    username: string;
+    password: string;
+    email?: string;
+    fullName?: string;
+  }) =>
+    request<{ token: string; user: ServerUser }>("/auth/invite/accept", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };

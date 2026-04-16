@@ -47,7 +47,7 @@ const AUTH_ROLES: Record<RoleKey, AuthRole | null> = {
 export default function UsersAccessPage() {
   const { t } = useTranslation();
   const [, navigate] = useLocation();
-  const { currentUser, logout, addInvite } = useAuthStore();
+  const { currentUser, logout } = useAuthStore();
   const {
     appUsers, novaAccounts,
     inviteAppUser, createNovaAccount, deactivateNovaAccount,
@@ -96,7 +96,7 @@ export default function UsersAccessPage() {
     } catch { /* silent */ }
   };
 
-  const handleInviteUser = () => {
+  const handleInviteUser = async () => {
     if (!inviteForm.fullName.trim() || !inviteForm.email.trim()) return;
     inviteAppUser({ fullName: inviteForm.fullName, email: inviteForm.email, role: inviteForm.role, inviteLink });
 
@@ -106,12 +106,32 @@ export default function UsersAccessPage() {
     const role = inviteForm.role;
 
     if (authRole) {
-      const token = addInvite({ fullName: name, email, role: authRole });
-      const url = `${window.location.origin}/invite/${token}`;
-      setGeneratedInviteUrl(url);
-      setGeneratedInviteName(name);
-      setGeneratedInviteEmail(email);
-      setGeneratedInviteRole(role);
+      try {
+        const raw = localStorage.getItem("picksmart-auth-store");
+        const jwt = raw ? (JSON.parse(raw) as { state?: { jwtToken?: string } })?.state?.jwtToken : null;
+        const res = await fetch("/api/auth/invite", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
+          },
+          body: JSON.stringify({
+            fullName: name,
+            email,
+            role: authRole,
+            warehouseId: currentUser?.warehouseId ?? null,
+            warehouseSlug: currentUser?.warehouseSlug ?? null,
+          }),
+        });
+        if (res.ok) {
+          const { token } = await res.json() as { token: string };
+          const url = `${window.location.origin}/invite/${token}`;
+          setGeneratedInviteUrl(url);
+          setGeneratedInviteName(name);
+          setGeneratedInviteEmail(email);
+          setGeneratedInviteRole(role);
+        }
+      } catch { /* silent */ }
     } else {
       setGeneratedInviteUrl(null);
     }

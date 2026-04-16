@@ -1,73 +1,98 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useAuthStore } from "@/lib/authStore";
+import { psaApi } from "@/lib/psaApi";
 import type { AuthRole } from "@/lib/authStore";
-import { Activity, Eye, EyeOff, UserPlus, AlertTriangle, Mail, RefreshCw, Check } from "lucide-react";
+import { Activity, Eye, EyeOff, UserPlus, AlertTriangle, Mail, RefreshCw, Check, Loader2 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
-const ROLE_HOME: Record<AuthRole, string> = {
-  selector: "/selector",
-  trainer: "/trainer-portal",
+const ROLE_HOME: Record<string, string> = {
+  selector:   "/selector",
+  trainer:    "/trainer-portal",
   supervisor: "/supervisor",
-  manager: "/manager",
-  director: "/control-panel",
-  owner: "/command",
+  manager:    "/manager",
+  director:   "/control-panel",
+  owner:      "/command",
 };
 
-const ROLE_LABEL: Record<AuthRole, string> = {
-  selector: "Selector",
-  trainer: "Trainer",
+const ROLE_LABEL: Record<string, string> = {
+  selector:   "Selector",
+  trainer:    "Trainer",
   supervisor: "Supervisor",
-  manager: "Manager",
-  director: "Director",
-  owner: "Owner",
+  manager:    "Manager",
+  director:   "Director",
+  owner:      "Owner",
 };
 
-type Step = "form" | "verify" | "done";
+type Step = "loading" | "not-found" | "used" | "form" | "verify" | "done";
 
-// Open invite: fullName is generic placeholder, email is empty
-function isOpenInvite(invite: { fullName: string; email: string }) {
+interface InviteData {
+  fullName: string;
+  email: string;
+  role: string;
+  warehouseId: string | null;
+  warehouseSlug: string | null;
+  usedAt: string | null;
+}
+
+function isOpenInvite(invite: InviteData) {
   return !invite.email || invite.fullName === "Team Member";
 }
 
 export default function InvitePage() {
   const [, params] = useRoute("/invite/:token");
   const [, navigate] = useLocation();
-  const { getInvite, acceptInvite } = useAuthStore();
+  const { loginWithToken } = useAuthStore();
 
   const token = params?.token ?? "";
-  const invite = getInvite(token);
-  const isOpen = invite ? isOpenInvite(invite) : false;
 
-  const suggestedUsername = invite && !isOpen
-    ? invite.email.split("@")[0].toLowerCase().replace(/[^a-z0-9._-]/g, "")
-    : "";
+  const [step, setStep]       = useState<Step>("loading");
+  const [invite, setInvite]   = useState<InviteData | null>(null);
 
-  const [step, setStep] = useState<Step>("form");
-  const [username, setUsername] = useState(suggestedUsername);
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [showPw, setShowPw] = useState(false);
+  const [username, setUsername]   = useState("");
+  const [password, setPassword]   = useState("");
+  const [confirm, setConfirm]     = useState("");
+  const [showPw, setShowPw]       = useState(false);
   const [verifyCode, setVerifyCode] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  // Open invite fields
+  const [error, setError]         = useState("");
+  const [loading, setLoading]     = useState(false);
+
+  // Open-invite fields
   const [openFullName, setOpenFullName] = useState("");
-  const [openEmail, setOpenEmail] = useState("");
+  const [openEmail, setOpenEmail]       = useState("");
+
+  // Load invite from database
+  useEffect(() => {
+    if (!token) { setStep("not-found"); return; }
+
+    psaApi.getInvite(token)
+      .then(({ invite: data }) => {
+        setInvite(data);
+        if (data.usedAt) {
+          setStep("used");
+        } else {
+          // Suggest a username from email for named invites
+          if (data.email && data.fullName !== "Team Member") {
+            setUsername(data.email.split("@")[0].toLowerCase().replace(/[^a-z0-9._-]/g, ""));
+          }
+          setStep("form");
+        }
+      })
+      .catch(() => setStep("not-found"));
+  }, [token]);
+
+  const isOpen = invite ? isOpenInvite(invite) : false;
+  const effectiveEmail = isOpen ? openEmail.trim() : (invite?.email ?? "");
+  const effectiveName  = isOpen ? openFullName.trim() : (invite?.fullName ?? "");
 
   const inputCls = "w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition placeholder:text-slate-600";
   const btnYellow = "w-full rounded-2xl bg-yellow-400 px-6 py-3 font-black text-slate-950 hover:bg-yellow-300 transition disabled:opacity-40 disabled:cursor-not-allowed";
 
-  // Effective email/name (from token or from open-invite fields)
-  const effectiveEmail = isOpen ? openEmail.trim() : invite?.email ?? "";
-  const effectiveName = isOpen ? openFullName.trim() : invite?.fullName ?? "";
-
-  // ── Step 1: fill form + send code ──────────────────────────────────────────
+  // ── Step 1: fill form + send verification email ──────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
     if (isOpen) {
       if (!effectiveName) { setError("Please enter your full name."); return; }
       if (!effectiveEmail || !effectiveEmail.includes("@")) { setError("Please enter a valid email address."); return; }
@@ -96,27 +121,40 @@ export default function InvitePage() {
     }
   };
 
-  // ── Step 2: verify code + create account ───────────────────────────────────
+  // ── Step 2: verify code + create account ────────────────────────────────────
   const handleVerify = async () => {
     setError("");
     setLoading(true);
     try {
-      const r = await fetch(`${BASE}/api/auth/verify-code`, {
+      // Verify the email code
+      const codeRes = await fetch(`${BASE}/api/auth/verify-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: effectiveEmail, code: verifyCode.trim() }),
       });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) { setError(d.error ?? "Invalid code. Try again."); setLoading(false); return; }
+      const codeData = await codeRes.json().catch(() => ({}));
+      if (!codeRes.ok) { setError(codeData.error ?? "Invalid code. Try again."); setLoading(false); return; }
 
-      const ok = acceptInvite(token, username.trim(), password);
-      if (ok) {
-        setStep("done");
-      } else {
+      // Create the account via API
+      const { token: jwtToken, user } = await psaApi.acceptInviteOpen({
+        token,
+        username: username.trim(),
+        password,
+        ...(isOpen ? { email: effectiveEmail, fullName: effectiveName } : {}),
+      });
+
+      // Log the user in immediately — no extra sign-in needed
+      loginWithToken(jwtToken, user);
+      setStep("done");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Something went wrong.";
+      if (msg.toLowerCase().includes("username")) {
         setError("That username is already taken. Please go back and choose another.");
+      } else if (msg.toLowerCase().includes("used")) {
+        setStep("used");
+      } else {
+        setError(msg);
       }
-    } catch {
-      setError("Network error. Try again.");
     } finally {
       setLoading(false);
     }
@@ -133,21 +171,45 @@ export default function InvitePage() {
     } catch {}
   };
 
-  // ── Invalid invite ─────────────────────────────────────────────────────────
-  if (!invite) {
+  const home = ROLE_HOME[invite?.role ?? "selector"] ?? "/selector";
+
+  // ── Loading ──────────────────────────────────────────────────────────────────
+  if (step === "loading") {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <Loader2 className="h-10 w-10 text-yellow-400 animate-spin" />
+      </div>
+    );
+  }
+
+  // ── Invalid / not found ──────────────────────────────────────────────────────
+  if (step === "not-found") {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
         <div className="rounded-3xl border border-red-500/30 bg-slate-900 p-10 max-w-md w-full text-center">
           <AlertTriangle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-          <h1 className="text-2xl font-black text-white mb-2">Invalid invite link</h1>
-          <p className="text-slate-400">This invite link appears to be broken or incomplete. Ask your admin to resend it.</p>
+          <h1 className="text-2xl font-black text-white mb-2">Invite not found</h1>
+          <p className="text-slate-400">This invite link is expired or doesn't exist. Ask your admin to send a new one.</p>
         </div>
       </div>
     );
   }
 
-  const roleLabel = ROLE_LABEL[invite.role] ?? invite.role;
-  const home = ROLE_HOME[invite.role ?? "selector"];
+  // ── Already used ─────────────────────────────────────────────────────────────
+  if (step === "used") {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
+        <div className="rounded-3xl border border-amber-500/30 bg-slate-900 p-10 max-w-md w-full text-center">
+          <Check className="h-12 w-12 text-amber-400 mx-auto mb-4" />
+          <h1 className="text-2xl font-black text-white mb-2">Already used</h1>
+          <p className="text-slate-400 mb-6">This invite has already been accepted. Sign in if you already have an account.</p>
+          <button onClick={() => navigate("/login")} className={btnYellow}>Go to Sign in</button>
+        </div>
+      </div>
+    );
+  }
+
+  const roleLabel = ROLE_LABEL[invite?.role ?? "selector"] ?? invite?.role;
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
@@ -174,8 +236,8 @@ export default function InvitePage() {
                 </p>
               </div>
 
-              {/* Show name/email only if NOT an open invite */}
-              {!isOpen && (
+              {/* Named invite: show name + email read-only */}
+              {!isOpen && invite && (
                 <div className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 mb-6">
                   <p className="text-white font-bold capitalize">{invite.fullName}</p>
                   <p className="text-slate-400 text-sm">{invite.email}</p>
@@ -218,7 +280,7 @@ export default function InvitePage() {
                 <div>
                   <label className="block text-sm text-slate-400 mb-2">
                     Choose a username
-                    {suggestedUsername && (
+                    {username && !isOpen && (
                       <span className="ml-2 text-xs text-yellow-400 font-normal">— suggested from your email</span>
                     )}
                   </label>
@@ -269,7 +331,7 @@ export default function InvitePage() {
                 <h1 className="text-2xl font-black text-white">Verify your email</h1>
                 <p className="text-slate-400 text-sm mt-2">
                   We sent a 6-digit code to<br />
-                  <span className="text-white font-semibold">{invite.email}</span>
+                  <span className="text-white font-semibold">{effectiveEmail}</span>
                 </p>
               </div>
 
@@ -293,7 +355,7 @@ export default function InvitePage() {
               </div>
 
               <button onClick={handleVerify} disabled={loading || verifyCode.length !== 6} className={btnYellow}>
-                {loading ? "Verifying…" : "Verify & Create Account"}
+                {loading ? "Creating account…" : "Verify & Create Account"}
               </button>
 
               <button onClick={handleResend} className="w-full flex items-center justify-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition">
@@ -313,9 +375,9 @@ export default function InvitePage() {
                 <Check className="h-8 w-8 text-green-400" />
               </div>
               <h1 className="text-2xl font-black text-white">Account created!</h1>
-              <p className="text-slate-400">Your email is verified and your account is ready. Sign in to get started.</p>
-              <button onClick={() => navigate(`/login?redirect=${encodeURIComponent(home)}`)} className={btnYellow}>
-                Go to Sign in
+              <p className="text-slate-400">Your email is verified and your account is ready.</p>
+              <button onClick={() => navigate(home)} className={btnYellow}>
+                Go to Dashboard →
               </button>
             </div>
           )}

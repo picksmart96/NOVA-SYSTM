@@ -67,12 +67,34 @@ function QuickInvite() {
   const [copied,   setCopied]   = useState(false);
   const [err,      setErr]      = useState("");
 
-  function generate() {
+  async function generate() {
     if (!name || !email) { setErr("Name and email are required."); return; }
     setErr("");
-    const payload = { name, email, role, exp: Date.now() + 7 * 86400000 };
-    setUrl(`${APP_URL}/invite/${btoa(JSON.stringify(payload))}`);
-    setSent(false);
+    setSending(true);
+    try {
+      const res = await fetch(`${BASE}/api/auth/invite`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(() => {
+            try {
+              const raw = localStorage.getItem("picksmart-auth-store");
+              const jwt = raw ? (JSON.parse(raw) as { state?: { jwtToken?: string } })?.state?.jwtToken : null;
+              return jwt ? { Authorization: `Bearer ${jwt}` } : {};
+            } catch { return {}; }
+          })(),
+        },
+        body: JSON.stringify({ fullName: name, email, role }),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setErr(d.error ?? "Failed to create invite."); return; }
+      const data = await res.json();
+      setUrl(`${APP_URL}/invite/${data.token as string}`);
+      setSent(false);
+    } catch {
+      setErr("Network error. Try again.");
+    } finally {
+      setSending(false);
+    }
   }
 
   async function sendEmail() {

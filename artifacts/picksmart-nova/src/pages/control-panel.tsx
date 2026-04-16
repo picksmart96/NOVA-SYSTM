@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAuthStore } from "@/lib/authStore";
 import { usePerformanceStore } from "@/lib/performanceStore";
 import { useLocation } from "wouter";
@@ -37,7 +37,7 @@ type Tab = "overview" | "performance" | "invite";
 
 export default function ControlPanelPage() {
   const [, navigate] = useLocation();
-  const { currentUser, accounts, logout, addInvite } = useAuthStore();
+  const { currentUser, accounts, logout } = useAuthStore();
   const { userLogs, userGoals } = usePerformanceStore();
 
   const [tab, setTab] = useState<Tab>("overview");
@@ -91,19 +91,40 @@ export default function ControlPanelPage() {
     }).sort((a, b) => (b.avg ?? 0) - (a.avg ?? 0));
   }, [userLogs, userGoals]);
 
-  function generateInviteLink(role: "supervisor" | "manager") {
-    const token = addInvite({
-      fullName: "Team Member",
-      email: "",
-      role,
-      warehouseId: currentUser?.warehouseId ?? null,
-      warehouseSlug: currentUser?.warehouseSlug ?? null,
-    });
-    return `${window.location.origin}${BASE}/invite/${token}`;
-  }
+  const [supLink, setSupLink] = useState("");
+  const [mgrLink, setMgrLink] = useState("");
 
-  const [supLink] = useState(() => generateInviteLink("supervisor"));
-  const [mgrLink] = useState(() => generateInviteLink("manager"));
+  useEffect(() => {
+    async function generateLinks() {
+      const raw = localStorage.getItem("picksmart-auth-store");
+      const jwt = raw ? (JSON.parse(raw) as { state?: { jwtToken?: string } })?.state?.jwtToken : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (jwt) headers["Authorization"] = `Bearer ${jwt}`;
+
+      for (const role of ["supervisor", "manager"] as const) {
+        try {
+          const res = await fetch("/api/auth/invite", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              fullName: "Team Member",
+              email: "",
+              role,
+              warehouseId: currentUser?.warehouseId ?? null,
+              warehouseSlug: currentUser?.warehouseSlug ?? null,
+            }),
+          });
+          if (res.ok) {
+            const { token } = await res.json() as { token: string };
+            const url = `${window.location.origin}/invite/${token}`;
+            if (role === "supervisor") setSupLink(url);
+            else setMgrLink(url);
+          }
+        } catch { /* silent */ }
+      }
+    }
+    void generateLinks();
+  }, [currentUser?.warehouseId, currentUser?.warehouseSlug]);
 
   function copySup() {
     copyToClipboard(supLink, () => { setCopiedSup(true); setTimeout(() => setCopiedSup(false), 2500); });

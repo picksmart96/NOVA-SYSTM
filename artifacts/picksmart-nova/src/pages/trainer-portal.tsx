@@ -18,7 +18,7 @@ type SelectorLevel = "Beginner" | "Intermediate" | "Advanced";
 export default function TrainerPortalPage() {
   const { t } = useTranslation();
   const [, navigate] = useLocation();
-  const { currentUser, logout, addInvite } = useAuthStore();
+  const { currentUser, logout } = useAuthStore();
   const {
     trainer, selectors, sessions, assignments,
     addSelector, toggleNova,
@@ -45,7 +45,7 @@ export default function TrainerPortalPage() {
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copiedInvite, setCopiedInvite] = useState(false);
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.fullName.trim() || !form.email.trim()) return;
     addSelector({
@@ -55,9 +55,28 @@ export default function TrainerPortalPage() {
       level: form.level,
       notes: form.notes,
     });
-    const token = addInvite({ fullName: form.fullName, email: form.email, role: "selector" });
-    const link = `${window.location.origin}/invite/${token}`;
-    setInviteLink(link);
+    try {
+      const raw = localStorage.getItem("picksmart-auth-store");
+      const jwt = raw ? (JSON.parse(raw) as { state?: { jwtToken?: string } })?.state?.jwtToken : null;
+      const res = await fetch("/api/auth/invite", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
+        },
+        body: JSON.stringify({
+          fullName: form.fullName.trim(),
+          email: form.email.trim(),
+          role: "selector",
+          warehouseId: currentUser?.warehouseId ?? null,
+          warehouseSlug: currentUser?.warehouseSlug ?? null,
+        }),
+      });
+      if (res.ok) {
+        const { token } = await res.json() as { token: string };
+        setInviteLink(`${window.location.origin}/invite/${token}`);
+      }
+    } catch { /* silent */ }
     setForm({ fullName: "", email: "", age: "", level: "Beginner", notes: "" });
   };
 

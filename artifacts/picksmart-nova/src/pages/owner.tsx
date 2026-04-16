@@ -457,7 +457,7 @@ function UserManagement() {
 
 // ── Invite Management ─────────────────────────────────────────────────────────
 function InviteManagement() {
-  const { addInvite, pendingInvites } = useAuthStore();
+  const { pendingInvites } = useAuthStore();
   const { customWarehouses } = useWarehouseStore();
   const allWarehouses = [...DEFAULT_WAREHOUSES, ...customWarehouses];
   const [fullName, setFullName] = useState("");
@@ -466,21 +466,33 @@ function InviteManagement() {
   const [warehouseSlug, setWarehouseSlug] = useState(allWarehouses[0]?.slug ?? "");
   const [lastLink, setLastLink] = useState<string | null>(null);
 
-  function sendInvite() {
+  async function sendInvite() {
     if (!fullName.trim() || !email.trim()) return;
     const selectedWarehouse = allWarehouses.find((w) => w.slug === warehouseSlug) ?? null;
-    const token = addInvite({
-      fullName: fullName.trim(),
-      email: email.trim(),
-      role,
-      warehouseId: selectedWarehouse?.id ?? null,
-      warehouseSlug: selectedWarehouse?.slug ?? null,
-    });
-    const base = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
-    const link = `${window.location.origin}${base}/invite/${token}`;
-    setLastLink(link);
-    setFullName("");
-    setEmail("");
+    try {
+      const raw = localStorage.getItem("picksmart-auth-store");
+      const jwt = raw ? (JSON.parse(raw) as { state?: { jwtToken?: string } })?.state?.jwtToken : null;
+      const res = await fetch("/api/auth/invite", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
+        },
+        body: JSON.stringify({
+          fullName: fullName.trim(),
+          email: email.trim(),
+          role,
+          warehouseId: selectedWarehouse?.id ?? null,
+          warehouseSlug: selectedWarehouse?.slug ?? null,
+        }),
+      });
+      if (res.ok) {
+        const { token } = await res.json() as { token: string };
+        setLastLink(`${window.location.origin}/invite/${token}`);
+        setFullName("");
+        setEmail("");
+      }
+    } catch { /* silent */ }
   }
 
   return (
@@ -1161,7 +1173,7 @@ const AUTH_ROLES: Record<RoleKey, AuthRole | null> = {
 };
 
 function UsersAccessSection() {
-  const { currentUser, addInvite } = useAuthStore();
+  const { currentUser } = useAuthStore();
   const { appUsers, novaAccounts, inviteAppUser, createNovaAccount, deactivateNovaAccount } = useAccessStore();
   const { customWarehouses } = useWarehouseStore();
   const allWarehouses = [...DEFAULT_WAREHOUSES, ...customWarehouses];
@@ -1203,7 +1215,7 @@ function UsersAccessSection() {
     } catch { /* silent */ }
   };
 
-  const handleInviteUser = () => {
+  const handleInviteUser = async () => {
     if (!inviteForm.fullName.trim() || !inviteForm.email.trim()) return;
     inviteAppUser({ fullName: inviteForm.fullName, email: inviteForm.email, role: inviteForm.role, inviteLink });
     const authRole = AUTH_ROLES[inviteForm.role];
@@ -1212,19 +1224,32 @@ function UsersAccessSection() {
     const role = inviteForm.role;
     const selectedWarehouse = allWarehouses.find((w) => w.slug === inviteForm.warehouseSlug) ?? null;
     if (authRole) {
-      const token = addInvite({
-        fullName: name,
-        email,
-        role: authRole,
-        warehouseId: selectedWarehouse?.id ?? null,
-        warehouseSlug: selectedWarehouse?.slug ?? null,
-      });
-      const base = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
-      const url = `${window.location.origin}${base}/invite/${token}`;
-      setGeneratedInviteUrl(url);
-      setGeneratedInviteName(name);
-      setGeneratedInviteEmail(email);
-      setGeneratedInviteRole(role);
+      try {
+        const raw = localStorage.getItem("picksmart-auth-store");
+        const jwt = raw ? (JSON.parse(raw) as { state?: { jwtToken?: string } })?.state?.jwtToken : null;
+        const res = await fetch("/api/auth/invite", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
+          },
+          body: JSON.stringify({
+            fullName: name,
+            email,
+            role: authRole,
+            warehouseId: selectedWarehouse?.id ?? null,
+            warehouseSlug: selectedWarehouse?.slug ?? null,
+          }),
+        });
+        if (res.ok) {
+          const { token } = await res.json() as { token: string };
+          const url = `${window.location.origin}/invite/${token}`;
+          setGeneratedInviteUrl(url);
+          setGeneratedInviteName(name);
+          setGeneratedInviteEmail(email);
+          setGeneratedInviteRole(role);
+        }
+      } catch { /* silent */ }
     } else {
       setGeneratedInviteUrl(null);
     }
@@ -3781,13 +3806,38 @@ function ChatLogsSection() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function OwnerControlPanel() {
-  const { accounts, currentUser, addInvite } = useAuthStore();
+  const { accounts, currentUser } = useAuthStore();
   const { userLogs, userGoals } = usePerformanceStore();
   const [cpTab, setCpTab] = useState<"overview" | "performance" | "invite">("overview");
   const [copiedSup, setCopiedSup] = useState(false);
   const [copiedMgr, setCopiedMgr] = useState(false);
   const [showSupLink, setShowSupLink] = useState(false);
   const [showMgrLink, setShowMgrLink] = useState(false);
+  const [supLink, setSupLink] = useState("");
+  const [mgrLink, setMgrLink] = useState("");
+
+  useEffect(() => {
+    async function generateLinks() {
+      const raw = localStorage.getItem("picksmart-auth-store");
+      const jwt = raw ? (JSON.parse(raw) as { state?: { jwtToken?: string } })?.state?.jwtToken : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (jwt) headers["Authorization"] = `Bearer ${jwt}`;
+      for (const role of ["supervisor", "manager"] as const) {
+        try {
+          const res = await fetch("/api/auth/invite", {
+            method: "POST", headers,
+            body: JSON.stringify({ fullName: "Team Member", email: "", role, warehouseId: null, warehouseSlug: null }),
+          });
+          if (res.ok) {
+            const { token } = await res.json() as { token: string };
+            const url = `${window.location.origin}/invite/${token}`;
+            if (role === "supervisor") setSupLink(url); else setMgrLink(url);
+          }
+        } catch { /* silent */ }
+      }
+    }
+    void generateLinks();
+  }, []);
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const realAccounts = accounts.filter((a) => a.id !== "master");
@@ -3807,16 +3857,6 @@ function OwnerControlPanel() {
     const trend = recent.length >= 2 ? recent[recent.length - 1].pickRate - recent[0].pickRate : null;
     return { username, avg, goal, trend, logsCount: logs.length };
   }).sort((a, b) => (b.avg ?? 0) - (a.avg ?? 0));
-
-  const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
-  const [supLink] = useState(() => {
-    const token = addInvite({ fullName: "Team Member", email: "", role: "supervisor" });
-    return `${window.location.origin}${BASE_URL}/invite/${token}`;
-  });
-  const [mgrLink] = useState(() => {
-    const token = addInvite({ fullName: "Team Member", email: "", role: "manager" });
-    return `${window.location.origin}${BASE_URL}/invite/${token}`;
-  });
 
   const SUBTABS = [
     { id: "overview" as const, label: "Overview" },

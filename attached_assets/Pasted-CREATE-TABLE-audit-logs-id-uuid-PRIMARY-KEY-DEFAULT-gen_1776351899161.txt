@@ -1,0 +1,184 @@
+CREATE TABLE audit_logs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  user_id uuid,
+  company_id uuid,
+
+  action text, -- login, create_contract, cancel_subscription, etc
+
+  entity text, -- contract, assignment, user, billing
+  entity_id uuid,
+
+  details jsonb, -- store extra info
+
+  ip_address text,
+  user_agent text,
+
+  created_at timestamp DEFAULT now()
+);const logAction = async ({
+  user,
+  action,
+  entity,
+  entity_id,
+  details,
+  req
+}) => {
+  await supabase.from("audit_logs").insert({
+    user_id: user.id,
+    company_id: user.company_id,
+    action,
+    entity,
+    entity_id,
+    details,
+    ip_address: req.ip,
+    user_agent: req.headers["user-agent"]
+  });
+};await logAction({
+  user,
+  action: "login_success",
+  entity: "auth",
+  entity_id: user.id,
+  details: { email: user.email },
+  req
+});await logAction({
+  user: { id: null, company_id: null },
+  action: "login_failed",
+  entity: "auth",
+  entity_id: null,
+  details: { email },
+  req
+});await logAction({
+  user: req.user,
+  action: "cancel_subscription",
+  entity: "billing",
+  entity_id: subscriptionId,
+  details: { reason: "user_action" },
+  req
+});await logAction({
+  user: req.user,
+  action: "contract_signed",
+  entity: "contract",
+  entity_id: contractId,
+  details: { plan: "1_year" },
+  req
+});await logAction({
+  user: req.user,
+  action: "assignment_created",
+  entity: "assignment",
+  entity_id: assignmentId,
+  details: { total_cases: 120 },
+  req
+});await logAction({
+  user: { id: null, company_id: null },
+  action: "brute_force_detected",
+  entity: "security",
+  entity_id: null,
+  details: { ip: req.ip },
+  req
+});<h2>🔐 Activity Log</h2>
+
+{logs.map(log => (
+  <div key={log.id} style={{border:"1px solid gray", padding:10}}>
+    
+    <p><b>Action:</b> {log.action}</p>
+    <p><b>Entity:</b> {log.entity}</p>
+    <p><b>User:</b> {log.user_id}</p>
+    <p><b>Time:</b> {log.created_at}</p>
+
+  </div>
+))}<select onChange={(e)=>setFilter(e.target.value)}>
+  <option value="">All</option>
+  <option value="login">Logins</option>
+  <option value="billing">Billing</option>
+  <option value="security">Security</option>
+</select>if (failedLogins > 5) {
+  sendAdminAlert("Suspicious login activity detected");
+}CREATE TABLE alerts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  company_id uuid,
+  type text, -- security, billing, performance
+
+  message text,
+  severity text, -- low, medium, high
+
+  read boolean DEFAULT false,
+
+  created_at timestamp DEFAULT now()
+);const createAlert = async ({
+  company_id,
+  type,
+  message,
+  severity = "medium"
+}) => {
+  await supabase.from("alerts").insert({
+    company_id,
+    type,
+    message,
+    severity
+  });
+};if (failedAttempts > 3) {
+  await createAlert({
+    type: "security",
+    message: "Multiple failed login attempts detected",
+    severity: "high"
+  });
+}await createAlert({
+  company_id,
+  type: "billing",
+  message: "New subscription payment received",
+  severity: "low"
+});await createAlert({
+  company_id,
+  type: "business",
+  message: "New contract signed",
+  severity: "medium"
+});if (mistakes > 10) {
+  await createAlert({
+    company_id,
+    type: "performance",
+    message: "High mistake rate detected for selector",
+    severity: "high"
+  });
+}npm install resend import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY);const sendAlertEmail = async (message) => {
+  await resend.emails.send({
+    from: "NOVA Alerts <alerts@yourdomain.com>",
+    to: ["youremail@gmail.com"],
+    subject: "🚨 NOVA Alert",
+    html: `<p>${message}</p>`
+  });
+};await createAlert({ ... });
+
+await sendAlertEmail("Multiple failed login attempts detected");<h2>🚨 Alerts</h2>
+
+{alerts.map(a => (
+  <div key={a.id} style={{
+    border:"1px solid red",
+    padding:10,
+    marginBottom:10
+  }}>
+    
+    <p><b>Type:</b> {a.type}</p>
+    <p><b>Message:</b> {a.message}</p>
+    <p><b>Severity:</b> {a.severity}</p>
+    <p><b>Time:</b> {a.created_at}</p>
+
+  </div>
+))}supabase
+  .channel("alerts")
+  .on(
+    "postgres_changes",
+    { event: "INSERT", schema: "public", table: "alerts" },
+    (payload) => {
+      setAlerts(prev => [payload.new, ...prev]);
+    }
+  )
+  .subscribe();if (loginsFromDifferentIPs > 3) {
+  createAlert({
+    type: "security",
+    message: "Unusual login behavior detected",
+    severity: "high"
+  });
+}
