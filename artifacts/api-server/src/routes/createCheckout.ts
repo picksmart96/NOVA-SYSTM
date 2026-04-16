@@ -4,12 +4,19 @@ import { logger } from "../lib/logger.js";
 
 const router = Router();
 
-// POST /create-checkout  — creates a Stripe Checkout session
-// Body: { email, billing: "monthly"|"yearly" }
+const PLANS: Record<string, { unitAmount: number; interval: "week" | "month" | "year"; label: string }> = {
+  weekly:  { unitAmount: 166000, interval: "week",  label: "Weekly"  },
+  monthly: { unitAmount: 250000, interval: "month", label: "Monthly" },
+  yearly:  { unitAmount: 6900000, interval: "year", label: "Annual"  },
+};
+
+// POST /create-checkout — creates a Stripe Checkout session
+// Body: { email, billing: "weekly"|"monthly"|"yearly", userId? }
 router.post("/create-checkout", async (req, res) => {
-  const { email, billing = "monthly" } = req.body as {
+  const { email, billing = "weekly", userId } = req.body as {
     email?: string;
     billing?: string;
+    userId?: string;
   };
 
   if (!email) {
@@ -17,12 +24,8 @@ router.post("/create-checkout", async (req, res) => {
     return;
   }
 
-  const isYearly = billing === "yearly";
-  const unitAmount = isYearly ? 25000 : 2500; // $250/yr or $25/mo in cents
-  const interval   = isYearly ? "year" : "month";
-
-  const appUrl =
-    process.env.APP_URL ?? "https://nova-warehouse-control.replit.app";
+  const plan = PLANS[billing] ?? PLANS.weekly;
+  const appUrl = process.env.APP_URL ?? "https://nova-warehouse-control.replit.app";
 
   try {
     const stripe = await getUncachableStripeClient();
@@ -36,22 +39,22 @@ router.post("/create-checkout", async (req, res) => {
           price_data: {
             currency: "usd",
             product_data: {
-              name: "PickSmart NOVA — Professional Single",
+              name: `PickSmart NOVA — Company Plan (${plan.label})`,
               description:
-                "Full platform: Training, NOVA Help, NOVA Trainer, Leaderboard, Common Mistakes, Selector Breaking News",
+                "Full platform: NOVA Voice, Trainer Portal, Mistake Tracking, Assignment Builder, Warehouse Config",
             },
-            unit_amount: unitAmount,
-            recurring: { interval },
+            unit_amount: plan.unitAmount,
+            recurring: { interval: plan.interval },
           },
           quantity: 1,
         },
       ],
       success_url: `${appUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url:  `${appUrl}/payment-cancel`,
-      metadata: { billing, email },
+      cancel_url:  `${appUrl}/upgrade`,
+      metadata: { billing, email, userId: userId ?? "" },
     });
 
-    logger.info(`[Stripe] Checkout session created — ${email} — $${unitAmount / 100}/${interval}`);
+    logger.info(`[Stripe] Checkout session created — ${email} — ${plan.label} $${plan.unitAmount / 100}/${plan.interval}`);
     res.json({ url: session.url });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error";

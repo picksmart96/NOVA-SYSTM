@@ -32,6 +32,8 @@ export interface AuthAccount {
   warehouseId?: string | null;
   warehouseSlug?: string | null;
   isDemoUser?: boolean;
+  trialEndsAt?: string | null;
+  companyName?: string | null;
 }
 
 export interface PendingInvite {
@@ -108,6 +110,8 @@ function serverUserToAccount(u: ServerUser): AuthAccount {
     warehouseId: u.warehouseId,
     warehouseSlug: u.warehouseSlug,
     createdAt: u.createdAt,
+    trialEndsAt: u.trialEndsAt ?? null,
+    companyName: u.companyName ?? null,
   };
 }
 

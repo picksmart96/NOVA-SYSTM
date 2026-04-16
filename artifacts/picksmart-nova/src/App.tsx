@@ -83,6 +83,8 @@ import RegisterPage from "@/pages/register";
 import WarehouseSetupPage from "@/pages/warehouse-setup";
 import TrialSignupPage from "@/pages/TrialSignupPage";
 import AssignmentBuilderPage from "@/pages/AssignmentBuilderPage";
+import UpgradePage from "@/pages/UpgradePage";
+import TrialBanner from "@/components/TrialBanner";
 
 function RedirectToOwner() {
   const [, navigate] = useLocation();
@@ -225,6 +227,9 @@ function Router() {
       </Route>
       <Route path="/meet-nova">
         <NovaSalesVoiceAgent />
+      </Route>
+      <Route path="/upgrade">
+        <UpgradePage />
       </Route>
       <Route path="/payment-success">
         <PaymentSuccessPage />
@@ -466,6 +471,7 @@ function AppInner() {
   return (
     <>
       <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}>
+        <TrialBanner />
         <Router />
       </WouterRouter>
       <Toaster />

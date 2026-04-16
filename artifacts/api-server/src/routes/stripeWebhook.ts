@@ -1,5 +1,9 @@
 import { Router, type Request, type Response } from "express";
 import { stripe } from "../lib/stripe.js";
+import { db } from "@workspace/db";
+import { psaUsers } from "@workspace/db";
+import { eq } from "drizzle-orm";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -31,19 +35,44 @@ router.post(
       return;
     }
 
-    console.log(`[Stripe Webhook] Event received: ${event.type}`);
+    logger.info(`[Stripe Webhook] Event: ${event.type}`);
 
     if (event.type === "checkout.session.completed") {
-      const session = event.data.object as { customer_email?: string; metadata?: Record<string, string> };
-      console.log("[Stripe Webhook] Payment SUCCESS — customer:", session.customer_email);
-      // TODO: Mark the warehouse account as subscribed in the database
-      // Example: await db.update(warehouses).set({ isSubscribed: true }).where(...)
+      const session = event.data.object as {
+        customer_email?: string;
+        metadata?: Record<string, string>;
+        customer?: string;
+        subscription?: string;
+      };
+
+      const email  = session.customer_email ?? session.metadata?.email;
+      const userId = session.metadata?.userId;
+
+      if (userId) {
+        db.update(psaUsers)
+          .set({ isSubscribed: true, subscriptionPlan: "company", trialEndsAt: null })
+          .where(eq(psaUsers.id, userId))
+          .then(() => logger.info(`[Stripe] Activated subscription for user ${userId}`))
+          .catch((err) => logger.error({ err }, "[Stripe] Failed to activate subscription by userId"));
+      } else if (email) {
+        db.update(psaUsers)
+          .set({ isSubscribed: true, subscriptionPlan: "company", trialEndsAt: null })
+          .where(eq(psaUsers.email, email))
+          .then(() => logger.info(`[Stripe] Activated subscription for email ${email}`))
+          .catch((err) => logger.error({ err }, "[Stripe] Failed to activate subscription by email"));
+      }
     }
 
     if (event.type === "customer.subscription.deleted") {
-      const sub = event.data.object as { customer?: string };
-      console.log("[Stripe Webhook] Subscription CANCELLED — customer:", sub.customer);
-      // TODO: Deactivate the warehouse account
+      const sub = event.data.object as { metadata?: Record<string, string> };
+      const userId = sub.metadata?.userId;
+      if (userId) {
+        db.update(psaUsers)
+          .set({ isSubscribed: false })
+          .where(eq(psaUsers.id, userId))
+          .then(() => logger.info(`[Stripe] Deactivated subscription for user ${userId}`))
+          .catch((err) => logger.error({ err }, "[Stripe] Failed to deactivate subscription"));
+      }
     }
 
     res.json({ received: true });

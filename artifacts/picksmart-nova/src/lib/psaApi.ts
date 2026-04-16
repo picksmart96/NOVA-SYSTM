@@ -45,6 +45,8 @@ export interface ServerUser {
   isMaster: boolean;
   createdAt: string;
   updatedAt: string;
+  trialEndsAt: string | null;
+  companyName: string | null;
 }
 
 export const psaApi = {
