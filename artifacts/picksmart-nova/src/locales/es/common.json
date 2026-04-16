@@ -555,8 +555,8 @@
       "subtitle": "Dos planes. Uno para selectores individuales, uno para operaciones completas de empresa. Sin cargos ocultos.",
       "mostPopular": "Más Popular",
       "plans": [
-        { "title": "Professional Single", "subtitle": "Para selectores individuales", "price": "$25", "suffix": "/mes", "cta": "Comenzar", "features": ["Acceso completo a capacitación", "Entrenador de IA NOVA Help", "Sesiones NOVA Trainer", "Biblioteca de Errores Comunes", "Tabla de Clasificación", "Selector Breaking News"] },
-        { "title": "Company Unlimited", "subtitle": "Para equipos y operaciones de almacén", "price": "$1,600", "suffix": "/año", "cta": "Acceso Empresa", "featured": true, "features": ["Todo en Professional Single", "Usuarios ilimitados del equipo", "Panel del Entrenador", "Panel del Supervisor", "Acceso ilimitado a capacitación y flujo", "Soporte prioritario"] }
+        { "title": "Professional Single", "subtitle": "Para selectores individuales", "price": "$25", "suffix": "/mes", "cta": "Comenzar", "features": ["Acceso completo a capacitación", "Entrenador de IA NOVA Help", "Mi Rastreador de Rendimiento", "Biblioteca de Errores Comunes", "Tabla de Clasificación", "Selector Breaking News"] },
+        { "title": "Company Unlimited", "subtitle": "Para equipos y operaciones de almacén", "price": "$1,600", "suffix": "/año", "cta": "Acceso Empresa", "featured": true, "features": ["Todo en Professional Single", "NOVA Trainer (sesiones de picking por voz)", "Entorno de demostración en vivo", "Usuarios ilimitados del equipo", "Panel del Entrenador", "Panel del Supervisor", "Acceso ilimitado a capacitación y flujo", "Soporte prioritario"] }
       ]
     },
     "finalCta": {

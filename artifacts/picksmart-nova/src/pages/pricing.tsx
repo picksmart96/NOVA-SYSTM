@@ -58,9 +58,9 @@ export default function PricingPage() {
 
             <div className="mt-6 space-y-3 text-slate-300">
               <p>• Training access</p>
-              <p>• NOVA Help</p>
-              <p>• NOVA Trainer</p>
-              <p>• Common Mistakes</p>
+              <p>• NOVA Help AI coach</p>
+              <p>• My Performance Tracker (inside NOVA Help)</p>
+              <p>• Common Mistakes library</p>
               <p>• Leaderboard</p>
               <p>• Selector Breaking News</p>
               <p>• Monthly or yearly billing</p>
@@ -95,6 +95,8 @@ export default function PricingPage() {
 
             <div className="mt-6 space-y-3 text-slate-300">
               <p>• Everything in Professional Single</p>
+              <p>• NOVA Trainer (voice-directed picking sessions)</p>
+              <p>• Live Demo environment</p>
               <p>• Trainer Dashboard</p>
               <p>• Supervisor Dashboard</p>
               <p>• Unlimited company users</p>

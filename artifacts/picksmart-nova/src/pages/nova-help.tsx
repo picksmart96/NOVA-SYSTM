@@ -6,9 +6,11 @@ import { detectStopWord } from "@/lib/novaModeRouter";
 import { NovaVoiceStatus, type VoiceStateKey } from "@/components/nova/NovaVoiceStatus";
 import LockedAction from "@/components/paywall/LockedAction";
 import { useTalkRequestStore } from "@/lib/talkRequestStore";
-import { MessageCircle, X, CheckCircle2, Send, Mic } from "lucide-react";
+import { MessageCircle, X, CheckCircle2, Send, Mic, BarChart2, Target, Zap, ClipboardList, Clock, TrendingUp } from "lucide-react";
 import { useAuthStore } from "@/lib/authStore";
 import { usePerformanceStore } from "@/lib/performanceStore";
+
+const PERF_STANDARD_UPH = 90;
 
 // ─── Detect "speak to someone" requests ──────────────────────────────────────
 function isHumanRequestTrigger(text: string): boolean {
@@ -230,13 +232,61 @@ export default function NovaHelpPage() {
 
   // ── User + performance data ──────────────────────────────────────────────
   const { currentUser } = useAuthStore();
-  const { getYesterdayLog, getGoal, getWeekAvg } = usePerformanceStore();
+  const { getYesterdayLog, getGoal, getWeekAvg, logToday, getRecentLogs, getTodayLog, setGoal } = usePerformanceStore();
   const firstName   = currentUser?.fullName?.split(" ")[0] ?? currentUser?.username ?? "";
   const username    = currentUser?.username ?? "";
   const yestLog     = username ? getYesterdayLog(username) : null;
   const userGoal    = username ? getGoal(username) : null;
   const weekAvg     = username ? getWeekAvg(username) : null;
   const isRealUser  = !!currentUser && !currentUser.isDemoUser;
+
+  // ── Tab navigation ────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<"coach" | "performance">("coach");
+
+  // ── Performance tracker (My Performance tab) ──────────────────────────────
+  const perfUsername  = currentUser?.username ?? "";
+  const perfTodayLog  = perfUsername ? getTodayLog(perfUsername) : null;
+  const perfRecentLogs = perfUsername ? getRecentLogs(perfUsername, 7) : [];
+  const perfGoal      = perfUsername ? getGoal(perfUsername) : null;
+
+  const [perfCases, setPerfCases] = useState(perfTodayLog?.cases?.toString() ?? "");
+  const [perfHours, setPerfHours] = useState(perfTodayLog?.hours?.toString() ?? "");
+  const [perfGoalInput, setPerfGoalInput] = useState(perfGoal?.targetRate?.toString() ?? "");
+  const [perfNote, setPerfNote]   = useState(perfTodayLog?.note ?? "");
+  const [perfSaved, setPerfSaved] = useState(false);
+
+  const perfCasesNum = parseFloat(perfCases) || 0;
+  const perfHoursNum = parseFloat(perfHours) || 0;
+  const perfGoalNum  = parseFloat(perfGoalInput) || 0;
+  const liveUPH      = perfHoursNum > 0 ? Math.round(perfCasesNum / perfHoursNum) : 0;
+  const liveEff      = liveUPH > 0 ? Math.round((liveUPH / PERF_STANDARD_UPH) * 100) : 0;
+
+  const novaFeedback = (): string => {
+    if (!liveUPH) return isSpanish
+      ? "Ingresa tus números y te ayudo a entender tu rendimiento."
+      : "Enter your shift numbers and I'll help you understand your pace.";
+    if (liveEff >= 110) return isSpanish
+      ? `¡Destacado! Con ${liveUPH} UPH estás ${liveEff - 100}% por encima del estándar. ¡Eres un selector de alto rendimiento — sigue así!`
+      : `Outstanding! At ${liveUPH} UPH you're ${liveEff - 100}% above standard. You're a top performer — keep that pace!`;
+    if (liveEff >= 100) return isSpanish
+      ? `¡En objetivo! Con ${liveUPH} UPH estás cumpliendo el estándar de ${PERF_STANDARD_UPH}. Enfócate en mantener la consistencia.`
+      : `On target! At ${liveUPH} UPH you're hitting the ${PERF_STANDARD_UPH} standard. Focus on keeping that consistency.`;
+    if (liveEff >= 85) return isSpanish
+      ? `¡Casi llegas! Con ${liveUPH} UPH estás ${100 - liveEff}% por debajo. Pequeñas mejoras en tu ruta suman mucho.`
+      : `Getting close! At ${liveUPH} UPH you're ${100 - liveEff}% below standard. Small improvements in your pick path add up fast.`;
+    return isSpanish
+      ? `Con ${liveUPH} UPH estás ${100 - liveEff}% por debajo del estándar de ${PERF_STANDARD_UPH}. Reduce el tiempo muerto entre picks y optimiza tu ruta.`
+      : `At ${liveUPH} UPH you're ${100 - liveEff}% below the ${PERF_STANDARD_UPH} standard. Focus on reducing dead time between picks and tightening your path.`;
+  };
+
+  const handlePerfSave = () => {
+    if (!perfUsername || perfCasesNum <= 0 || perfHoursNum <= 0) return;
+    const eff = liveUPH > 0 ? Math.round((liveUPH / PERF_STANDARD_UPH) * 100) : 0;
+    logToday(perfUsername, eff, perfHoursNum, perfNote.trim() || undefined, perfCasesNum, liveUPH);
+    if (perfGoalNum > 0) setGoal(perfUsername, perfGoalNum);
+    setPerfSaved(true);
+    setTimeout(() => setPerfSaved(false), 3000);
+  };
 
   // ── Question counter + soft lock ──────────────────────────────────────────
   const [questionCount, setQuestionCount] = useState(0);
@@ -959,7 +1009,7 @@ export default function NovaHelpPage() {
             {isSpanish ? "Entrenador de voz — almacén" : "Warehouse voice coach"}
           </p>
         </div>
-        {sessionActive && (
+        {sessionActive && activeTab === "coach" && (
           <div className="flex items-center gap-3">
             <NovaVoiceStatus state={voiceStateKey} />
             <button
@@ -972,7 +1022,205 @@ export default function NovaHelpPage() {
         )}
       </div>
 
-      {/* Main */}
+      {/* Tab bar */}
+      <div className="bg-[#141428] border-b border-white/5 px-4 flex gap-1">
+        <button
+          onClick={() => setActiveTab("coach")}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition ${
+            activeTab === "coach"
+              ? "border-violet-400 text-white"
+              : "border-transparent text-slate-500 hover:text-slate-300"
+          }`}
+        >
+          <Mic className="h-4 w-4" />
+          {isSpanish ? "Entrenador NOVA" : "NOVA Coach"}
+        </button>
+        <button
+          onClick={() => setActiveTab("performance")}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition ${
+            activeTab === "performance"
+              ? "border-yellow-400 text-yellow-400"
+              : "border-transparent text-slate-500 hover:text-slate-300"
+          }`}
+        >
+          <BarChart2 className="h-4 w-4" />
+          {isSpanish ? "Mi Rendimiento" : "My Performance"}
+        </button>
+      </div>
+
+      {/* ── My Performance Tab ─────────────────────────────────────────────── */}
+      {activeTab === "performance" && (
+        <div className="flex-1 overflow-y-auto px-4 py-6 max-w-lg mx-auto w-full space-y-5">
+
+          {/* NOVA feedback banner */}
+          <div className={`rounded-2xl border px-5 py-4 flex gap-3 items-start ${
+            liveEff >= 110 ? "bg-green-500/10 border-green-500/30" :
+            liveEff >= 100 ? "bg-green-500/10 border-green-500/30" :
+            liveEff >= 85  ? "bg-yellow-400/10 border-yellow-400/30" :
+            liveEff > 0    ? "bg-red-500/10 border-red-500/30" :
+                             "bg-violet-900/30 border-violet-500/20"
+          }`}>
+            <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">N</div>
+            <p className="text-sm text-slate-200 leading-relaxed">{novaFeedback()}</p>
+          </div>
+
+          {/* Input row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1.5">
+                {isSpanish ? "Cajas Picadas" : "Cases Picked"}
+              </label>
+              <input
+                type="number" min="0" placeholder="720"
+                value={perfCases}
+                onChange={(e) => setPerfCases(e.target.value)}
+                className="w-full rounded-xl bg-slate-800 border border-slate-700 focus:border-yellow-400/60 outline-none text-white font-black text-2xl px-4 py-3 placeholder:text-slate-600 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1.5">
+                {isSpanish ? "Horas Trabajadas" : "Hours Worked"}
+              </label>
+              <input
+                type="number" min="0" step="0.25" placeholder="8.5"
+                value={perfHours}
+                onChange={(e) => setPerfHours(e.target.value)}
+                className="w-full rounded-xl bg-slate-800 border border-slate-700 focus:border-yellow-400/60 outline-none text-white font-black text-2xl px-4 py-3 placeholder:text-slate-600 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+              />
+            </div>
+          </div>
+
+          {/* Goal input */}
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1.5">
+              {isSpanish ? "Meta de Eficiencia %" : "Efficiency Goal %"}
+            </label>
+            <input
+              type="number" min="50" max="150" placeholder="100"
+              value={perfGoalInput}
+              onChange={(e) => setPerfGoalInput(e.target.value)}
+              className="w-full rounded-xl bg-slate-800 border border-slate-700 focus:border-violet-400/60 outline-none text-white font-bold text-lg px-4 py-3 placeholder:text-slate-600 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <p className="text-[10px] text-slate-600 mt-1">
+              {isSpanish ? "NOVA usará esta meta para guiarte cada día." : "NOVA will use this goal to coach you each day."}
+            </p>
+          </div>
+
+          {/* Live stats */}
+          {liveUPH > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-2xl bg-slate-800 border border-slate-700 px-3 py-3 text-center">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <Zap className="h-3 w-3 text-yellow-400" />
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">UPH</p>
+                </div>
+                <p className="text-2xl font-black text-white">{liveUPH}</p>
+                <p className="text-[9px] text-slate-600 mt-0.5">std {PERF_STANDARD_UPH}</p>
+              </div>
+              <div className={`rounded-2xl border px-3 py-3 text-center ${
+                liveEff >= 100 ? "bg-green-500/10 border-green-500/30" :
+                liveEff >= 85  ? "bg-yellow-400/10 border-yellow-400/30" :
+                                 "bg-red-500/10 border-red-500/30"
+              }`}>
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <Target className="h-3 w-3 text-slate-400" />
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">{isSpanish ? "Ef%" : "Eff%"}</p>
+                </div>
+                <p className={`text-2xl font-black ${
+                  liveEff >= 100 ? "text-green-400" :
+                  liveEff >= 85  ? "text-yellow-400" : "text-red-400"
+                }`}>{liveEff}%</p>
+                <p className="text-[9px] text-slate-600 mt-0.5">target 100%</p>
+              </div>
+              <div className="rounded-2xl bg-slate-800 border border-slate-700 px-3 py-3 text-center">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <TrendingUp className="h-3 w-3 text-slate-400" />
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">{isSpanish ? "Meta" : "Goal"}</p>
+                </div>
+                <p className="text-2xl font-black text-white">
+                  {perfGoalNum > 0 ? `${perfGoalNum}%` : "—"}
+                </p>
+                <p className="text-[9px] text-slate-600 mt-0.5">{isSpanish ? "semanal" : "weekly"}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Note */}
+          <input
+            type="text"
+            placeholder={isSpanish ? "Nota opcional — ej. equipo dañado" : "Note (optional) — e.g. short break, equipment issue"}
+            value={perfNote}
+            onChange={(e) => setPerfNote(e.target.value)}
+            className="w-full rounded-xl bg-slate-800 border border-slate-700 focus:border-slate-600 outline-none text-white px-4 py-2.5 text-sm placeholder:text-slate-600"
+          />
+
+          {/* Save button */}
+          <button
+            onClick={handlePerfSave}
+            disabled={perfCasesNum <= 0 || perfHoursNum <= 0}
+            className={`w-full rounded-2xl py-3.5 text-base font-black transition flex items-center justify-center gap-2 ${
+              perfSaved
+                ? "bg-green-500/20 text-green-400 border border-green-500/30"
+                : perfCasesNum > 0 && perfHoursNum > 0
+                ? "bg-yellow-400 text-slate-950 hover:bg-yellow-300"
+                : "bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-700"
+            }`}
+          >
+            {perfSaved
+              ? <><CheckCircle2 className="h-5 w-5" /> {isSpanish ? "¡Guardado!" : "Saved!"}</>
+              : isSpanish ? "Guardar Mi Registro" : "Save Today's Log"}
+          </button>
+
+          {/* 7-day history */}
+          {perfRecentLogs.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-600 mb-3">
+                {isSpanish ? "Últimos 7 días" : "Last 7 Days"}
+              </p>
+              <div className="space-y-2">
+                {perfRecentLogs.map((log) => {
+                  const isToday = log.date === new Date().toISOString().slice(0, 10);
+                  const effColor = log.pickRate >= 100 ? "text-green-400" : log.pickRate >= 85 ? "text-yellow-400" : "text-red-400";
+                  const dateLabel = isToday
+                    ? (isSpanish ? "Hoy" : "Today")
+                    : new Date(log.date + "T12:00:00").toLocaleDateString(isSpanish ? "es-US" : "en-US", { weekday: "short", month: "short", day: "numeric" });
+                  return (
+                    <div key={log.date} className={`flex items-center justify-between rounded-2xl px-4 py-3 border ${
+                      isToday ? "border-yellow-400/20 bg-yellow-400/5" : "border-slate-800 bg-slate-800/40"
+                    }`}>
+                      <div>
+                        <p className={`text-sm font-bold ${isToday ? "text-yellow-400" : "text-white"}`}>{dateLabel}</p>
+                        {log.note && <p className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[140px]">{log.note}</p>}
+                      </div>
+                      <div className="flex items-center gap-3 text-right">
+                        <div>
+                          <p className="text-[10px] text-slate-500">{isSpanish ? "Cajas" : "Cases"}</p>
+                          <p className="text-sm font-black text-white">{log.cases ?? "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-500">{isSpanish ? "Hrs" : "Hours"}</p>
+                          <p className="text-sm font-black text-white">{log.hours}h</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-500">UPH</p>
+                          <p className="text-sm font-black text-white">{log.uph ?? "—"}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-500">Eff%</p>
+                          <p className={`text-sm font-black ${effColor}`}>{log.pickRate}%</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── NOVA Coach Tab ─────────────────────────────────────────────────── */}
+      {activeTab === "coach" && (
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 gap-6 max-w-lg mx-auto w-full">
 
         {/* Signal orb — tap to stop NOVA while speaking */}
@@ -1435,6 +1683,7 @@ export default function NovaHelpPage() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

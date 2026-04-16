@@ -555,8 +555,8 @@
       "subtitle": "Two plans. One for individual selectors, one for full company operations. No hidden fees.",
       "mostPopular": "Most Popular",
       "plans": [
-        { "title": "Professional Single", "subtitle": "For individual selectors", "price": "$25", "suffix": "/month", "cta": "Get Started", "features": ["Full training access", "NOVA Help AI coach", "NOVA Trainer sessions", "Common Mistakes library", "Leaderboard", "Selector Breaking News"] },
-        { "title": "Company Unlimited", "subtitle": "For teams and warehouse operations", "price": "$1,600", "suffix": "/year", "cta": "Get Company Access", "featured": true, "features": ["Everything in Professional Single", "Unlimited team users", "Trainer Dashboard", "Supervisor Dashboard", "Unlimited training & workflow access", "Priority support"] }
+        { "title": "Professional Single", "subtitle": "For individual selectors", "price": "$25", "suffix": "/month", "cta": "Get Started", "features": ["Full training access", "NOVA Help AI coach", "My Performance Tracker", "Common Mistakes library", "Leaderboard", "Selector Breaking News"] },
+        { "title": "Company Unlimited", "subtitle": "For teams and warehouse operations", "price": "$1,600", "suffix": "/year", "cta": "Get Company Access", "featured": true, "features": ["Everything in Professional Single", "NOVA Trainer (voice picking sessions)", "Live Demo environment", "Unlimited team users", "Trainer Dashboard", "Supervisor Dashboard", "Unlimited training & workflow access", "Priority support"] }
       ]
     },
     "finalCta": {

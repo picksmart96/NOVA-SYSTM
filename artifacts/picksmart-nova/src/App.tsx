@@ -114,6 +114,28 @@ function demoGateName(path: string) {
  * content page. Demo users are redirected to the NOVA Gate page instead of
  * seeing the real content. Closing the modal sends the visitor back to home.
  */
+/**
+ * CompanyRoute — blocks personal-plan subscribers from accessing company-only
+ * features (NOVA Trainer, Live Demo). Non-logged-in visitors pass through
+ * (demo is still a marketing/sales tool for potential company customers).
+ */
+function CompanyRoute({ children }: { children: React.ReactNode }) {
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const [, navigate] = useLocation();
+
+  const isPersonalOnly =
+    !!currentUser &&
+    currentUser.role !== "owner" &&
+    currentUser.subscriptionPlan === "personal";
+
+  useEffect(() => {
+    if (isPersonalOnly) navigate("/pricing?upgrade=company", { replace: true });
+  }, [isPersonalOnly, navigate]);
+
+  if (isPersonalOnly) return null;
+  return <>{children}</>;
+}
+
 function GatedRoute({ children }: { children: React.ReactNode }) {
   const currentUser = useAuthStore((s) => s.currentUser);
   const [location, navigate] = useLocation();
@@ -264,7 +286,7 @@ function Router() {
         <Layout><GatedRoute><NovaHelpPage /></GatedRoute></Layout>
       </Route>
       <Route path="/nova-trainer">
-        <GatedRoute><NovaTrainerPage /></GatedRoute>
+        <GatedRoute><CompanyRoute><NovaTrainerPage /></CompanyRoute></GatedRoute>
       </Route>
       <Route path="/selector">
         <Layout><GatedRoute><SelectorPortalPage /></GatedRoute></Layout>
@@ -386,30 +408,30 @@ function Router() {
         <Layout><RequestAccessPage /></Layout>
       </Route>
 
-      {/* ── Public demo — no login or subscription required ── */}
+      {/* ── Demo — visible to non-logged-in visitors; blocked for personal-plan subscribers ── */}
       <Route path="/demo">
-        <Layout><DemoLandingPage /></Layout>
+        <Layout><CompanyRoute><DemoLandingPage /></CompanyRoute></Layout>
       </Route>
       <Route path="/demo/training">
-        <Layout><DemoTrainingPage /></Layout>
+        <Layout><CompanyRoute><DemoTrainingPage /></CompanyRoute></Layout>
       </Route>
       <Route path="/demo/leaderboard">
-        <Layout><DemoLeaderboardPage /></Layout>
+        <Layout><CompanyRoute><DemoLeaderboardPage /></CompanyRoute></Layout>
       </Route>
       <Route path="/demo/nova-trainer">
-        <DemoNovaTrainerPage />
+        <CompanyRoute><DemoNovaTrainerPage /></CompanyRoute>
       </Route>
       <Route path="/demo/nova-agent">
-        <NovaDemoAgentPage />
+        <CompanyRoute><NovaDemoAgentPage /></CompanyRoute>
       </Route>
       <Route path="/demo/nova-help">
-        <DemoNovaHelpPage />
+        <CompanyRoute><DemoNovaHelpPage /></CompanyRoute>
       </Route>
       <Route path="/demo/trainer-dashboard">
-        <Layout><DemoTrainerDashboard /></Layout>
+        <Layout><CompanyRoute><DemoTrainerDashboard /></CompanyRoute></Layout>
       </Route>
       <Route path="/demo/supervisor-dashboard">
-        <Layout><DemoSupervisorDashboard /></Layout>
+        <Layout><CompanyRoute><DemoSupervisorDashboard /></CompanyRoute></Layout>
       </Route>
       <Route path="/demo/nova-gate">
         <DemoNovaGatePage />
