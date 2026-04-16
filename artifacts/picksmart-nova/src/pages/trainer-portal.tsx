@@ -181,6 +181,11 @@ export default function TrainerPortalPage() {
           >
             <ClipboardList className="h-4 w-4" /> Assign Assignment
           </button>
+          <Link href="/assignment-builder">
+            <button className="rounded-2xl border border-yellow-400/40 bg-yellow-400/10 px-5 py-3 font-semibold hover:bg-yellow-400/20 text-yellow-400 transition flex items-center gap-2">
+              <Zap className="h-4 w-4" /> Build Assignment
+            </button>
+          </Link>
         </div>
 
         {/* ── Main two-column layout ── */}

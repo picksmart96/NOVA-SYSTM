@@ -81,6 +81,8 @@ import PaymentSuccessPage from "@/pages/payment-success";
 import PaymentCancelPage from "@/pages/payment-cancel";
 import RegisterPage from "@/pages/register";
 import WarehouseSetupPage from "@/pages/warehouse-setup";
+import TrialSignupPage from "@/pages/TrialSignupPage";
+import AssignmentBuilderPage from "@/pages/AssignmentBuilderPage";
 
 function RedirectToOwner() {
   const [, navigate] = useLocation();
@@ -233,8 +235,14 @@ function Router() {
       <Route path="/register">
         <RegisterPage />
       </Route>
+      <Route path="/trial">
+        <TrialSignupPage />
+      </Route>
       <Route path="/warehouse-setup">
         <GatedRoute><WarehouseSetupPage /></GatedRoute>
+      </Route>
+      <Route path="/assignment-builder">
+        <GatedRoute><CompanyRoute><AssignmentBuilderPage /></CompanyRoute></GatedRoute>
       </Route>
 
       {/* ── Gated — requires active subscription to view any content ── */}

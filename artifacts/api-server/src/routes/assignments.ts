@@ -130,6 +130,95 @@ router.get("/assignments/:id/stops", async (req, res) => {
   }
 });
 
+// ── POST /api/assignments/:id/stops/bulk ─────────────────────────────────────
+// Bulk-create stops for an existing assignment (CSV import or manual list).
+router.post("/assignments/:id/stops/bulk", async (req, res) => {
+  try {
+    const { stops } = req.body as {
+      stops: { aisle: number; slot: number; qty: number; checkCode: string; stopOrder?: number }[];
+    };
+
+    if (!Array.isArray(stops) || stops.length === 0) {
+      res.status(400).json({ error: "stops array required" });
+      return;
+    }
+
+    const values = stops.map((s, i) => ({
+      id: `stop-${randomUUID().slice(0, 8)}`,
+      assignmentId: req.params.id,
+      aisle: Number(s.aisle),
+      slot: Number(s.slot),
+      qty: Number(s.qty),
+      checkCode: String(s.checkCode).trim(),
+      stopOrder: s.stopOrder ?? i,
+      status: "pending" as const,
+    }));
+
+    const created = await db.insert(assignmentStopsTable).values(values).returning();
+    res.status(201).json(created);
+  } catch (err) {
+    req.log.error({ err }, "Error bulk-creating stops");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── POST /api/assignments/generate-random ────────────────────────────────────
+// Generate a random training assignment (20 stops) with stops, return full object.
+router.post("/assignments/generate-random", async (req, res) => {
+  try {
+    const { stopCount = 20, startAisle = 10, endAisle = 30 } = req.body ?? {};
+
+    const id = `asgn-${randomUUID().slice(0, 8)}`;
+    const assignmentNumber = Math.floor(1000 + Math.random() * 9000);
+
+    const stops: { aisle: number; slot: number; qty: number; checkCode: string; stopOrder: number }[] = [];
+    for (let i = 0; i < Number(stopCount); i++) {
+      stops.push({
+        aisle: Math.floor(Number(startAisle) + Math.random() * (Number(endAisle) - Number(startAisle) + 1)),
+        slot: Math.floor(Math.random() * 200) + 1,
+        qty: Math.floor(Math.random() * 10) + 1,
+        checkCode: String(Math.floor(100 + Math.random() * 900)),
+        stopOrder: i,
+      });
+    }
+    stops.sort((a, b) => a.aisle - b.aisle || a.slot - b.slot);
+    stops.forEach((s, i) => { s.stopOrder = i; });
+
+    const totalCases = stops.reduce((sum, s) => sum + s.qty, 0);
+
+    const [assignment] = await db
+      .insert(assignmentsTable)
+      .values({
+        id,
+        assignmentNumber,
+        title: `Training Run #${assignmentNumber}`,
+        startAisle: stops[0]?.aisle ?? Number(startAisle),
+        endAisle: stops[stops.length - 1]?.aisle ?? Number(endAisle),
+        totalCases,
+        totalCube: 0,
+        totalPallets: 1,
+        doorNumber: Math.floor(Math.random() * 20) + 1,
+        status: "pending",
+        voiceMode: "training",
+        percentComplete: 0,
+      })
+      .returning();
+
+    const stopValues = stops.map((s) => ({
+      id: `stop-${randomUUID().slice(0, 8)}`,
+      assignmentId: id,
+      ...s,
+      status: "pending" as const,
+    }));
+    const createdStops = await db.insert(assignmentStopsTable).values(stopValues).returning();
+
+    res.status(201).json({ assignment, stops: createdStops });
+  } catch (err) {
+    req.log.error({ err }, "Error generating random assignment");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.patch("/assignments/:id/stops/:stopId", async (req, res) => {
   try {
     const body = req.body;

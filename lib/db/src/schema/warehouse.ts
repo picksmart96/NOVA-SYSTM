@@ -1,4 +1,5 @@
-import { pgTable, text, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -17,13 +18,18 @@ export const doorCodesTable = pgTable("door_codes", {
 });
 
 export const slotMasterTable = pgTable("slot_master", {
-  id: text("id").primaryKey(),
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: text("company_id"),
   aisle: integer("aisle").notNull(),
   slot: integer("slot").notNull(),
   level: text("level"),
   checkCode: text("check_code").notNull(),
-  label: text("label").notNull(),
+  label: text("label").notNull().default(""),
   isActive: boolean("is_active").notNull().default(true),
+  zone: text("zone"),
+  side: text("side"),
+  itemId: text("item_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const insertSystemDefaultsSchema = createInsertSchema(systemDefaultsTable);

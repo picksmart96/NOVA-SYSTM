@@ -1,4 +1,4 @@
-import { pgTable, text, boolean, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -17,6 +17,8 @@ export const psaUsers = pgTable("psa_users", {
   warehouseId: text("warehouse_id"),
   warehouseSlug: text("warehouse_slug"),
   isMaster: boolean("is_master").notNull().default(false),
+  companyName: text("company_name"),
+  trialEndsAt: timestamp("trial_ends_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

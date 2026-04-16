@@ -55,6 +55,7 @@ interface AuthState {
 
   login: (username: string, password: string) => boolean;
   loginAsync: (username: string, password: string) => Promise<boolean>;
+  loginWithToken: (token: string, user: ServerUser) => void;
   restoreSession: () => Promise<void>;
   syncUsersFromServer: () => Promise<void>;
   loginAsDemo: (role?: AuthRole) => void;
@@ -245,6 +246,12 @@ export const useAuthStore = create<AuthState>()(
           },
           locked: false,
         });
+      },
+
+      // ── Log in directly with a token + user from trial/registration ────
+      loginWithToken: (token: string, user: ServerUser) => {
+        const account = serverUserToAccount(user);
+        set({ currentUser: account, jwtToken: token, locked: false });
       },
 
       logout: () => set({ currentUser: null, jwtToken: null }),

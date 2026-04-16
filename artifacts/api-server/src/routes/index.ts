@@ -19,11 +19,14 @@ import novaSalesChatRouter from "./novaSalesChat";
 import novaChatLogsRouter from "./novaChatLogs";
 import contractsRouter from "./contracts";
 import mistakesRouter from "./mistakes.js";
+import trialRouter from "./trial.js";
+import slotMasterRouter from "./slotMaster.js";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
+router.use(trialRouter);
 router.use(assignmentsRouter);
 router.use(warehouseRouter);
 router.use(trainingRouter);
@@ -42,5 +45,6 @@ router.use(novaSalesChatRouter);
 router.use(novaChatLogsRouter);
 router.use(contractsRouter);
 router.use(mistakesRouter);
+router.use(slotMasterRouter);
 
 export default router;
