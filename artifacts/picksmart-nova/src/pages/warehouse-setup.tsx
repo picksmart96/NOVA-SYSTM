@@ -146,7 +146,9 @@ export default function WarehouseSetupPage() {
     }
     setSaving(false);
     setSaved(true);
-    setTimeout(() => navigate("/trainer-portal"), 1500);
+    // Return to company dashboard if user came from trial, else trainer portal
+    const from = new URLSearchParams(window.location.search).get("from");
+    setTimeout(() => navigate(from === "dashboard" ? "/company-dashboard" : "/trainer-portal"), 1500);
   };
 
   if (saved) {

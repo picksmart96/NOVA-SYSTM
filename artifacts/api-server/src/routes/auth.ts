@@ -274,8 +274,8 @@ router.post("/auth/invite", requireAuth, async (req, res) => {
     warehouseSlug?: string;
   };
 
-  if (!fullName || !email || !role) {
-    res.status(400).json({ error: "fullName, email, role required" });
+  if (!role) {
+    res.status(400).json({ error: "role is required" });
     return;
   }
 
@@ -283,8 +283,8 @@ router.post("/auth/invite", requireAuth, async (req, res) => {
     const token = crypto.randomUUID() + "-" + Date.now().toString(36);
     await db.insert(psaInvites).values({
       token,
-      fullName,
-      email,
+      fullName: fullName ?? "Team Member",
+      email: email ?? null,
       role,
       warehouseId: warehouseId ?? null,
       warehouseSlug: warehouseSlug ?? null,

@@ -82,6 +82,7 @@ import PaymentCancelPage from "@/pages/payment-cancel";
 import RegisterPage from "@/pages/register";
 import WarehouseSetupPage from "@/pages/warehouse-setup";
 import TrialSignupPage from "@/pages/TrialSignupPage";
+import CompanyDashboard from "@/pages/CompanyDashboard";
 import AssignmentBuilderPage from "@/pages/AssignmentBuilderPage";
 import UpgradePage from "@/pages/UpgradePage";
 import PlatformOverviewPage from "@/pages/platform-overview";
@@ -243,6 +244,9 @@ function Router() {
       </Route>
       <Route path="/trial">
         <TrialSignupPage />
+      </Route>
+      <Route path="/company-dashboard">
+        <GatedRoute><CompanyDashboard /></GatedRoute>
       </Route>
       <Route path="/warehouse-setup">
         <GatedRoute><WarehouseSetupPage /></GatedRoute>

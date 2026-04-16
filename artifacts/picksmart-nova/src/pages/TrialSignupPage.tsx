@@ -70,7 +70,7 @@ export default function TrialSignupPage() {
       }
 
       loginWithToken(data.token, data.user);
-      navigate("/warehouse-setup");
+      navigate("/company-dashboard");
     } catch {
       setErrors({ general: "Network error. Please try again." });
       setLoading(false);
