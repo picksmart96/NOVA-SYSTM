@@ -116,7 +116,7 @@ export default function TrialSignupPage() {
         <ul className="space-y-4 text-sm">
           {[
             "Full company dashboard — trainers, supervisors, selectors",
-            "NOVA voice-directed picking sessions (ES3 / Jennifer)",
+            "NOVA voice-directed picking sessions (NOVA / Jennifer)",
             "Real-time mistake tracking & coaching alerts",
             "CSV assignment upload or random generator",
             "Warehouse profile & zone configuration",

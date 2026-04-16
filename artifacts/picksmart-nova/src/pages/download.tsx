@@ -56,7 +56,7 @@ export default function DownloadPage() {
           <div className="text-center mb-10">
             <h1 className="text-3xl font-black mb-3">Get PickSmart NOVA</h1>
             <p className="text-slate-400 text-lg leading-relaxed">
-              Access the full ES3 voice-directed warehouse training platform on any device.
+              Access the full NOVA voice-directed warehouse training platform on any device.
             </p>
           </div>
         )}
@@ -94,7 +94,7 @@ export default function DownloadPage() {
             <Smartphone className="h-8 w-8 text-yellow-400 mb-4" />
             <h2 className="text-lg font-bold mb-1 group-hover:text-yellow-400 transition">iPhone / iPad</h2>
             <p className="text-slate-400 text-sm mb-4">
-              Download from the App Store for the full native voice experience with ES3.
+              Download from the App Store for the full native voice experience with NOVA.
             </p>
             <span className="inline-flex items-center gap-2 text-yellow-400 font-bold text-sm">
               App Store <ExternalLink className="h-4 w-4" />

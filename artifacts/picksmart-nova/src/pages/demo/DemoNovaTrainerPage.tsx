@@ -55,7 +55,7 @@ export default function DemoNovaTrainerPage() {
             </div>
 
             <div className="mt-4 rounded-xl border border-yellow-400/20 bg-yellow-400/5 px-4 py-3 text-sm text-yellow-200">
-              This is a live NOVA session demo. NOVA will guide you through the full ES3 voice-picking workflow including equipment sign-on, safety check, assignment load, and stop-by-stop picking directions.
+              This is a live NOVA session demo. NOVA will guide you through the full NOVA voice-picking workflow including equipment sign-on, safety check, assignment load, and stop-by-stop picking directions.
             </div>
           </div>
 

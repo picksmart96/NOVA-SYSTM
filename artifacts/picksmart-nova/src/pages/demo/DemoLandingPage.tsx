@@ -193,7 +193,7 @@ export default function DemoLandingPage() {
               iconBg="bg-yellow-400/10 border-yellow-400/20"
               title="NOVA Trainer"
               subtitle="Selector view"
-              description="Experience the full ES3 voice-directed picking workflow — from equipment sign-on through pallet build."
+              description="Experience the full NOVA voice-directed picking workflow — from equipment sign-on through pallet build."
               buttonLabel="Try NOVA Trainer"
               onClick={() => enter("selector", "/demo/nova-trainer")}
             />

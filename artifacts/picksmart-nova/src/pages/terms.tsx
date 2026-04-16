@@ -34,7 +34,7 @@ export default function TermsPage() {
               News), dashboards, and related operational tools.
             </p>
             <p className="mt-4">
-              The Platform is offered in two configurations: <strong className="text-white">ES3</strong> (including NOVA Trainer
+              The Platform is offered in two configurations: <strong className="text-white">NOVA</strong> (including NOVA Trainer
               voice workflow) and <strong className="text-white">Standard</strong> (without NOVA Trainer). Features available to
               your account depend on your warehouse's subscription configuration.
             </p>

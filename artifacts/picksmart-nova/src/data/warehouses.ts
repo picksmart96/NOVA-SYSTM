@@ -51,7 +51,7 @@ export const STANDARD_FEATURES: WarehouseFeature[] = [
 export const DEFAULT_WAREHOUSES: Warehouse[] = [
   {
     id: "wh-es3-demo",
-    name: "ES3 Demo Warehouse",
+    name: "NOVA Demo Warehouse",
     slug: "es3-demo",
     systemType: "es3",
     subscriptionPlan: "company",
@@ -96,14 +96,14 @@ export function featuresForSystemType(type: WarehouseSystemType): WarehouseFeatu
 }
 
 export const SYSTEM_TYPE_LABEL: Record<WarehouseSystemType, string> = {
-  es3: "ES3 Voice Workflow",
+  es3: "NOVA Voice Workflow",
   standard: "Standard Warehouse",
 };
 
 export const FEATURE_LABEL: Record<WarehouseFeature, string> = {
   "training": "Training Modules",
   "nova-help": "NOVA Help AI Coach",
-  "nova-trainer": "NOVA Trainer (ES3 Voice)",
+  "nova-trainer": "NOVA Trainer (Voice Directed)",
   "common-mistakes": "Common Mistakes Library",
   "leaderboard": "Leaderboard",
   "selector-breaking-news": "Selector Breaking News",

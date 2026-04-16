@@ -71,7 +71,7 @@ export const DEMO_LEADERBOARD = [
 
 export const DEMO_ACTIVITY = [
   { id: 1, type: "session",      text: "Shaniqua Davis completed a live NOVA session at 112% pace.",           time: "2 min ago" },
-  { id: 2, type: "module",       text: "Marcus Hill finished Module 6 — ES3 Advanced Techniques.",             time: "14 min ago" },
+  { id: 2, type: "module",       text: "Marcus Hill finished Module 6 — NOVA Advanced Techniques.",             time: "14 min ago" },
   { id: 3, type: "improvement",  text: "Tasha Green improved accuracy from 95% → 98% over 3 sessions.",       time: "31 min ago" },
   { id: 4, type: "cert",         text: "Jasmine Cole earned Pallet Building Certification.",                   time: "1 hr ago" },
   { id: 5, type: "note",         text: "Trainer David Price added coaching note for Andre Lewis (aisle pacing).", time: "2 hr ago" },

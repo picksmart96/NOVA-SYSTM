@@ -657,7 +657,7 @@ export default function NovaTrainerPage() {
           </div>
           <div>
             <h1 className="text-xl font-black text-white">NOVA Trainer</h1>
-            <p className="text-xs text-slate-400">ES3 Voice-Directed Picking — Jennifer Script</p>
+            <p className="text-xs text-slate-400">NOVA Voice-Directed Picking — Jennifer Script</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -1047,7 +1047,7 @@ export default function NovaTrainerPage() {
         <div className="space-y-4">
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
             <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
-              <BookOpen className="h-3.5 w-3.5" /> ES3 Commands
+              <BookOpen className="h-3.5 w-3.5" /> NOVA Commands
             </h2>
 
             <div className="mb-3">

@@ -63,7 +63,7 @@ export default function WarehouseEntryPage() {
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 rounded-full bg-yellow-400/10 border border-yellow-400/30 px-4 py-2 mb-6">
             <span className="text-yellow-400 font-bold text-sm">
-              {isES3 ? "🎙️ ES3 Voice Workflow" : "🏭 Standard Warehouse"}
+              {isES3 ? "🎙️ NOVA Voice Workflow" : "🏭 Standard Warehouse"}
             </span>
           </div>
           <h1 className="text-4xl font-black text-white">{warehouse.name}</h1>
@@ -88,7 +88,7 @@ export default function WarehouseEntryPage() {
           {!isES3 && (
             <div className="mt-5 rounded-xl bg-slate-800/60 border border-slate-700 p-4">
               <p className="text-xs text-slate-400">
-                <span className="text-slate-300 font-semibold">NOVA Trainer</span> is not included — this warehouse uses the standard workflow without ES3 voice direction.
+                <span className="text-slate-300 font-semibold">NOVA Trainer</span> is not included — this warehouse uses the standard workflow without NOVA voice direction.
               </p>
             </div>
           )}

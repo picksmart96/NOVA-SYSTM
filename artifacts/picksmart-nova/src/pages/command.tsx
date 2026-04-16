@@ -23,7 +23,7 @@ const NAV_SECTIONS = [
   {
     label: "NOVA Voice",
     items: [
-      { label: "NOVA Selector",  path: "/selector",       icon: Mic,         desc: "Live ES3 picking session",    color: "purple" },
+      { label: "NOVA Selector",  path: "/selector",       icon: Mic,         desc: "Live NOVA picking session",    color: "purple" },
       { label: "NOVA Trainer",   path: "/nova-trainer",   icon: Zap,         desc: "Voice-directed trainer mode", color: "purple" },
       { label: "NOVA Help",      path: "/nova-help",      icon: HelpCircle,  desc: "AI voice coach & analytics",  color: "purple" },
     ],

@@ -25,7 +25,7 @@ const STEPS = [
     subtitleEs: "¿Cómo dirige tu almacén a los selectores?",
     icon: <Warehouse className="h-6 w-6" />,
     options: [
-      { value: "voice", label: "Voice-Directed", labelEs: "Dirigido por Voz", icon: <Mic className="h-5 w-5" />, description: "ES3, Vocollect, Honeywell", descriptionEs: "ES3, Vocollect, Honeywell" },
+      { value: "voice", label: "Voice-Directed", labelEs: "Dirigido por Voz", icon: <Mic className="h-5 w-5" />, description: "NOVA, Vocollect, Honeywell", descriptionEs: "NOVA, Vocollect, Honeywell" },
       { value: "rf", label: "RF Scanner", labelEs: "Escáner RF", icon: <ScanBarcode className="h-5 w-5" />, description: "Zebra, Motorola scanner devices", descriptionEs: "Dispositivos Zebra, Motorola" },
       { value: "paper", label: "Paper / Pick Sheet", labelEs: "Papel / Hoja de Picking", icon: <FileText className="h-5 w-5" />, description: "Printed pick lists", descriptionEs: "Listas de picking impresas" },
     ] as StepOption[],

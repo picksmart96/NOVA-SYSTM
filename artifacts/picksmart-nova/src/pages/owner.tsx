@@ -516,7 +516,7 @@ function InviteManagement() {
           <option value="">— No warehouse —</option>
           {allWarehouses.map((wh) => (
             <option key={wh.id} value={wh.slug}>
-              {wh.name} ({wh.systemType === "es3" ? "ES3" : "Standard"})
+              {wh.name} ({wh.systemType === "es3" ? "NOVA" : "Standard"})
             </option>
           ))}
         </select>
@@ -731,7 +731,7 @@ function HandbookSection() {
           <thead><tr><Th>Link</Th><Th>Who Sees It</Th><Th>What It Does</Th></tr></thead>
           <tbody>
             {[
-              ["NOVA Trainer","All company","ES3 voice simulation trainer"],
+              ["NOVA Trainer","All company","NOVA voice simulation trainer"],
               ["Trainer Dashboard","Trainer+","Manage selector training"],
               ["Supervisor Dashboard","Supervisor+","Team overview and tracking"],
               ["My Progress","All","Personal progress tracking"],
@@ -777,7 +777,7 @@ function HandbookSection() {
       {/* NOVA Trainer */}
       <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 mb-6">
         <H2>5. NOVA Trainer — Voice Simulation</H2>
-        <P>Simulates the ES3 voice-directed picking system. Walks you through a full picking session using real commands and responses. Company plan only.</P>
+        <P>Simulates the NOVA voice-directed picking system. Walks you through a full picking session using real commands and responses. Company plan only.</P>
         <H3>How to Start</H3>
         <Ul items={[
           "Go to NOVA Trainer in the menu",
@@ -1016,7 +1016,7 @@ function LinkLibrary() {
       links: [
         { key: "training",  label: "Training Modules",       description: "All training content",            url: url("/training"),        icon: BookOpen, accent: "blue" as const },
         { key: "trainer",   label: "Trainer Dashboard",      description: "Trainer portal (trainer+ role)",  url: url("/trainer-portal"),  icon: Activity, accent: "blue" as const },
-        { key: "nova",      label: "NOVA Trainer",           description: "Voice picking simulator (ES3 only)",  url: url("/nova-trainer"),    icon: Mic,      accent: "blue" as const },
+        { key: "nova",      label: "NOVA Trainer",           description: "Voice picking simulator (NOVA only)",  url: url("/nova-trainer"),    icon: Mic,      accent: "blue" as const },
         { key: "supervisor",label: "Supervisor Dashboard",   description: "Supervisor tools",                url: url("/supervisor"),      icon: ShieldCheck, accent: "purple" as const },
       ],
     },
@@ -1054,7 +1054,7 @@ function LinkLibrary() {
       <div>
         <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Warehouse Invite Links</p>
         <p className="text-xs text-slate-600 mb-3">
-          Share these links with your warehouse team. ES3 links include NOVA Trainer. Standard links do not.
+          Share these links with your warehouse team. NOVA links include NOVA Trainer. Standard links do not.
         </p>
         <div className="flex flex-col gap-3">
           {allWarehouses.map((wh) => {
@@ -1313,7 +1313,7 @@ function UsersAccessSection() {
                 <option value="">— No warehouse assigned —</option>
                 {allWarehouses.map((wh) => (
                   <option key={wh.id} value={wh.slug}>
-                    {wh.name} ({wh.systemType === "es3" ? "ES3" : "Standard"})
+                    {wh.name} ({wh.systemType === "es3" ? "NOVA" : "Standard"})
                   </option>
                 ))}
               </select>

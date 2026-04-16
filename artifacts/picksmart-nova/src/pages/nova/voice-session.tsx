@@ -242,7 +242,7 @@ export default function VoiceSessionPage() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  // ── ES3 Performance Calculator ─────────────────────────────────────────────
+  // ── NOVA Performance Calculator ─────────────────────────────────────────────
   // Standard UPH is derived from the assignment's own goal time + total cases.
   // Falls back to 90 UPH if goal data is unavailable.
   const standardUPH = (assignment.goalTimeMinutes ?? 0) > 0
@@ -488,7 +488,7 @@ export default function VoiceSessionPage() {
         </div>
       )}
 
-      {/* Bottom HUD — Progress + ES3 Performance Calculator */}
+      {/* Bottom HUD — Progress + NOVA Performance Calculator */}
       <div className="absolute bottom-0 left-0 right-0 bg-black/70 backdrop-blur-md border-t border-white/10">
 
         {/* Progress bar row */}
