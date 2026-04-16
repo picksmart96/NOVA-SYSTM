@@ -18,6 +18,7 @@ import socialRouter from "./social";
 import novaSalesChatRouter from "./novaSalesChat";
 import novaChatLogsRouter from "./novaChatLogs";
 import contractsRouter from "./contracts";
+import mistakesRouter from "./mistakes.js";
 
 const router: IRouter = Router();
 
@@ -40,5 +41,6 @@ router.use(socialRouter);
 router.use(novaSalesChatRouter);
 router.use(novaChatLogsRouter);
 router.use(contractsRouter);
+router.use(mistakesRouter);
 
 export default router;

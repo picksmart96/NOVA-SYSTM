@@ -12,9 +12,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
-import { Mic, ArrowLeft, Volume2, CheckCircle2, Box, Headphones, Clock, TrendingUp, TrendingDown, Minus, Zap, Target } from "lucide-react";
+import { Mic, ArrowLeft, Volume2, CheckCircle2, Box, Headphones, Clock, TrendingUp, TrendingDown, Minus, Zap, Target, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
+import { useAuthStore } from "@/lib/authStore";
+import { logMistake, getCoachingLine, isStruggling, type MistakeType } from "@/lib/mistakeLog";
+import { useTranslation } from "react-i18next";
 
 type SessionState = 
   | 'intro'
@@ -31,6 +34,9 @@ export default function VoiceSessionPage() {
   const id = params?.id || "";
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const { i18n } = useTranslation();
+  const lang = i18n.language?.startsWith("es") ? "es" : "en";
+  const { currentUser, jwtToken } = useAuthStore();
 
   const { data: assignment, isLoading: loadingAssignment } = useGetAssignment(id, {
     query: { enabled: !!id, queryKey: getGetAssignmentQueryKey(id) }
@@ -49,6 +55,35 @@ export default function VoiceSessionPage() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [transcript, setTranscript] = useState("");
+
+  // ── Mistake tracking ─────────────────────────────────────────────────────
+  const [mistakeCount, setMistakeCount]     = useState(0);
+  const [lastCoaching, setLastCoaching]     = useState<string | null>(null);
+  const [showCoaching, setShowCoaching]     = useState(false);
+  const coachingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const recordMistake = (type: MistakeType, expected: string, actual: string) => {
+    const severity: "low" | "medium" | "high" =
+      type === "check_error" ? "high" : type === "stacking_error" ? "medium" : "low";
+    setMistakeCount((n) => n + 1);
+    const coaching = getCoachingLine(type, lang);
+    setLastCoaching(coaching);
+    setShowCoaching(true);
+    if (coachingTimerRef.current) clearTimeout(coachingTimerRef.current);
+    coachingTimerRef.current = setTimeout(() => setShowCoaching(false), 8000);
+    if (jwtToken) {
+      logMistake(jwtToken, {
+        companyId:     currentUser?.id,
+        selectorId:    currentUser?.id,
+        sessionId:     id,
+        mistakeType:   type,
+        description:   `${type.replace("_", " ")} during voice session`,
+        expectedAction: expected,
+        actualAction:   actual,
+        severity,
+      });
+    }
+  };
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -181,8 +216,10 @@ export default function VoiceSessionPage() {
       speak(`Confirmed. Grab ${currentStop.qty}.`);
       setSessionState('confirm_qty');
     } else {
-      // Wrong code
-      speak(`Invalid. ${codeInput}. ${currentStop.aisle} ${currentStop.slot} check.`);
+      // Wrong code — log + coach
+      const coaching = getCoachingLine("check_error", lang);
+      speak(`Invalid. ${codeInput}. ${currentStop.aisle} ${currentStop.slot} check. ${coaching}`);
+      recordMistake("check_error", currentStop.checkCode, codeInput);
       setCodeInput("");
       setSessionState('wrong_code');
     }
@@ -426,6 +463,31 @@ export default function VoiceSessionPage() {
         </div>
       </div>
 
+      {/* NOVA Coaching banner — shown after a mistake, auto-hides after 8s */}
+      {showCoaching && lastCoaching && (
+        <div className="absolute bottom-[130px] left-4 right-4 z-10 max-w-2xl mx-auto rounded-2xl border border-red-500/40 bg-red-950/80 backdrop-blur-md px-5 py-3.5 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-[10px] font-black uppercase tracking-widest text-red-400 mb-0.5">NOVA COACHING</p>
+            <p className="text-sm text-white leading-snug">{lastCoaching}</p>
+          </div>
+          <button onClick={() => setShowCoaching(false)} className="text-red-500 hover:text-red-300 transition text-xs">✕</button>
+        </div>
+      )}
+
+      {/* Struggling alert — fires once at threshold */}
+      {isStruggling(mistakeCount) && mistakeCount === 10 && (
+        <div className="absolute bottom-[180px] left-4 right-4 z-10 max-w-2xl mx-auto rounded-2xl border border-yellow-400/40 bg-yellow-950/80 backdrop-blur-md px-5 py-3.5 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-yellow-400 shrink-0 mt-0.5" />
+          <p className="text-sm text-yellow-200">
+            <span className="font-black">Accuracy Alert — </span>
+            {lang === "es"
+              ? "Alto número de errores detectado. Recomendamos pausar y revisar el proceso de verificación."
+              : "High mistake count detected. Consider pausing to review your check digit process."}
+          </p>
+        </div>
+      )}
+
       {/* Bottom HUD — Progress + ES3 Performance Calculator */}
       <div className="absolute bottom-0 left-0 right-0 bg-black/70 backdrop-blur-md border-t border-white/10">
 
@@ -445,7 +507,7 @@ export default function VoiceSessionPage() {
 
         {/* Performance Stats Grid */}
         <div className="px-4 pb-3">
-          <div className="max-w-5xl mx-auto grid grid-cols-4 gap-2">
+          <div className="max-w-5xl mx-auto grid grid-cols-5 gap-2">
 
             {/* UPH */}
             <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-center">
@@ -504,6 +566,30 @@ export default function VoiceSessionPage() {
                   Next: {nextStop.aisle}-{nextStop.slot}
                 </p>
               )}
+            </div>
+
+            {/* Mistakes */}
+            <div className={`rounded-xl border px-3 py-2 text-center ${
+              mistakeCount === 0
+                ? "bg-white/5 border-white/10"
+                : isStruggling(mistakeCount)
+                ? "bg-red-900/40 border-red-500/40"
+                : "bg-yellow-900/30 border-yellow-400/30"
+            }`}>
+              <div className="flex items-center justify-center gap-1 mb-0.5">
+                <AlertTriangle className={`h-3 w-3 ${
+                  mistakeCount === 0 ? "text-white/50" :
+                  isStruggling(mistakeCount) ? "text-red-400" : "text-yellow-400"
+                }`} />
+                <p className="text-[9px] font-bold uppercase tracking-widest text-white/40">ERR</p>
+              </div>
+              <p className={`text-lg font-black leading-none ${
+                mistakeCount === 0 ? "text-white/50" :
+                isStruggling(mistakeCount) ? "text-red-400" : "text-yellow-400"
+              }`}>{mistakeCount}</p>
+              <p className="text-[9px] text-white/30 mt-0.5">
+                {isStruggling(mistakeCount) ? "retrain" : "session"}
+              </p>
             </div>
 
           </div>

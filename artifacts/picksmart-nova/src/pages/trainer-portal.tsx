@@ -9,8 +9,9 @@ import { LogSessionModal } from "@/components/nova/LogSessionModal";
 import { SessionCard } from "@/components/nova/SessionCard";
 import {
   Shield, Users, ClipboardList, Zap, BookOpen,
-  MapPin, UserPlus, LogOut, CheckCircle2, AlertCircle, DoorOpen, KeyRound, Copy, Check, Mail, Send
+  MapPin, UserPlus, LogOut, CheckCircle2, AlertCircle, DoorOpen, KeyRound, Copy, Check, Mail, Send, AlertTriangle
 } from "lucide-react";
+import MistakeLogPanel from "@/components/nova/MistakeLogPanel";
 
 type SelectorLevel = "Beginner" | "Intermediate" | "Advanced";
 
@@ -444,6 +445,11 @@ export default function TrainerPortalPage() {
               );
             })}
           </div>
+        </div>
+
+        {/* ── Mistake Log Panel ── */}
+        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+          <MistakeLogPanel />
         </div>
 
         {/* ── Sessions Panel ── */}
