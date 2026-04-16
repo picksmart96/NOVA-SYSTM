@@ -162,7 +162,7 @@ export default function WarehouseSetupPage() {
           {isSpanish ? "NOVA ahora está calibrada para tu operación." : "NOVA is now calibrated for your operation."}
         </p>
         <p className="text-slate-600 text-xs mt-3">
-          {isSpanish ? "Iniciando NOVA Trainer…" : "Launching NOVA Trainer…"}
+          {isSpanish ? "Abriendo portal de entrenador…" : "Opening Trainer Portal…"}
         </p>
       </div>
     );
@@ -351,7 +351,7 @@ export default function WarehouseSetupPage() {
                   ? (isSpanish ? "Guardando…" : "Saving…")
                   : (
                     <>
-                      {isSpanish ? "Guardar y Lanzar NOVA" : "Save & Launch NOVA"}
+                      {isSpanish ? "Guardar y Continuar" : "Save & Continue"}
                       <ChevronRight className="h-5 w-5" />
                     </>
                   )}
