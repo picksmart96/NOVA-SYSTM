@@ -21,6 +21,8 @@ import contractsRouter from "./contracts";
 import mistakesRouter from "./mistakes.js";
 import trialRouter from "./trial.js";
 import slotMasterRouter from "./slotMaster.js";
+import alertsRouter from "./alerts.js";
+import positionsRouter from "./positions.js";
 
 const router: IRouter = Router();
 
@@ -46,5 +48,7 @@ router.use(novaChatLogsRouter);
 router.use(contractsRouter);
 router.use(mistakesRouter);
 router.use(slotMasterRouter);
+router.use(alertsRouter);
+router.use(positionsRouter);
 
 export default router;

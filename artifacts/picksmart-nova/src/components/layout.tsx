@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 import LanguageSwitcher from "@/components/layout/LanguageSwitcher";
 import SubscribePromptModal from "@/components/paywall/SubscribePromptModal";
 import DemoBanner from "@/components/DemoBanner";
+import { AlertCenter } from "@/components/AlertCenter";
 
 // Paths that are always free — no subscription required to visit.
 const FREE_PATHS = ["/", "/pricing", "/choose-plan", "/login", "/privacy", "/terms", "/register", "/download", "/payment-success", "/payment-cancel", "/deal-sign"];
@@ -167,6 +168,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               ⚡ Meet NOVA
             </Link>
             <LanguageSwitcher />
+            <AlertCenter />
 
             {currentUser ? (
               <DropdownMenu>

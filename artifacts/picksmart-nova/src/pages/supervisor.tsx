@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useAccessStore } from "@/lib/accessStore";
 import { useTrainerStore } from "@/lib/trainerStore";
@@ -6,12 +6,14 @@ import { useAuthStore } from "@/lib/authStore";
 import { AssignAssignmentModal } from "@/components/nova/AssignAssignmentModal";
 import { useTranslation } from "react-i18next";
 import { useSupervisorPostStore } from "@/lib/supervisorPostStore";
+import { usePositions } from "@/hooks/usePositions";
+import { useAlerts } from "@/hooks/useAlerts";
 import {
   Activity, Users, Zap, BookOpen, TrendingUp, Radio,
   MapPin, LogOut, Copy, Send, UserPlus, Check,
   ClipboardList, CheckCircle2, AlertCircle, DoorOpen, KeyRound,
   Trash2, UserCheck, ShieldAlert, Megaphone, Star, X as XIcon,
-  Warehouse,
+  Warehouse, Headphones, MessageSquare, RefreshCw, Bell,
 } from "lucide-react";
 
 function formatDate(date: string) {
@@ -21,7 +23,7 @@ function formatDate(date: string) {
   });
 }
 
-const TABS = ["Overview", "Assignments", "Activate NOVA", "Selectors", "Trainers", "People", "Sessions", "Shift Post", "Weekly Report"] as const;
+const TABS = ["Overview", "Assignments", "Activate NOVA", "Selectors", "Trainers", "People", "Sessions", "Shift Post", "Weekly Report", "Live Monitor"] as const;
 type Tab = typeof TABS[number];
 
 const MEDALS = ["🥇", "🥈", "🥉", "4.", "5."];
@@ -35,6 +37,9 @@ export default function SupervisorPage() {
   const { trainerInviteRequests, novaSessions, stopNovaSession } = useAccessStore();
   const { selectors, sessions, assignments, removeSelector } = useTrainerStore();
   const { posts: supervisorPosts, addPost, deletePost } = useSupervisorPostStore();
+
+  const { positions, sendCoaching, getPositionStatus } = usePositions(5000);
+  const { alerts, unreadCount, markRead, markAllRead, createAlert } = useAlerts(10000);
 
   const [tab, setTab] = useState<Tab>("Overview");
   const [trainerName, setTrainerName] = useState("");
@@ -69,6 +74,10 @@ export default function SupervisorPage() {
   const [wrSubmitting, setWrSubmitting] = useState(false);
   const [wrSubmitted, setWrSubmitted] = useState(false);
   const [wrError, setWrError] = useState("");
+  const [coachTarget, setCoachTarget] = useState<string | null>(null);
+  const [coachMsg, setCoachMsg] = useState("");
+  const [coachSent, setCoachSent] = useState<string | null>(null);
+  const [alertFilter, setAlertFilter] = useState<"all" | "high" | "security" | "performance">("all");
 
   const openAssignForAssignment = (assignmentId: string) => {
     setPreselectedAssignmentId(assignmentId);
@@ -1018,6 +1027,193 @@ export default function SupervisorPage() {
             </div>
           )}
         </div>
+
+        {tab === "Live Monitor" && (
+          <div className="space-y-6">
+
+            {/* ── Alerts Panel ── */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-5 w-5 text-yellow-400" />
+                  <h2 className="font-black text-lg">NOVA Alerts</h2>
+                  {unreadCount > 0 && (
+                    <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">{unreadCount} new</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={alertFilter}
+                    onChange={e => setAlertFilter(e.target.value as typeof alertFilter)}
+                    className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-300"
+                  >
+                    <option value="all">All</option>
+                    <option value="high">High Severity</option>
+                    <option value="security">Security</option>
+                    <option value="performance">Performance</option>
+                  </select>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={() => markAllRead()}
+                      className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-400 hover:text-white hover:border-yellow-400 transition"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                  <button
+                    onClick={() => createAlert("performance", "Test alert from supervisor", "medium")}
+                    className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-400 hover:text-white hover:border-yellow-400 transition"
+                  >
+                    + Test Alert
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {alerts
+                  .filter(a => alertFilter === "all" || (alertFilter === "high" ? a.severity === "high" : a.type === alertFilter))
+                  .slice(0, 30)
+                  .map(alert => (
+                    <div
+                      key={alert.id}
+                      onClick={() => markRead(alert.id)}
+                      className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition ${
+                        !alert.read ? "border-yellow-500/40 bg-yellow-500/5" : "border-slate-800 bg-slate-900"
+                      }`}
+                    >
+                      <div className={`mt-0.5 rounded-full w-2 h-2 shrink-0 ${
+                        alert.severity === "high" ? "bg-red-400" :
+                        alert.severity === "medium" ? "bg-yellow-400" : "bg-blue-400"
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`text-xs font-bold uppercase ${
+                            alert.severity === "high" ? "text-red-400" :
+                            alert.severity === "medium" ? "text-yellow-400" : "text-blue-400"
+                          }`}>{alert.type} · {alert.severity}</span>
+                          <span className="text-[10px] text-slate-500 shrink-0">
+                            {new Date(alert.createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-300 mt-0.5">{alert.message}</p>
+                      </div>
+                    </div>
+                  ))}
+                {alerts.length === 0 && (
+                  <p className="text-center py-6 text-slate-500 text-sm">No alerts — all clear ✓</p>
+                )}
+              </div>
+            </div>
+
+            {/* ── Live Selector Positions ── */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-yellow-400" />
+                  <h2 className="font-black text-lg">Live Selector Monitor</h2>
+                  <span className="text-xs text-slate-500">updates every 5s</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                    <div className="h-2 w-2 rounded-full bg-green-400" /> Active
+                    <div className="h-2 w-2 rounded-full bg-yellow-400 ml-2" /> Moving
+                    <div className="h-2 w-2 rounded-full bg-red-400 ml-2" /> Delayed
+                  </div>
+                </div>
+              </div>
+
+              {positions.length === 0 ? (
+                <div className="rounded-xl border border-slate-800 bg-slate-900 py-12 text-center">
+                  <MapPin className="h-10 w-10 text-slate-600 mx-auto mb-3" />
+                  <p className="text-slate-400 font-semibold">No active selectors</p>
+                  <p className="text-slate-600 text-sm mt-1">Position data appears when selectors check in via NOVA</p>
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {positions.map(pos => {
+                    const liveStatus = getPositionStatus(pos.updatedAt);
+                    const statusColor = liveStatus === "active" ? "bg-green-500/10 border-green-500/30 text-green-300"
+                      : liveStatus === "moving" ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-300"
+                      : "bg-red-500/10 border-red-500/30 text-red-300";
+                    const dotColor = liveStatus === "active" ? "bg-green-400" : liveStatus === "moving" ? "bg-yellow-400" : "bg-red-400";
+                    const isCoaching = coachTarget === pos.selectorId;
+                    return (
+                      <div key={pos.selectorId} className={`rounded-xl border p-4 ${statusColor}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className={`h-2 w-2 rounded-full ${dotColor}`} />
+                            <span className="font-bold text-sm text-white">{pos.selectorName ?? "Selector"}</span>
+                          </div>
+                          <span className={`text-[10px] font-bold uppercase rounded-full px-2 py-0.5 border ${statusColor}`}>{liveStatus}</span>
+                        </div>
+                        <div className="text-xs text-slate-400 space-y-0.5 mb-3">
+                          {pos.currentAisle && (
+                            <p>📍 Aisle <span className="text-white font-bold">{pos.currentAisle}</span>
+                              {pos.currentSlot && <> · Slot <span className="text-white font-bold">{pos.currentSlot}</span></>}
+                            </p>
+                          )}
+                          {pos.nextAisle && (
+                            <p>➡️ Next: Aisle <span className="text-white font-bold">{pos.nextAisle}</span>
+                              {pos.nextSlot && <> · Slot <span className="text-white font-bold">{pos.nextSlot}</span></>}
+                            </p>
+                          )}
+                          <p className="text-slate-600 text-[10px]">Updated {new Date(pos.updatedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => { setCoachTarget(isCoaching ? null : pos.selectorId); setCoachMsg(""); setCoachSent(null); }}
+                            className="flex items-center gap-1 rounded-lg border border-slate-700 px-2.5 py-1 text-xs text-slate-300 hover:border-yellow-400 hover:text-yellow-300 transition"
+                          >
+                            <Headphones className="h-3 w-3" /> Coach
+                          </button>
+                          {liveStatus === "delayed" && (
+                            <button
+                              onClick={async () => {
+                                await createAlert("performance", `Supervisor intervention needed: ${pos.selectorName ?? "Selector"} delayed at Aisle ${pos.currentAisle}`, "high");
+                              }}
+                              className="flex items-center gap-1 rounded-lg border border-red-500/40 px-2.5 py-1 text-xs text-red-300 hover:bg-red-500/10 transition"
+                            >
+                              <ShieldAlert className="h-3 w-3" /> Alert
+                            </button>
+                          )}
+                        </div>
+                        {isCoaching && (
+                          <div className="mt-3 space-y-2">
+                            <textarea
+                              value={coachMsg}
+                              onChange={e => setCoachMsg(e.target.value)}
+                              placeholder="Coaching message (will be spoken aloud to selector)..."
+                              rows={2}
+                              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:border-yellow-400"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={async () => {
+                                  if (!coachMsg.trim()) return;
+                                  const ok = await sendCoaching(pos.selectorId, coachMsg.trim());
+                                  if (ok) { setCoachSent(pos.selectorId); setCoachMsg(""); setTimeout(() => setCoachSent(null), 3000); }
+                                }}
+                                className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-yellow-400 px-3 py-1.5 text-xs font-bold text-slate-950 hover:bg-yellow-300 transition"
+                              >
+                                <Send className="h-3 w-3" /> Send
+                              </button>
+                              <button onClick={() => setCoachTarget(null)} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:border-slate-500 transition">
+                                Cancel
+                              </button>
+                            </div>
+                            {coachSent === pos.selectorId && (
+                              <p className="text-xs text-green-400 font-semibold flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Coaching message sent!</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+          </div>
+        )}
 
       </div>
 

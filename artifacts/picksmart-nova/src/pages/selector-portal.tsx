@@ -9,8 +9,9 @@ import { novaSpeak, novaRecogLang, NOVA_TEXT, matchNovaCommand } from "@/lib/nov
 import {
   Headphones, BookOpen, HelpCircle, TrendingUp, Star, AlertTriangle, KeyRound,
   DoorOpen, Mic, MicOff, Volume2, VolumeX, Megaphone, ShieldCheck, Zap,
-  ChevronRight, ClipboardList, CheckCircle2, Clock, Target,
+  ChevronRight, ClipboardList, CheckCircle2, Clock, Target, MessageSquare,
 } from "lucide-react";
+import { useMyCoaching } from "@/hooks/usePositions";
 
 const STANDARD_UPH = 90;
 
@@ -82,6 +83,11 @@ export default function SelectorPortalPage() {
     setLogSaved(true);
     setTimeout(() => setLogSaved(false), 3000);
   };
+
+  // ── Coaching messages ──────────────────────────────────────────────────────
+  const { messages: coachMsgs, markRead: markCoachRead } = useMyCoaching(8000);
+  const [visibleCoachId, setVisibleCoachId] = useState<string | null>(null);
+  const spokenCoachIds = useRef<Set<string>>(new Set());
 
   // ── Voice / Speech state ───────────────────────────────────────────────────
   const [muted, setMuted] = useState(false);
@@ -205,6 +211,19 @@ export default function SelectorPortalPage() {
 
     recognitionRef.current = recognition;
   }, [speakTodayFocus, speakLatestUpdate, speakAssignment, lang]);
+
+  // ── Speak incoming coaching messages ───────────────────────────────────────
+  useEffect(() => {
+    const unread = coachMsgs.filter(m => !m.read && !spokenCoachIds.current.has(m.id));
+    if (unread.length === 0) return;
+    const newest = unread[0];
+    spokenCoachIds.current.add(newest.id);
+    setVisibleCoachId(newest.id);
+    speak(`Coaching message from your supervisor: ${newest.message}`, () => {
+      setTimeout(() => setVisibleCoachId(null), 3000);
+    });
+    void markCoachRead(newest.id);
+  }, [coachMsgs, speak, markCoachRead]);
 
   const startVoiceCommand = () => {
     if (!recognitionRef.current) {
@@ -588,6 +607,24 @@ export default function SelectorPortalPage() {
                   <p className="text-xs text-slate-500 mt-1">— {latestPost.postedBy}</p>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Coaching Message Banner ──────────────────────────────────────── */}
+        {coachMsgs.filter(m => !m.read).length > 0 && (
+          <div className="rounded-2xl border border-yellow-400/40 bg-yellow-400/5 p-4 flex items-start gap-3 animate-pulse-once">
+            <div className="w-8 h-8 rounded-xl bg-yellow-400/20 flex items-center justify-center shrink-0">
+              <Headphones className="h-4 w-4 text-yellow-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-yellow-400 mb-1 uppercase tracking-wider">🎧 Coaching from your supervisor</p>
+              {coachMsgs.filter(m => !m.read).map(m => (
+                <div key={m.id} className="flex items-start justify-between gap-2 mb-1">
+                  <p className="text-sm text-white">{m.message}</p>
+                  <button onClick={() => markCoachRead(m.id)} className="shrink-0 text-slate-500 hover:text-slate-300 text-xs mt-0.5">✓</button>
+                </div>
+              ))}
             </div>
           </div>
         )}

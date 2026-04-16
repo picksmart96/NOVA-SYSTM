@@ -235,6 +235,44 @@ All protections live in `artifacts/api-server/src/middleware/security.ts`:
 | **Payload cap** | `express.json({ limit: "1mb" })` prevents request bombing |
 | **Raw Stripe webhook** | Applied before JSON middleware so `stripe-signature` verification works |
 
+## Real-Time Alert & Monitoring System
+
+New system added to all supervisor/owner dashboards:
+
+### DB Tables (4 new, created via raw SQL)
+| Table | Purpose |
+|---|---|
+| `psa_alerts` | Company alerts with type, severity, message, read status |
+| `psa_audit_logs` | Full audit trail of user actions (login, contract, billing, security) |
+| `psa_selector_positions` | Live real-time selector aisle/slot positions (upsert on conflict) |
+| `psa_coaching_messages` | Coaching messages sent from supervisors to selectors |
+
+### API Routes
+| Route | Auth | Purpose |
+|---|---|---|
+| `POST /api/alerts` | requireAuth | Create an alert |
+| `GET /api/alerts` | requireAuth | Get alerts (owner=all, others=by warehouseSlug) |
+| `PATCH /api/alerts/:id/read` | requireAuth | Mark alert read |
+| `POST /api/alerts/read-all` | requireAuth | Mark all read |
+| `GET /api/audit` | requireAuth | Get audit log |
+| `POST /api/audit/log` | requireAuth | Log an action |
+| `POST /api/positions` | requireAuth | Upsert selector position |
+| `GET /api/positions` | requireAuth | Get all live positions |
+| `POST /api/coaching` | requireAuth | Send coaching message to selector |
+| `GET /api/coaching/mine` | requireAuth | Selector gets own coaching messages |
+| `PATCH /api/coaching/:id/read` | requireAuth | Mark coaching message read |
+
+### Frontend
+- **Alert bell** in nav (`AlertCenter.tsx`) — polls every 12s, badge count, browser push notifications
+- **Live Monitor tab** in `supervisor.tsx` — alerts panel + real-time selector position grid + coaching panel
+- **Coaching TTS** in `selector-portal.tsx` — polls every 8s, speaks coaching messages via TTS, banner display
+- **Hooks**: `useAlerts` (`src/hooks/useAlerts.ts`), `usePositions` / `useMyCoaching` (`src/hooks/usePositions.ts`)
+
+### Route Files
+- `artifacts/api-server/src/routes/alerts.ts` — alerts + audit endpoints
+- `artifacts/api-server/src/routes/positions.ts` — positions + coaching endpoints
+- `lib/db/src/schema/alerts.ts` — all 4 new table definitions
+
 ## Architecture Notes
 - Frontend is pure Vite SPA, no SSR
 - API is OpenAPI-first, codegen via Orval
