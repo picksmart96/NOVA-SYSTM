@@ -146,7 +146,7 @@ export default function WarehouseSetupPage() {
     }
     setSaving(false);
     setSaved(true);
-    setTimeout(() => navigate("/nova-trainer"), 1500);
+    setTimeout(() => navigate("/trainer-portal"), 1500);
   };
 
   if (saved) {
