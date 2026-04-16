@@ -4,11 +4,10 @@ import { useAuthStore } from "@/lib/authStore";
 import {
   Activity, Copy, Check, ChevronRight, Users, ShieldCheck,
   UserCog, UserCircle, Warehouse, Star, LogOut, ExternalLink,
-  RefreshCw,
+  RefreshCw, Share2, Mail,
 } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
-const APP_URL  = import.meta.env.VITE_APP_URL  ?? "https://nova-warehouse-control.replit.app";
+const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
 type Role = "manager" | "supervisor" | "trainer";
 
@@ -79,13 +78,16 @@ function InviteCard({ card }: { card: RoleCard }) {
   const [link, setLink]       = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied]   = useState(false);
+  const [shared, setShared]   = useState(false);
   const [error, setError]     = useState("");
+
+  const appUrl = `${window.location.origin}${BASE}`;
 
   async function generate() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_BASE}/auth/invite`, {
+      const res = await fetch(`${BASE}/api/auth/invite`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -96,11 +98,16 @@ function InviteCard({ card }: { card: RoleCard }) {
           warehouseSlug: currentUser?.warehouseSlug ?? null,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Failed to generate"); return; }
-      setLink(`${APP_URL}/invite?token=${data.token}`);
+      const data = await res.json() as { token?: string; error?: string };
+      if (!res.ok) { setError(data.error ?? "Failed to generate link. Please try again."); return; }
+
+      const finalUrl = `${appUrl}/invite?token=${data.token}`;
+      setLink(finalUrl);
+
+      // Update the alert with the real URL (fire-and-forget)
+      // The alert was already created server-side; we just note the URL if needed
     } catch {
-      setError("Network error. Please try again.");
+      setError("Network error. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -110,6 +117,22 @@ function InviteCard({ card }: { card: RoleCard }) {
     await navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
+  }
+
+  async function share() {
+    const text = `You're invited to join ${currentUser?.companyName ?? "our team"} on PickSmart NOVA as a ${card.label}. Click the link to set up your account:`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `PickSmart NOVA — ${card.label} Invite`, text, url: link });
+        setShared(true);
+        setTimeout(() => setShared(false), 3000);
+      } catch { /* user cancelled */ }
+    } else {
+      // Fallback: open email client
+      const subject = encodeURIComponent(`You're invited to PickSmart NOVA as a ${card.label}`);
+      const body = encodeURIComponent(`${text}\n\n${link}`);
+      window.open(`mailto:?subject=${subject}&body=${body}`, "_blank");
+    }
   }
 
   return (
@@ -136,29 +159,42 @@ function InviteCard({ card }: { card: RoleCard }) {
       {link ? (
         <div className="space-y-2">
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Invite Link Ready</p>
+
+          {/* Link preview */}
           <div className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5">
             <p className="flex-1 text-xs text-slate-300 font-mono truncate">{link}</p>
-            <button
-              onClick={copy}
-              className="shrink-0 p-1.5 rounded-lg hover:bg-slate-800 transition text-slate-400 hover:text-white"
-              title="Copy link"
-            >
+            <button onClick={copy} className="shrink-0 p-1.5 rounded-lg hover:bg-slate-800 transition text-slate-400 hover:text-white" title="Copy link">
               {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
             </button>
           </div>
-          <div className="flex gap-2">
+
+          {/* Action buttons */}
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={copy}
-              className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-black transition ${copied ? "bg-green-500 text-white" : c.btn}`}
+              className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-black transition ${copied ? "bg-green-500 text-white" : c.btn}`}
             >
-              {copied ? <><Check className="h-4 w-4" /> Copied!</> : <><Copy className="h-4 w-4" /> Copy Link</>}
+              {copied ? <><Check className="h-3.5 w-3.5" /> Copied</> : <><Copy className="h-3.5 w-3.5" /> Copy</>}
             </button>
+
+            <button
+              onClick={share}
+              className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-black transition border ${shared ? "border-green-500 bg-green-500/10 text-green-400" : "border-slate-700 text-slate-300 hover:border-slate-500 hover:bg-slate-800"}`}
+            >
+              {shared
+                ? <><Check className="h-3.5 w-3.5" /> Sent</>
+                : navigator.share
+                  ? <><Share2 className="h-3.5 w-3.5" /> Share</>
+                  : <><Mail className="h-3.5 w-3.5" /> Email</>
+              }
+            </button>
+
             <button
               onClick={generate}
-              title="Generate new link"
-              className="px-3 py-2.5 rounded-xl border border-slate-700 text-slate-400 hover:text-white hover:border-slate-500 transition"
+              title="Generate a new link"
+              className="flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold border border-slate-700 text-slate-400 hover:text-white hover:border-slate-500 transition"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className="h-3.5 w-3.5" /> New
             </button>
           </div>
         </div>

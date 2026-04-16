@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { psaUsers, psaInvites } from "@workspace/db";
+import { psaUsers, psaInvites, psaAlerts } from "@workspace/db";
 import { eq, and, ne } from "drizzle-orm";
 import {
   hashPassword,
@@ -266,12 +266,13 @@ router.delete("/auth/users/:id", requireRole("manager"), async (req, res) => {
 // Any authenticated user can create an invite (trainers invite selectors,
 // supervisors invite trainers, owners/managers invite any role).
 router.post("/auth/invite", requireAuth, async (req, res) => {
-  const { fullName, email, role, warehouseId, warehouseSlug } = req.body as {
+  const { fullName, email, role, warehouseId, warehouseSlug, inviteUrl } = req.body as {
     fullName?: string;
     email?: string;
     role?: string;
     warehouseId?: string;
     warehouseSlug?: string;
+    inviteUrl?: string;
   };
 
   if (!role) {
@@ -280,14 +281,39 @@ router.post("/auth/invite", requireAuth, async (req, res) => {
   }
 
   try {
+    // Resolve the requesting user for alert metadata
+    const [creator] = await db.select().from(psaUsers).where(eq(psaUsers.id, req.psaUser!.sub)).limit(1);
+
     const token = crypto.randomUUID() + "-" + Date.now().toString(36);
     await db.insert(psaInvites).values({
       token,
       fullName: fullName ?? "Team Member",
-      email: email ?? null,
+      email: email?.trim() || "",   // NOT NULL column — default to empty string
       role,
       warehouseId: warehouseId ?? null,
-      warehouseSlug: warehouseSlug ?? null,
+      warehouseSlug: warehouseSlug ?? creator?.warehouseSlug ?? null,
+    });
+
+    // ── Fire alert so Command Center is notified immediately ──
+    const appUrl = process.env.APP_URL ?? "https://nova-warehouse-control.replit.app";
+    const builtInviteUrl = inviteUrl ?? `${appUrl}/invite?token=${token}`;
+    await db.insert(psaAlerts).values({
+      type: "invite_shared",
+      message: `${creator?.fullName ?? creator?.username ?? "Someone"} generated a ${role} invite link`,
+      severity: "low",
+      companyId: creator?.warehouseSlug ?? null,
+      userId: creator?.id ?? null,
+      meta: {
+        role,
+        token,
+        inviteUrl: builtInviteUrl,
+        generatedBy: {
+          id: creator?.id ?? null,
+          username: creator?.username ?? null,
+          fullName: creator?.fullName ?? null,
+          companyName: creator?.companyName ?? null,
+        },
+      },
     });
 
     res.status(201).json({ token });

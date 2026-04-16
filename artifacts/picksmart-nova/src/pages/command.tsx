@@ -909,6 +909,181 @@ function NovaActivity() {
   );
 }
 
+// ─── Invite Activity Panel ────────────────────────────────────────────────────
+interface InviteAlert {
+  id: string;
+  message: string;
+  createdAt: string;
+  read: boolean;
+  meta: {
+    role?: string;
+    token?: string;
+    inviteUrl?: string;
+    generatedBy?: {
+      id?: string;
+      username?: string;
+      fullName?: string;
+      companyName?: string;
+    };
+  } | null;
+}
+
+const ROLE_COLOR: Record<string, string> = {
+  manager:    "text-yellow-400 border-yellow-400/30 bg-yellow-400/10",
+  supervisor: "text-blue-400  border-blue-400/30  bg-blue-400/10",
+  trainer:    "text-green-400 border-green-400/30 bg-green-400/10",
+  selector:   "text-slate-400 border-slate-400/30 bg-slate-400/10",
+};
+
+function InviteActivity() {
+  const jwtToken = useAuthStore(s => s.jwtToken);
+  const [alerts,  setAlerts]  = useState<InviteAlert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [copied,  setCopied]  = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const headers = { "Content-Type": "application/json", Authorization: `Bearer ${jwtToken}` };
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch(`${BASE}/api/alerts`, { headers });
+      if (!r.ok) throw new Error("failed");
+      const d = await r.json() as { alerts: InviteAlert[] };
+      const invite = (d.alerts ?? []).filter(a => a.type === "invite_shared") as InviteAlert[];
+      setAlerts(invite);
+    } catch { /* silently fail */ }
+    finally { setLoading(false); }
+  }, [jwtToken]);
+
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 20_000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  async function markRead(id: string) {
+    await fetch(`${BASE}/api/alerts/${id}/read`, { method: "PATCH", headers });
+    setAlerts(prev => prev.map(a => a.id === id ? { ...a, read: true } : a));
+  }
+
+  async function copyLink(id: string, url: string) {
+    await navigator.clipboard.writeText(url);
+    setCopied(id);
+    setTimeout(() => setCopied(null), 2500);
+    markRead(id);
+  }
+
+  const unread = alerts.filter(a => !a.read).length;
+
+  return (
+    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center">
+            <UserPlus className="h-4 w-4 text-blue-400" />
+          </div>
+          <div>
+            <p className="text-sm font-black text-white flex items-center gap-2">
+              Invite Activity
+              {unread > 0 && (
+                <span className="text-[10px] font-black bg-blue-500 text-white px-1.5 py-0.5 rounded-full">{unread} new</span>
+              )}
+            </p>
+            <p className="text-xs text-slate-500">Every invite link generated across your platform</p>
+          </div>
+        </div>
+        <button onClick={load} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-white transition">
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">{[...Array(3)].map((_, i) => <div key={i} className="h-14 rounded-xl bg-slate-800/50 animate-pulse" />)}</div>
+      ) : alerts.length === 0 ? (
+        <div className="text-center py-8">
+          <UserPlus className="h-8 w-8 text-slate-700 mx-auto mb-2" />
+          <p className="text-slate-500 text-sm">No invite links generated yet.</p>
+          <p className="text-slate-600 text-xs mt-1">When anyone generates a team invite, it shows up here.</p>
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+          {alerts.map(alert => {
+            const meta = alert.meta ?? {};
+            const role = meta.role ?? "unknown";
+            const by = meta.generatedBy;
+            const name = by?.fullName ?? by?.username ?? "Unknown";
+            const company = by?.companyName ?? "";
+            const inviteUrl = meta.inviteUrl;
+            const isOpen = expanded === alert.id;
+            const rc = ROLE_COLOR[role] ?? ROLE_COLOR.selector;
+
+            return (
+              <div
+                key={alert.id}
+                className={`rounded-xl border transition ${alert.read ? "border-slate-800 bg-slate-950/30" : "border-blue-500/20 bg-blue-500/5"}`}
+              >
+                {/* Row */}
+                <button
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
+                  onClick={() => {
+                    setExpanded(isOpen ? null : alert.id);
+                    if (!alert.read) markRead(alert.id);
+                  }}
+                >
+                  <div className={`h-8 w-8 rounded-lg border flex items-center justify-center shrink-0 ${rc}`}>
+                    <UserPlus className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-white truncate">
+                      {name}
+                      {company && <span className="text-slate-500 font-normal"> · {company}</span>}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Generated a <span className={`font-bold capitalize`}>{role}</span> invite link
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border capitalize ${rc}`}>{role}</span>
+                    <span className="text-xs text-slate-600">{timeAgo(alert.createdAt)}</span>
+                    <ChevronRight className={`h-3.5 w-3.5 text-slate-600 transition-transform ${isOpen ? "rotate-90" : ""}`} />
+                  </div>
+                </button>
+
+                {/* Expanded detail */}
+                {isOpen && (
+                  <div className="px-3 pb-3 pt-0 border-t border-slate-800/60 space-y-2 mt-1">
+                    <div className="text-xs text-slate-500 space-y-1">
+                      <p><span className="text-slate-400 font-bold">Sent by:</span> {name} {company ? `(${company})` : ""}</p>
+                      <p><span className="text-slate-400 font-bold">Role:</span> <span className="capitalize">{role}</span></p>
+                      {meta.token && (
+                        <p><span className="text-slate-400 font-bold">Token:</span> <span className="font-mono text-[10px] text-slate-500">{meta.token.slice(0, 20)}…</span></p>
+                      )}
+                    </div>
+
+                    {inviteUrl ? (
+                      <div className="flex items-center gap-2 rounded-lg bg-slate-950 border border-slate-800 px-3 py-2">
+                        <span className="text-[10px] font-mono text-slate-400 flex-1 truncate">{inviteUrl}</span>
+                        <button
+                          onClick={() => copyLink(alert.id, inviteUrl)}
+                          className="text-slate-500 hover:text-yellow-400 transition"
+                        >
+                          {copied === alert.id ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-600 italic">Invite URL not recorded — generate a new one from the Build Your Team page.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function CommandPage() {
   const { currentUser, logout } = useAuthStore();
@@ -989,6 +1164,14 @@ export default function CommandPage() {
           <div>
             <QuickInvite />
           </div>
+        </div>
+
+        {/* ── Full-width: Invite Activity ── */}
+        <div className="mt-8">
+          <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">
+            Invite Activity
+          </p>
+          <InviteActivity />
         </div>
 
         {/* ── Full-width: Assignments ── */}
