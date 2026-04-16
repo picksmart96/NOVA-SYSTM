@@ -269,13 +269,18 @@ export default function NovaHelpPage() {
   const chatHistoryRef                  = useRef<ChatMessage[]>([]);
 
   // ── Refs ──────────────────────────────────────────────────────────────────
-  const sessionActiveRef  = useRef(false);
-  const recognitionRef    = useRef<SpeechRecognition | null>(null);
-  const listenModeRef     = useRef<"wake"|"question"|null>(null);
-  const safetyModeRef     = useRef(false);
-  const safetyIndexRef    = useRef(0);
-  const ttsUnlockedRef    = useRef(false);
+  const sessionActiveRef   = useRef(false);
+  const recognitionRef     = useRef<SpeechRecognition | null>(null);
+  const listenModeRef      = useRef<"wake"|"question"|null>(null);
+  const safetyModeRef      = useRef(false);
+  const safetyIndexRef     = useRef(0);
+  const ttsUnlockedRef     = useRef(false);
   const moodCheckActiveRef = useRef(false);
+
+  // ── Screen lock / audio keep-alive refs ───────────────────────────────────
+  const wakeLockRef        = useRef<WakeLockSentinel | null>(null);
+  const audioCtxRef        = useRef<AudioContext | null>(null);
+  const keepAliveNodeRef   = useRef<OscillatorNode | null>(null);
 
   // Forward refs for cross-callback use
   const handleQuestionRef        = useRef<((t: string) => Promise<void>) | null>(null);
@@ -298,6 +303,78 @@ export default function NovaHelpPage() {
     window.speechSynthesis.speak(silent);
     ttsUnlockedRef.current = true;
   };
+
+  // ── Wake Lock — keeps screen on while NOVA is active ─────────────────────
+  const requestWakeLock = useCallback(async () => {
+    if (!("wakeLock" in navigator)) return;
+    try {
+      if (wakeLockRef.current) return;
+      wakeLockRef.current = await (navigator as Navigator & { wakeLock: { request(type: string): Promise<WakeLockSentinel> } }).wakeLock.request("screen");
+      wakeLockRef.current.addEventListener("release", () => {
+        wakeLockRef.current = null;
+      });
+    } catch { /* permission denied or device doesn't support */ }
+  }, []);
+
+  const releaseWakeLock = useCallback(() => {
+    try { wakeLockRef.current?.release(); } catch { /* ignore */ }
+    wakeLockRef.current = null;
+  }, []);
+
+  // ── Silent AudioContext — keeps iOS audio session alive ───────────────────
+  const startAudioKeepAlive = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx || audioCtxRef.current) return;
+      const ctx = new AudioCtx();
+      audioCtxRef.current = ctx;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.00001;
+      osc.frequency.value = 1;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      keepAliveNodeRef.current = osc;
+    } catch { /* ignore */ }
+  }, []);
+
+  const stopAudioKeepAlive = useCallback(() => {
+    try { keepAliveNodeRef.current?.stop(); } catch { /* ignore */ }
+    try { audioCtxRef.current?.close(); } catch { /* ignore */ }
+    keepAliveNodeRef.current = null;
+    audioCtxRef.current = null;
+  }, []);
+
+  // ── Visibility change — restart mic immediately when screen unlocks ────────
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!sessionActiveRef.current) return;
+
+      // Re-request wake lock (OS releases it when screen locks)
+      requestWakeLock();
+
+      // Resume AudioContext if suspended
+      if (audioCtxRef.current?.state === "suspended") {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+
+      // Restart recognition in whichever mode was active
+      const mode = listenModeRef.current;
+      setTimeout(() => {
+        if (!sessionActiveRef.current) return;
+        if (mode === "wake") {
+          startWakeRef.current?.();
+        } else if (mode === "question") {
+          startQuestionListenRef.current?.();
+        }
+      }, 400);
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [requestWakeLock]);
 
   // ── Stop recognition ──────────────────────────────────────────────────────
   const stopRecognition = useCallback(() => {
@@ -714,6 +791,9 @@ export default function NovaHelpPage() {
   const startSession = () => {
     // Unlock TTS synchronously on this user gesture
     unlockTTS();
+    // Keep screen on + keep audio session alive so mic survives screen lock
+    requestWakeLock();
+    startAudioKeepAlive();
 
     sessionActiveRef.current = true;
     safetyModeRef.current = false;
@@ -767,6 +847,8 @@ export default function NovaHelpPage() {
     setSafetyIndex(0);
     stopRecognition();
     try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+    releaseWakeLock();
+    stopAudioKeepAlive();
     setSessionActive(false);
     setPhase("idle");
     setAnswer("");
