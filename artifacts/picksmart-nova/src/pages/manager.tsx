@@ -5,7 +5,7 @@ import { useLocation } from "wouter";
 import {
   Users, Activity, TrendingUp, TrendingDown, BarChart3,
   Briefcase, LogOut, Target, Clock, AlertCircle, Zap,
-  ShieldCheck, BookOpen, CheckCircle2
+  ShieldCheck, BookOpen, CheckCircle2, Warehouse
 } from "lucide-react";
 
 type Tab = "team" | "performance" | "training";
@@ -78,12 +78,20 @@ export default function ManagerPage() {
             <h1 className="text-2xl font-black text-white">Welcome, {currentUser?.fullName?.split(" ")[0]}</h1>
             <p className="text-slate-400 text-sm mt-0.5">Manage your team and track performance</p>
           </div>
-          <button
-            onClick={() => { logout(); navigate("/login"); }}
-            className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:text-white transition"
-          >
-            <LogOut className="h-4 w-4" /> Sign Out
-          </button>
+          <div className="flex items-center gap-2">
+            <a
+              href="/warehouse-setup"
+              className="flex items-center gap-2 rounded-xl border border-yellow-400/30 bg-yellow-400/5 px-4 py-2.5 text-sm font-semibold text-yellow-300 hover:border-yellow-400 hover:bg-yellow-400/10 transition"
+            >
+              <Warehouse className="h-4 w-4" /> Warehouse Setup
+            </a>
+            <button
+              onClick={() => { logout(); navigate("/login"); }}
+              className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:text-white transition"
+            >
+              <LogOut className="h-4 w-4" /> Sign Out
+            </button>
+          </div>
         </div>
       </div>
 
@@ -236,6 +244,7 @@ export default function ManagerPage() {
                   { label: "NOVA Help", href: "/nova-help", icon: Zap, desc: "AI voice coach for your team" },
                   { label: "Trainer Portal", href: "/trainer-portal", icon: ShieldCheck, desc: "Assign and track learning sessions" },
                   { label: "Supervisor Dashboard", href: "/supervisor", icon: Users, desc: "Shift management and overviews" },
+                  { label: "Warehouse Setup", href: "/warehouse-setup", icon: Warehouse, desc: "Configure your warehouse zones & check method" },
                 ].map((item) => (
                   <a
                     key={item.href}

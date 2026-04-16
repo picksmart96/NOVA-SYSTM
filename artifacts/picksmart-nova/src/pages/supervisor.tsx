@@ -11,6 +11,7 @@ import {
   MapPin, LogOut, Copy, Send, UserPlus, Check,
   ClipboardList, CheckCircle2, AlertCircle, DoorOpen, KeyRound,
   Trash2, UserCheck, ShieldAlert, Megaphone, Star, X as XIcon,
+  Warehouse,
 } from "lucide-react";
 
 function formatDate(date: string) {
@@ -160,6 +161,11 @@ export default function SupervisorPage() {
             <Link href="/nova/warehouse">
               <button className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-yellow-400 transition flex items-center gap-2">
                 <MapPin className="h-4 w-4" /> Warehouse Ref
+              </button>
+            </Link>
+            <Link href="/warehouse-setup">
+              <button className="rounded-2xl border border-yellow-400/30 bg-yellow-400/5 px-5 py-3 font-semibold hover:border-yellow-400 hover:bg-yellow-400/10 transition flex items-center gap-2 text-yellow-300">
+                <Warehouse className="h-4 w-4" /> Warehouse Setup
               </button>
             </Link>
             <button

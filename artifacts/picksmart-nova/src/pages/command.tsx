@@ -38,6 +38,12 @@ const NAV_SECTIONS = [
       { label: "Warehouse Setup",    path: "/warehouse-setup",    icon: Warehouse,     desc: "Configure zones & locations",   color: "orange" },
     ],
   },
+  {
+    label: "Owner Only",
+    items: [
+      { label: "Control Panel", path: "/control-panel", icon: Shield, desc: "Director accounts, invite links & performance", color: "green" },
+    ],
+  },
 ];
 
 const COLOR: Record<string, { border: string; icon: string; text: string; hover: string }> = {

@@ -87,10 +87,8 @@ export function useRoleNav(): NavLink[] {
     links.push({ href: "/manager", label: "Manager", group: "staff" });
   }
 
-  // Director+ gets Control Panel
-  if (atLeast("director", publicRole)) {
-    links.push({ href: "/control-panel", label: "Control Panel", group: "staff" });
-  }
+  // Owner-only: Control Panel is private (accessible via Command Center)
+  // Not shown in general nav
 
   return links;
 }

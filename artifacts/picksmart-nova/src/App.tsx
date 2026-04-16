@@ -382,10 +382,10 @@ function Router() {
         </Layout>
       </Route>
 
-      {/* Director Control Panel */}
+      {/* Owner-only Control Panel */}
       <Route path="/control-panel">
         <Layout>
-          <SubscriptionRoute path="/control-panel" requiredRole="director">
+          <SubscriptionRoute path="/control-panel" requiredRole="owner">
             <ControlPanelPage />
           </SubscriptionRoute>
         </Layout>
