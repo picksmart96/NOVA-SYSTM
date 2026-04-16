@@ -8,6 +8,7 @@ import {
   TrendingUp, AlertTriangle, CheckCircle2, XCircle,
   PlayCircle, Activity, FileText,
   Plus, Upload, Shuffle, ChevronDown, Trash2,
+  MessageSquare, Wrench,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/authStore";
 
@@ -1084,6 +1085,148 @@ function InviteActivity() {
   );
 }
 
+// ─── Customer Help Requests ───────────────────────────────────────────────────
+interface HelpAlert {
+  id: string;
+  message: string;
+  createdAt: string;
+  read: boolean;
+  meta: {
+    note?: string;
+    requestedBy?: {
+      id?: string;
+      username?: string;
+      fullName?: string;
+      companyName?: string;
+    };
+  } | null;
+}
+
+function HelpRequests() {
+  const jwtToken = useAuthStore(s => s.jwtToken);
+  const [requests, setRequests] = useState<HelpAlert[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const headers = { "Content-Type": "application/json", Authorization: `Bearer ${jwtToken}` };
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch(`${BASE}/api/alerts`, { headers });
+      if (!r.ok) throw new Error("failed");
+      const d = await r.json() as { alerts: HelpAlert[] };
+      setRequests((d.alerts ?? []).filter(a => a.type === "help_request") as HelpAlert[]);
+    } catch { /* silently fail */ }
+    finally { setLoading(false); }
+  }, [jwtToken]);
+
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 20_000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  async function markRead(id: string) {
+    await fetch(`${BASE}/api/alerts/${id}/read`, { method: "PATCH", headers });
+    setRequests(prev => prev.map(r => r.id === id ? { ...r, read: true } : r));
+  }
+
+  const unread = requests.filter(r => !r.read).length;
+
+  return (
+    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center">
+            <Wrench className="h-4 w-4 text-orange-400" />
+          </div>
+          <div>
+            <p className="text-sm font-black text-white flex items-center gap-2">
+              Assignment Help Requests
+              {unread > 0 && (
+                <span className="text-[10px] font-black bg-orange-500 text-white px-1.5 py-0.5 rounded-full">{unread} new</span>
+              )}
+            </p>
+            <p className="text-xs text-slate-500">Customers requesting help building their assignments</p>
+          </div>
+        </div>
+        <button onClick={load} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-white transition">
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">{[...Array(2)].map((_, i) => <div key={i} className="h-14 rounded-xl bg-slate-800/50 animate-pulse" />)}</div>
+      ) : requests.length === 0 ? (
+        <div className="text-center py-8">
+          <MessageSquare className="h-8 w-8 text-slate-700 mx-auto mb-2" />
+          <p className="text-slate-500 text-sm">No help requests yet.</p>
+          <p className="text-slate-600 text-xs mt-1">When a customer clicks "Request Help" from their trainer portal, it appears here.</p>
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+          {requests.map(req => {
+            const by = req.meta?.requestedBy;
+            const name = by?.fullName ?? by?.username ?? "Unknown";
+            const company = by?.companyName ?? "";
+            const note = req.meta?.note ?? "";
+            const isOpen = expanded === req.id;
+
+            return (
+              <div
+                key={req.id}
+                className={`rounded-xl border transition ${req.read ? "border-slate-800 bg-slate-950/30" : "border-orange-500/20 bg-orange-500/5"}`}
+              >
+                <button
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
+                  onClick={() => {
+                    setExpanded(isOpen ? null : req.id);
+                    if (!req.read) markRead(req.id);
+                  }}
+                >
+                  <div className="h-8 w-8 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shrink-0">
+                    <HelpCircle className="h-4 w-4 text-orange-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-white truncate">
+                      {name}
+                      {company && <span className="text-slate-500 font-normal"> · {company}</span>}
+                    </p>
+                    <p className="text-xs text-slate-500 truncate">
+                      {note ? `"${note.slice(0, 60)}${note.length > 60 ? "…" : ""}"` : "Needs help building an assignment"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-slate-600">{timeAgo(req.createdAt)}</span>
+                    <ChevronRight className={`h-3.5 w-3.5 text-slate-600 transition-transform ${isOpen ? "rotate-90" : ""}`} />
+                  </div>
+                </button>
+
+                {isOpen && (
+                  <div className="px-3 pb-3 pt-0 border-t border-slate-800/60 space-y-3 mt-1">
+                    <div className="text-xs text-slate-500 space-y-1">
+                      <p><span className="text-slate-400 font-bold">From:</span> {name} {company ? `(${company})` : ""}</p>
+                    </div>
+                    {note && (
+                      <div className="rounded-xl bg-slate-950 border border-slate-800 px-3 py-2.5">
+                        <p className="text-xs text-slate-400 font-bold mb-1">Their request:</p>
+                        <p className="text-sm text-white leading-relaxed">{note}</p>
+                      </div>
+                    )}
+                    <p className="text-xs text-slate-600 italic">
+                      Build their assignment in the Assignment Control section above and assign it to them.
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function CommandPage() {
   const { currentUser, logout } = useAuthStore();
@@ -1164,6 +1307,14 @@ export default function CommandPage() {
           <div>
             <QuickInvite />
           </div>
+        </div>
+
+        {/* ── Full-width: Help Requests ── */}
+        <div className="mt-8">
+          <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">
+            Customer Help Requests
+          </p>
+          <HelpRequests />
         </div>
 
         {/* ── Full-width: Invite Activity ── */}

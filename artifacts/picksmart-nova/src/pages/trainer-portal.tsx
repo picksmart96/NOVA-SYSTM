@@ -1,49 +1,50 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { useTrainerStore } from "@/lib/trainerStore";
 import { useAuthStore } from "@/lib/authStore";
 import { useTranslation } from "react-i18next";
-import { AssignAssignmentModal } from "@/components/nova/AssignAssignmentModal";
 import { ActivateNovaModal } from "@/components/nova/ActivateNovaModal";
 import { LogSessionModal } from "@/components/nova/LogSessionModal";
 import { SessionCard } from "@/components/nova/SessionCard";
 import {
-  Shield, Users, ClipboardList, Zap, BookOpen,
-  MapPin, UserPlus, LogOut, CheckCircle2, AlertCircle, DoorOpen, KeyRound, Copy, Check, Mail, Send, AlertTriangle
+  Shield, Users, BookOpen,
+  Zap, MapPin, UserPlus, LogOut, KeyRound, Copy, Check, Mail, Send,
+  ClipboardList, Plus, HelpCircle, CheckCircle2, RefreshCw, ChevronRight,
 } from "lucide-react";
 import MistakeLogPanel from "@/components/nova/MistakeLogPanel";
+
+const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
 type SelectorLevel = "Beginner" | "Intermediate" | "Advanced";
 
 export default function TrainerPortalPage() {
   const { t } = useTranslation();
   const [, navigate] = useLocation();
-  const { currentUser, logout } = useAuthStore();
+  const { currentUser, logout, jwtToken } = useAuthStore();
   const {
-    trainer, selectors, sessions, assignments,
+    trainer, selectors, sessions,
     addSelector, toggleNova,
   } = useTrainerStore();
 
-  const handleSignOut = () => {
-    logout();
-    navigate("/login");
-  };
+  const handleSignOut = () => { logout(); navigate("/login"); };
 
-  const [showAssignModal, setShowAssignModal] = useState(false);
-  const [showNovaModal, setShowNovaModal] = useState(false);
-  const [showLogModal, setShowLogModal] = useState(false);
+  const [showNovaModal,  setShowNovaModal]  = useState(false);
+  const [showLogModal,   setShowLogModal]   = useState(false);
   const [preselectedSelectorId, setPreselectedSelectorId] = useState<number | null>(null);
-  const [preselectedAssignmentId, setPreselectedAssignmentId] = useState<string | null>(null);
 
+  // Register selector form
   const [form, setForm] = useState({
-    fullName: "",
-    email: "",
-    age: "",
-    level: "Beginner" as SelectorLevel,
-    notes: "",
+    fullName: "", email: "", age: "", level: "Beginner" as SelectorLevel, notes: "",
   });
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteLink,   setInviteLink]   = useState<string | null>(null);
   const [copiedInvite, setCopiedInvite] = useState(false);
+
+  // Request help state
+  const [showHelpModal,  setShowHelpModal]  = useState(false);
+  const [helpNote,       setHelpNote]       = useState("");
+  const [helpSending,    setHelpSending]    = useState(false);
+  const [helpSent,       setHelpSent]       = useState(false);
+  const [helpErr,        setHelpErr]        = useState("");
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,63 +57,69 @@ export default function TrainerPortalPage() {
       notes: form.notes,
     });
     try {
-      const raw = localStorage.getItem("picksmart-auth-store");
-      const jwt = raw ? (JSON.parse(raw) as { state?: { jwtToken?: string } })?.state?.jwtToken : null;
-      const res = await fetch("/api/auth/invite", {
+      const res = await fetch(`${BASE}/api/auth/invite`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
+          ...(jwtToken ? { Authorization: `Bearer ${jwtToken}` } : {}),
         },
         body: JSON.stringify({
           fullName: form.fullName.trim(),
-          email: form.email.trim(),
+          email:    form.email.trim(),
           role: "selector",
-          warehouseId: currentUser?.warehouseId ?? null,
+          warehouseId:   currentUser?.warehouseId   ?? null,
           warehouseSlug: currentUser?.warehouseSlug ?? null,
         }),
       });
       if (res.ok) {
         const { token } = await res.json() as { token: string };
-        setInviteLink(`${window.location.origin}/invite/${token}`);
+        setInviteLink(`${window.location.origin}${BASE}/invite?token=${token}`);
       }
     } catch { /* silent */ }
     setForm({ fullName: "", email: "", age: "", level: "Beginner", notes: "" });
   };
 
   const handleCopyInvite = () => {
-    if (inviteLink) {
-      navigator.clipboard.writeText(inviteLink).catch(() => {});
-      setCopiedInvite(true);
-      setTimeout(() => setCopiedInvite(false), 2500);
-    }
+    if (!inviteLink) return;
+    navigator.clipboard.writeText(inviteLink).catch(() => {});
+    setCopiedInvite(true);
+    setTimeout(() => setCopiedInvite(false), 2500);
   };
 
-  const openNovaFor = (id: number) => {
-    setPreselectedSelectorId(id);
-    setShowNovaModal(true);
-  };
-  const openAssignFor = (id: number) => {
-    setPreselectedSelectorId(id);
-    setPreselectedAssignmentId(null);
-    setShowAssignModal(true);
-  };
-  const openAssignForAssignment = (assignmentId: string) => {
-    setPreselectedAssignmentId(assignmentId);
-    setPreselectedSelectorId(null);
-    setShowAssignModal(true);
-  };
-  const openLogFor = (id: number) => {
-    setPreselectedSelectorId(id);
-    setShowLogModal(true);
-  };
+  const openNovaFor = (id: number) => { setPreselectedSelectorId(id); setShowNovaModal(true); };
+  const openLogFor  = (id: number) => { setPreselectedSelectorId(id); setShowLogModal(true);  };
 
-  const getAssignmentNumber = (assignmentId: string | null) => {
-    if (!assignmentId) return null;
-    return assignments.find((a) => a.id === assignmentId)?.assignmentNumber ?? null;
-  };
+  const novaActiveCount = selectors.filter(s => s.novaActive).length;
 
-  const openAssignmentsCount = selectors.filter((s) => s.assignedAssignmentId).length;
+  async function sendHelpRequest() {
+    if (!helpNote.trim()) { setHelpErr("Describe what you need help with."); return; }
+    setHelpSending(true); setHelpErr("");
+    try {
+      await fetch(`${BASE}/api/alerts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwtToken}` },
+        body: JSON.stringify({
+          type: "help_request",
+          message: `Assignment help requested by ${currentUser?.fullName ?? currentUser?.username ?? "a trainer"}`,
+          severity: "medium",
+          meta: {
+            note: helpNote.trim(),
+            requestedBy: {
+              id:          currentUser?.id,
+              username:    currentUser?.username,
+              fullName:    currentUser?.fullName,
+              companyName: currentUser?.companyName,
+            },
+          },
+        }),
+      });
+      setHelpSent(true);
+      setHelpNote("");
+      setTimeout(() => { setHelpSent(false); setShowHelpModal(false); }, 3000);
+    } catch {
+      setHelpErr("Failed to send. Please try again.");
+    } finally { setHelpSending(false); }
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-white px-3 py-5 sm:px-6 sm:py-8">
@@ -167,10 +174,10 @@ export default function TrainerPortalPage() {
 
           <div className="rounded-3xl border border-slate-800 bg-slate-900 p-4 sm:p-6 shadow-lg">
             <div className="flex items-center gap-2 mb-2 sm:mb-3">
-              <ClipboardList className="h-4 w-4 text-slate-500" />
-              <p className="text-slate-400 text-xs sm:text-sm font-medium">Assignments</p>
+              <Zap className="h-4 w-4 text-slate-500" />
+              <p className="text-slate-400 text-xs sm:text-sm font-medium">NOVA Active</p>
             </div>
-            <p className="text-3xl sm:text-5xl font-black text-white">{openAssignmentsCount}</p>
+            <p className="text-3xl sm:text-5xl font-black text-white">{novaActiveCount}</p>
           </div>
         </div>
 
@@ -193,12 +200,6 @@ export default function TrainerPortalPage() {
             className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-yellow-400 transition flex items-center gap-2"
           >
             <BookOpen className="h-4 w-4" /> Log Session
-          </button>
-          <button
-            onClick={() => { setPreselectedSelectorId(null); setShowAssignModal(true); }}
-            className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 font-semibold hover:border-yellow-400 transition flex items-center gap-2"
-          >
-            <ClipboardList className="h-4 w-4" /> Assign Assignment
           </button>
         </div>
 
@@ -259,13 +260,10 @@ export default function TrainerPortalPage() {
                   <input
                     value={form.age}
                     onChange={(e) => setForm((p) => ({ ...p, age: e.target.value }))}
-                    type="number"
-                    min="16"
-                    max="70"
+                    type="number" min="16" max="70"
                     className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-yellow-400 transition"
                   />
                 </div>
-
                 <div>
                   <label className="block text-sm text-slate-400 mb-2">Level</label>
                   <select
@@ -313,156 +311,104 @@ export default function TrainerPortalPage() {
               </div>
             ) : (
               <div className="space-y-4 max-h-[560px] overflow-y-auto pr-1">
-                {selectors.map((selector) => {
-                  const assignedNum = getAssignmentNumber(selector.assignedAssignmentId);
-                  return (
-                    <div
-                      key={selector.id}
-                      className="rounded-2xl border border-slate-800 bg-slate-950 p-5"
-                    >
-                      <h3 className="text-lg font-black capitalize">{selector.name}</h3>
-                      <p className="mt-1 text-slate-400 text-sm">
-                        {selector.novaId} · Age {selector.age}
-                      </p>
-                      <p className="mt-1 text-slate-400 text-sm">{selector.experience}</p>
-                      {selector.novaPin && (
-                        <div className="mt-2 inline-flex items-center gap-1.5 rounded-xl border border-yellow-400/30 bg-yellow-400/5 px-3 py-1">
-                          <KeyRound className="h-3 w-3 text-yellow-400" />
-                          <span className="text-xs font-black text-yellow-300 tracking-widest">{selector.novaPin}</span>
-                        </div>
-                      )}
+                {selectors.map((selector) => (
+                  <div key={selector.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+                    <h3 className="text-lg font-black capitalize">{selector.name}</h3>
+                    <p className="mt-1 text-slate-400 text-sm">
+                      {selector.novaId} · Age {selector.age}
+                    </p>
+                    <p className="mt-1 text-slate-400 text-sm">{selector.experience}</p>
+                    {selector.novaPin && (
+                      <div className="mt-2 inline-flex items-center gap-1.5 rounded-xl border border-yellow-400/30 bg-yellow-400/5 px-3 py-1">
+                        <KeyRound className="h-3 w-3 text-yellow-400" />
+                        <span className="text-xs font-black text-yellow-300 tracking-widest">{selector.novaPin}</span>
+                      </div>
+                    )}
 
-                      {/* Badges */}
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <span className={`rounded-full px-3 py-1 text-xs font-bold border ${
-                          selector.level === "Advanced"
-                            ? "bg-red-500/10 text-red-300 border-red-500/30"
-                            : selector.level === "Intermediate"
-                            ? "bg-blue-500/10 text-blue-300 border-blue-500/30"
-                            : "bg-yellow-500/10 text-yellow-300 border-yellow-500/30"
-                        }`}>
-                          {selector.level}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className={`rounded-full px-3 py-1 text-xs font-bold border ${
+                        selector.level === "Advanced"
+                          ? "bg-red-500/10 text-red-300 border-red-500/30"
+                          : selector.level === "Intermediate"
+                          ? "bg-blue-500/10 text-blue-300 border-blue-500/30"
+                          : "bg-yellow-500/10 text-yellow-300 border-yellow-500/30"
+                      }`}>
+                        {selector.level}
+                      </span>
+                      {selector.novaActive && (
+                        <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs font-bold text-green-300 border border-green-500/30">
+                          NOVA Active
                         </span>
-
-                        {selector.novaActive && (
-                          <span className="rounded-full bg-green-500/20 px-3 py-1 text-xs font-bold text-green-300 border border-green-500/30">
-                            NOVA Active
-                          </span>
-                        )}
-
-                        {assignedNum && (
-                          <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs font-bold text-blue-300 border border-blue-500/30">
-                            Assigned: #{assignedNum}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Quick actions */}
-                      <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-800 pt-4">
-                        <button
-                          onClick={() => openNovaFor(selector.id)}
-                          className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold hover:border-yellow-400 hover:text-yellow-400 transition flex items-center gap-1"
-                        >
-                          <Zap className="h-3 w-3" />
-                          {selector.novaActive ? "Deactivate" : "Activate"} NOVA
-                        </button>
-                        <button
-                          onClick={() => openAssignFor(selector.id)}
-                          className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold hover:border-yellow-400 hover:text-yellow-400 transition flex items-center gap-1"
-                        >
-                          <ClipboardList className="h-3 w-3" /> Assign
-                        </button>
-                        <button
-                          onClick={() => openLogFor(selector.id)}
-                          className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold hover:border-yellow-400 hover:text-yellow-400 transition flex items-center gap-1"
-                        >
-                          <BookOpen className="h-3 w-3" /> Log Session
-                        </button>
-                      </div>
+                      )}
                     </div>
-                  );
-                })}
+
+                    <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-800 pt-4">
+                      <button
+                        onClick={() => openNovaFor(selector.id)}
+                        className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold hover:border-yellow-400 hover:text-yellow-400 transition flex items-center gap-1"
+                      >
+                        <Zap className="h-3 w-3" />
+                        {selector.novaActive ? "Deactivate" : "Activate"} NOVA
+                      </button>
+                      <button
+                        onClick={() => openLogFor(selector.id)}
+                        className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold hover:border-yellow-400 hover:text-yellow-400 transition flex items-center gap-1"
+                      >
+                        <BookOpen className="h-3 w-3" /> Log Session
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
         </div>
 
-        {/* ── Assignments Panel ── */}
+        {/* ── Training Assignments ── */}
         <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-          <h2 className="text-2xl font-black mb-6 flex items-center gap-2">
-            <ClipboardList className="h-5 w-5 text-yellow-400" /> Assignments
-          </h2>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-2xl font-black flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-yellow-400" /> Training Assignments
+            </h2>
+          </div>
 
-          <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            {assignments.map((a) => {
-              const assignedTo = selectors.find((s) => s.assignedAssignmentId === a.id);
-              return (
-                <div
-                  key={a.id}
-                  className="rounded-2xl border border-slate-800 bg-slate-950 p-5 flex flex-col gap-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-lg font-black text-white">#{a.assignmentNumber}</p>
-                      <span className={`inline-block mt-1 rounded-full px-2.5 py-0.5 text-xs font-bold border ${
-                        a.type === "PRODUCTION"
-                          ? "bg-orange-500/10 text-orange-300 border-orange-500/30"
-                          : "bg-blue-500/10 text-blue-300 border-blue-500/30"
-                      }`}>
-                        {a.type}
-                      </span>
-                    </div>
-                    {assignedTo ? (
-                      <CheckCircle2 className="h-5 w-5 text-green-400 shrink-0 mt-0.5" />
-                    ) : (
-                      <AlertCircle className="h-5 w-5 text-slate-600 shrink-0 mt-0.5" />
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5 text-xs text-slate-400">
-                    <div className="flex justify-between">
-                      <span>Cases</span><span className="text-white font-bold">{a.totalCases}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Stops</span><span className="text-white font-bold">{a.stops}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Aisles</span><span className="text-white font-bold">{a.startAisle}–{a.endAisle}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="flex items-center gap-1"><DoorOpen className="h-3 w-3" /> Door</span>
-                      <span className="text-yellow-300 font-bold">{a.doorNumber} · {a.doorCode}</span>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-slate-800 pt-3">
-                    {assignedTo ? (
-                      <p className="text-xs text-green-300 font-semibold capitalize truncate">
-                        ✓ {assignedTo.name}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-slate-600 italic">Unassigned</p>
-                    )}
-                  </div>
-
-                  <div className="mt-auto flex gap-2">
-                    <Link
-                      href={`/nova/assignments/${a.id}`}
-                      className="flex-1 rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold text-center hover:border-slate-500 hover:text-white transition"
-                    >
-                      View Details
-                    </Link>
-                    <button
-                      onClick={() => openAssignForAssignment(a.id)}
-                      className="flex-1 rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold hover:border-yellow-400 hover:text-yellow-400 transition flex items-center justify-center gap-1"
-                    >
-                      <ClipboardList className="h-3 w-3" />
-                      {assignedTo ? "Reassign" : "Assign"}
-                    </button>
-                  </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            {/* Build from scratch */}
+            <Link href="/assignment-builder">
+              <div className="rounded-2xl border border-yellow-400/30 bg-yellow-400/5 hover:bg-yellow-400/10 p-6 flex flex-col gap-3 cursor-pointer transition group">
+                <div className="w-12 h-12 rounded-xl bg-yellow-400/20 border border-yellow-400/30 flex items-center justify-center">
+                  <Plus className="h-6 w-6 text-yellow-400" />
                 </div>
-              );
-            })}
+                <div>
+                  <p className="text-base font-black text-white group-hover:text-yellow-300 transition">Build from Scratch</p>
+                  <p className="text-sm text-slate-400 mt-1 leading-relaxed">
+                    Create your own training assignment — add stops manually, upload a CSV, or auto-generate random picks.
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 text-yellow-400 text-sm font-bold mt-auto">
+                  Open Builder <ChevronRight className="h-4 w-4" />
+                </div>
+              </div>
+            </Link>
+
+            {/* Request help */}
+            <div
+              onClick={() => { setShowHelpModal(true); setHelpSent(false); setHelpErr(""); }}
+              className="rounded-2xl border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 p-6 flex flex-col gap-3 cursor-pointer transition group"
+            >
+              <div className="w-12 h-12 rounded-xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
+                <HelpCircle className="h-6 w-6 text-blue-400" />
+              </div>
+              <div>
+                <p className="text-base font-black text-white group-hover:text-blue-300 transition">Request Help</p>
+                <p className="text-sm text-slate-400 mt-1 leading-relaxed">
+                  Not sure how to set it up? Send a request and the PickSmart team will build your assignment for you.
+                </p>
+              </div>
+              <div className="flex items-center gap-1 text-blue-400 text-sm font-bold mt-auto">
+                Send Request <ChevronRight className="h-4 w-4" />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -493,12 +439,6 @@ export default function TrainerPortalPage() {
       </div>
 
       {/* ── Modals ── */}
-      <AssignAssignmentModal
-        open={showAssignModal}
-        onClose={() => { setShowAssignModal(false); setPreselectedSelectorId(null); setPreselectedAssignmentId(null); }}
-        preselectedSelectorId={preselectedSelectorId}
-        preselectedAssignmentId={preselectedAssignmentId}
-      />
       <ActivateNovaModal
         open={showNovaModal}
         onClose={() => { setShowNovaModal(false); setPreselectedSelectorId(null); }}
@@ -508,6 +448,66 @@ export default function TrainerPortalPage() {
         onClose={() => { setShowLogModal(false); setPreselectedSelectorId(null); }}
         preselectedSelectorId={preselectedSelectorId}
       />
+
+      {/* ── Request Help Modal ── */}
+      {showHelpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl border border-slate-700 bg-slate-900 p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center">
+                <HelpCircle className="h-5 w-5 text-blue-400" />
+              </div>
+              <div>
+                <p className="font-black text-white text-base">Request Assignment Help</p>
+                <p className="text-xs text-slate-500">The PickSmart team will build it for you</p>
+              </div>
+            </div>
+
+            {helpSent ? (
+              <div className="rounded-2xl border border-green-500/30 bg-green-500/10 px-5 py-6 text-center space-y-2">
+                <CheckCircle2 className="h-8 w-8 text-green-400 mx-auto" />
+                <p className="text-green-300 font-black">Request sent!</p>
+                <p className="text-slate-400 text-sm">We'll be in touch to help build your assignment.</p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-2">
+                    Describe what you need
+                  </label>
+                  <textarea
+                    value={helpNote}
+                    onChange={e => { setHelpNote(e.target.value); setHelpErr(""); }}
+                    rows={4}
+                    placeholder="e.g. 30-stop training run from aisles 10–25, mixed qty 1–6 cases, 3-digit check codes..."
+                    className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-blue-400 transition resize-none placeholder:text-slate-600 text-sm"
+                  />
+                  {helpErr && <p className="text-xs text-red-400 mt-1">{helpErr}</p>}
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowHelpModal(false)}
+                    className="flex-1 rounded-2xl border border-slate-700 text-slate-400 py-3 text-sm font-bold hover:border-slate-500 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={sendHelpRequest}
+                    disabled={helpSending || !helpNote.trim()}
+                    className="flex-1 rounded-2xl bg-blue-500 text-white font-black py-3 text-sm hover:bg-blue-400 transition disabled:opacity-40 flex items-center justify-center gap-2"
+                  >
+                    {helpSending
+                      ? <><RefreshCw className="h-4 w-4 animate-spin" /> Sending…</>
+                      : <><Send className="h-4 w-4" /> Send Request</>
+                    }
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
