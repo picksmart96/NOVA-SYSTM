@@ -18,9 +18,10 @@ const NAV_SECTIONS = [
   {
     label: "Management",
     items: [
-      { label: "Trainer Portal",    path: "/trainer-portal",      icon: LayoutDashboard, desc: "Manage selectors & sessions",  color: "yellow" },
-      { label: "Supervisor",        path: "/supervisor",           icon: Shield,          desc: "Shift overview & metrics",     color: "green"  },
-      { label: "Owner Dashboard",   path: "/owner",                icon: Users,           desc: "Accounts, billing & settings", color: "blue"   },
+      { label: "Trainer Portal",    path: "/trainer-portal",      icon: LayoutDashboard, desc: "Manage selectors & sessions",       color: "yellow" },
+      { label: "Supervisor",        path: "/supervisor",           icon: Shield,          desc: "Shift overview & metrics",          color: "green"  },
+      { label: "Manager",           path: "/manager",              icon: Users,           desc: "Team performance & training status", color: "blue"   },
+      { label: "Owner Dashboard",   path: "/owner",                icon: Users,           desc: "Accounts, billing & settings",      color: "blue"   },
     ],
   },
   {

@@ -77,17 +77,7 @@ export function useRoleNav(): NavLink[] {
     links.push({ href: "/trainer-portal", label: "Trainer Portal", group: "staff" });
   }
 
-  // Supervisor+ gets Supervisor dashboard
-  if (atLeast("supervisor", publicRole)) {
-    links.push({ href: "/supervisor", label: "Supervisor", group: "staff" });
-  }
-
-  // Manager+ gets Manager dashboard
-  if (atLeast("manager", publicRole)) {
-    links.push({ href: "/manager", label: "Manager", group: "staff" });
-  }
-
-  // Owner-only: Control Panel is private (accessible via Command Center)
+  // Supervisor, Manager, and Control Panel are private — accessible only via Command Center
   // Not shown in general nav
 
   return links;
