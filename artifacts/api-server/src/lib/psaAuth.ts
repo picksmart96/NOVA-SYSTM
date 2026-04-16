@@ -55,13 +55,17 @@ export function formatAccountNumber(n: number): string {
 }
 
 export async function nextAccountNumber(): Promise<string> {
-  const rows = await db
-    .update(psaAccountCounter)
-    .set({ nextNumber: sql`next_number + 1` })
-    .where(eq(psaAccountCounter.id, 1))
-    .returning({ nextNumber: psaAccountCounter.nextNumber });
-
-  const num = rows[0]?.nextNumber ?? 2;
+  // UPSERT: create the row if missing (starting at 3 → returns PSA-0002 first time),
+  // or increment if it already exists. This prevents the missing-row bug that caused
+  // every signup to get PSA-0001 and collide with the master account.
+  const result = await db.execute(sql`
+    INSERT INTO psa_account_counter (id, next_number)
+    VALUES (1, 3)
+    ON CONFLICT (id) DO UPDATE
+      SET next_number = psa_account_counter.next_number + 1
+    RETURNING next_number
+  `);
+  const num = (result.rows[0] as { next_number: number }).next_number;
   return formatAccountNumber(num - 1);
 }
 

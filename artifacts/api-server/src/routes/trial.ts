@@ -70,27 +70,42 @@ router.post("/auth/trial", signupRateLimit, async (req, res) => {
     }
 
     const passwordHash = await hashPassword(password);
-    const accountNumber = await nextAccountNumber();
-
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 30);
 
-    const [user] = await db
-      .insert(psaUsers)
-      .values({
-        username: username.trim(),
-        passwordHash,
-        fullName: fullName.trim(),
-        email: email.trim(),
-        role: "trainer",
-        status: "active",
-        subscriptionPlan: "company",
-        isSubscribed: true,
-        accountNumber,
-        companyName: companyName.trim(),
-        trialEndsAt,
-      })
-      .returning();
+    // Retry up to 3 times in case of account number collision (race condition safety)
+    let user: typeof psaUsers.$inferSelect | undefined;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const accountNumber = await nextAccountNumber();
+      try {
+        [user] = await db
+          .insert(psaUsers)
+          .values({
+            username: username.trim(),
+            passwordHash,
+            fullName: fullName.trim(),
+            email: email.trim(),
+            role: "trainer",
+            status: "active",
+            subscriptionPlan: "company",
+            isSubscribed: true,
+            accountNumber,
+            companyName: companyName.trim(),
+            trialEndsAt,
+          })
+          .returning();
+        break;
+      } catch (insertErr: any) {
+        const msg = String(insertErr?.message ?? "");
+        if (msg.includes("psa_users_account_number_key") && attempt < 2) {
+          logger.warn({ accountNumber, attempt }, "[Trial] Account number collision, retrying");
+          continue;
+        }
+        throw insertErr;
+      }
+    }
+
+    if (!user) throw new Error("Failed to create user after retries");
 
     const token = await signToken({
       sub: user.id,
@@ -99,12 +114,19 @@ router.post("/auth/trial", signupRateLimit, async (req, res) => {
       accountNumber: user.accountNumber,
     });
 
-    logger.info({ username: user.username, accountNumber }, "[Trial] New trial account created");
+    logger.info({ username: user.username, accountNumber: user.accountNumber }, "[Trial] New trial account created");
 
     res.status(201).json({ token, user: safeUser(user) });
-  } catch (err) {
+  } catch (err: any) {
     logger.error({ err }, "[Trial] Signup error");
-    res.status(500).json({ error: "Server error" });
+    const msg = String(err?.message ?? "");
+    if (msg.includes("psa_users_username_key")) {
+      res.status(409).json({ error: "Username already taken" });
+    } else if (msg.includes("psa_users_email_key")) {
+      res.status(409).json({ error: "Email already registered" });
+    } else {
+      res.status(500).json({ error: "Something went wrong. Please try again." });
+    }
   }
 });
 

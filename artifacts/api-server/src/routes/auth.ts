@@ -155,25 +155,36 @@ router.post("/auth/users", requireRole("manager"), async (req, res) => {
     }
 
     const passwordHash = await hashPassword(password);
-    const accountNumber = await nextAccountNumber();
 
-    const [user] = await db
-      .insert(psaUsers)
-      .values({
-        username,
-        passwordHash,
-        fullName,
-        role,
-        email: email || null,
-        status: "active",
-        subscriptionPlan: "company",
-        isSubscribed: true,
-        accountNumber,
-        warehouseId: warehouseId ?? null,
-        warehouseSlug: warehouseSlug ?? null,
-      })
-      .returning();
+    let user: typeof psaUsers.$inferSelect | undefined;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const accountNumber = await nextAccountNumber();
+      try {
+        [user] = await db
+          .insert(psaUsers)
+          .values({
+            username,
+            passwordHash,
+            fullName,
+            role,
+            email: email || null,
+            status: "active",
+            subscriptionPlan: "company",
+            isSubscribed: true,
+            accountNumber,
+            warehouseId: warehouseId ?? null,
+            warehouseSlug: warehouseSlug ?? null,
+          })
+          .returning();
+        break;
+      } catch (insertErr: any) {
+        const msg = String(insertErr?.message ?? "");
+        if (msg.includes("psa_users_account_number_key") && attempt < 2) continue;
+        throw insertErr;
+      }
+    }
 
+    if (!user) throw new Error("Failed to create user after retries");
     res.status(201).json({ user: safeUser(user) });
   } catch (err) {
     logger.error({ err }, "[Auth] Create user error");
@@ -364,24 +375,36 @@ router.post("/auth/invite/accept", async (req, res) => {
     const effectiveFullName = (invite.fullName && invite.fullName !== "Team Member") ? invite.fullName : (nameOverride ?? invite.fullName);
 
     const passwordHash = await hashPassword(password);
-    const accountNumber = await nextAccountNumber();
 
-    const [user] = await db
-      .insert(psaUsers)
-      .values({
-        username,
-        passwordHash,
-        fullName: effectiveFullName,
-        email: effectiveEmail || null,
-        role: invite.role,
-        status: "active",
-        subscriptionPlan: "company",
-        isSubscribed: true,
-        accountNumber,
-        warehouseId: invite.warehouseId,
-        warehouseSlug: invite.warehouseSlug,
-      })
-      .returning();
+    let user: typeof psaUsers.$inferSelect | undefined;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const accountNumber = await nextAccountNumber();
+      try {
+        [user] = await db
+          .insert(psaUsers)
+          .values({
+            username,
+            passwordHash,
+            fullName: effectiveFullName,
+            email: effectiveEmail || null,
+            role: invite.role,
+            status: "active",
+            subscriptionPlan: "company",
+            isSubscribed: true,
+            accountNumber,
+            warehouseId: invite.warehouseId,
+            warehouseSlug: invite.warehouseSlug,
+          })
+          .returning();
+        break;
+      } catch (insertErr: any) {
+        const msg = String(insertErr?.message ?? "");
+        if (msg.includes("psa_users_account_number_key") && attempt < 2) continue;
+        throw insertErr;
+      }
+    }
+
+    if (!user) throw new Error("Failed to create user after retries");
 
     await db
       .update(psaInvites)
