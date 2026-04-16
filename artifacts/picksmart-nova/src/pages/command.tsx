@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Users, Mic, Shield, UserPlus,
   Check, Copy, Send, Zap, HelpCircle,
   ClipboardList, Warehouse, LogOut, ChevronRight,
-  Mail, Building2, User,
+  Mail, Building2, User, RefreshCw, Clock,
+  TrendingUp, AlertTriangle, CheckCircle2, XCircle,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/authStore";
 
@@ -155,6 +156,185 @@ function QuickInvite() {
           </div>
           {err  && <p className="text-xs text-red-400">{err}</p>}
           {sent && <p className="text-xs text-green-400">✓ Invite sent to {email}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Trial Signups Panel ──────────────────────────────────────────────────────
+interface TrialSignup {
+  id: string;
+  username: string;
+  fullName: string;
+  email: string | null;
+  companyName: string | null;
+  isSubscribed: boolean;
+  subscriptionPlan: string | null;
+  trialEndsAt: string | null;
+  createdAt: string;
+  status: string;
+}
+
+function daysLeft(endsAt: string | null): number {
+  if (!endsAt) return 0;
+  return Math.ceil((new Date(endsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+function TrialSignups() {
+  const jwtToken = useAuthStore((s) => s.jwtToken);
+  const [signups,   setSignups]   = useState<TrialSignup[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [err,       setErr]       = useState("");
+  const [sending,   setSending]   = useState<string | null>(null);
+  const [sentMap,   setSentMap]   = useState<Record<string, boolean>>({});
+
+  const load = useCallback(async () => {
+    setLoading(true); setErr("");
+    try {
+      const r = await fetch(`${BASE}/api/trial/signups`, {
+        headers: { Authorization: `Bearer ${jwtToken}` },
+      });
+      if (!r.ok) throw new Error("Failed to fetch");
+      const d = await r.json() as { signups: TrialSignup[] };
+      setSignups(d.signups);
+    } catch {
+      setErr("Could not load trial signups.");
+    } finally { setLoading(false); }
+  }, [jwtToken]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function sendUpgrade(s: TrialSignup) {
+    if (!s.email) return;
+    setSending(s.id);
+    try {
+      await fetch(`${BASE}/api/trial/send-link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwtToken}` },
+        body: JSON.stringify({
+          companyName: s.companyName ?? s.username,
+          contactName: s.fullName,
+          email: s.email,
+        }),
+      });
+      setSentMap(m => ({ ...m, [s.id]: true }));
+      setTimeout(() => setSentMap(m => { const n = { ...m }; delete n[s.id]; return n; }), 3000);
+    } finally { setSending(null); }
+  }
+
+  const active    = signups.filter(s => !s.isSubscribed && daysLeft(s.trialEndsAt) > 0);
+  const expiring  = active.filter(s => daysLeft(s.trialEndsAt) <= 5);
+  const expired   = signups.filter(s => !s.isSubscribed && daysLeft(s.trialEndsAt) <= 0);
+  const converted = signups.filter(s => s.isSubscribed && s.trialEndsAt);
+
+  return (
+    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-black text-white flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-yellow-400" /> Trial Signups
+        </h2>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="text-slate-500 hover:text-white transition"
+          title="Refresh"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+        </button>
+      </div>
+
+      {/* Summary pills */}
+      <div className="grid grid-cols-3 gap-2 text-center">
+        {[
+          { label: "Active",    count: active.length,    color: "text-green-400",  bg: "bg-green-500/10 border-green-500/20" },
+          { label: "Expiring",  count: expiring.length,  color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20" },
+          { label: "Converted", count: converted.length, color: "text-yellow-400", bg: "bg-yellow-400/10 border-yellow-400/20" },
+        ].map(p => (
+          <div key={p.label} className={`rounded-xl border px-3 py-2 ${p.bg}`}>
+            <p className={`text-xl font-black ${p.color}`}>{p.count}</p>
+            <p className="text-xs text-slate-500">{p.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {err && <p className="text-xs text-red-400">{err}</p>}
+
+      {loading ? (
+        <div className="space-y-2">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-16 rounded-xl bg-slate-800/50 animate-pulse" />
+          ))}
+        </div>
+      ) : signups.length === 0 ? (
+        <div className="text-center py-6 text-slate-500 text-sm">
+          No trial signups yet. Send a trial link to get started.
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+          {signups.map(s => {
+            const days    = daysLeft(s.trialEndsAt);
+            const isConv  = s.isSubscribed;
+            const isExp   = !isConv && days <= 0;
+            const isUrgent = !isConv && !isExp && days <= 5;
+
+            let statusIcon = <Clock className="h-3.5 w-3.5 text-green-400" />;
+            let statusText = `${days}d left`;
+            let statusCls  = "text-green-400";
+            if (isConv)   { statusIcon = <CheckCircle2 className="h-3.5 w-3.5 text-yellow-400" />; statusText = "Subscribed"; statusCls = "text-yellow-400"; }
+            else if (isExp) { statusIcon = <XCircle className="h-3.5 w-3.5 text-red-400" />; statusText = "Expired"; statusCls = "text-red-400"; }
+            else if (isUrgent) { statusIcon = <AlertTriangle className="h-3.5 w-3.5 text-orange-400" />; statusText = `${days}d left`; statusCls = "text-orange-400"; }
+
+            return (
+              <div
+                key={s.id}
+                className={`rounded-xl border p-3 flex items-center gap-3 transition ${
+                  isConv   ? "border-yellow-400/20 bg-yellow-400/5" :
+                  isExp    ? "border-slate-800 bg-slate-950/50 opacity-60" :
+                  isUrgent ? "border-orange-500/20 bg-orange-500/5" :
+                             "border-slate-800 bg-slate-950/30"
+                }`}
+              >
+                {/* Avatar */}
+                <div className={`h-9 w-9 rounded-xl flex items-center justify-center text-sm font-black shrink-0 ${
+                  isConv ? "bg-yellow-400 text-slate-950" : "bg-slate-800 text-slate-400"
+                }`}>
+                  {(s.companyName ?? s.fullName ?? "?")[0].toUpperCase()}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-white truncate">
+                    {s.companyName ?? s.fullName}
+                  </p>
+                  <p className="text-xs text-slate-500 truncate">{s.email ?? s.username}</p>
+                </div>
+
+                {/* Status */}
+                <div className={`flex items-center gap-1 text-xs font-bold shrink-0 ${statusCls}`}>
+                  {statusIcon} {statusText}
+                </div>
+
+                {/* Action */}
+                {!isConv && s.email && (
+                  <button
+                    onClick={() => sendUpgrade(s)}
+                    disabled={sending === s.id}
+                    title={isExp ? "Re-send trial link" : "Send upgrade nudge"}
+                    className="shrink-0 rounded-lg border border-slate-700 bg-slate-800 hover:border-yellow-400 hover:text-yellow-400 text-slate-400 p-1.5 transition"
+                  >
+                    {sentMap[s.id]
+                      ? <Check className="h-3.5 w-3.5 text-green-400" />
+                      : sending === s.id
+                      ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      : <Send className="h-3.5 w-3.5" />
+                    }
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -358,6 +538,14 @@ export default function CommandPage() {
           <div>
             <QuickInvite />
           </div>
+        </div>
+
+        {/* ── Full-width: Trial Signups ── */}
+        <div className="mt-8">
+          <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">
+            Trial Activity
+          </p>
+          <TrialSignups />
         </div>
       </div>
     </div>

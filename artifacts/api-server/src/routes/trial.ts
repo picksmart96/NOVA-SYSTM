@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { psaUsers } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, isNotNull, desc } from "drizzle-orm";
 import { hashPassword, signToken, nextAccountNumber } from "../lib/psaAuth.js";
 import { logger } from "../lib/logger.js";
 import { ReplitConnectors } from "@replit/connectors-sdk";
+import { requireAuth, requireRole } from "../middleware/requireAuth.js";
 
 const router = Router();
 
@@ -102,6 +103,34 @@ router.post("/auth/trial", async (req, res) => {
     res.status(201).json({ token, user: safeUser(user) });
   } catch (err) {
     logger.error({ err }, "[Trial] Signup error");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ── GET /api/trial/signups ────────────────────────────────────────────────────
+// Owner only. Returns all accounts that have a trialEndsAt set, newest first.
+router.get("/trial/signups", requireAuth, requireRole("owner"), async (_req, res) => {
+  try {
+    const trials = await db
+      .select({
+        id:               psaUsers.id,
+        username:         psaUsers.username,
+        fullName:         psaUsers.fullName,
+        email:            psaUsers.email,
+        companyName:      psaUsers.companyName,
+        isSubscribed:     psaUsers.isSubscribed,
+        subscriptionPlan: psaUsers.subscriptionPlan,
+        trialEndsAt:      psaUsers.trialEndsAt,
+        createdAt:        psaUsers.createdAt,
+        status:           psaUsers.status,
+      })
+      .from(psaUsers)
+      .where(isNotNull(psaUsers.trialEndsAt))
+      .orderBy(desc(psaUsers.createdAt));
+
+    res.json({ signups: trials });
+  } catch (err) {
+    logger.error({ err }, "[Trial] signups fetch error");
     res.status(500).json({ error: "Server error" });
   }
 });
