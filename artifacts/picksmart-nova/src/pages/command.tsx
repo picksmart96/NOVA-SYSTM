@@ -512,8 +512,21 @@ function parseCSV(text: string): Stop[] {
   }).filter(s => s.aisle && s.slot);
 }
 
-interface Assignment { id: string; title: string; totalCases: number; status: string; trainerUserId?: string | null; startAisle?: number; endAisle?: number; }
-interface Trainer { id: string; username: string; fullName: string | null; }
+interface Assignment {
+  id: string;
+  title: string;
+  assignmentNumber?: number;
+  type?: string;
+  totalCases: number;
+  stops?: number;
+  status: string;
+  trainerUserId?: string | null;
+  startAisle?: number;
+  endAisle?: number;
+  doorNumber?: number;
+  goalTimeMinutes?: number | null;
+}
+interface Trainer { id: string; username: string; fullName: string | null; role?: string; }
 
 // ─── Assignment Manager ───────────────────────────────────────────────────────
 function AssignmentManager() {
@@ -735,59 +748,150 @@ function AssignmentManager() {
 
       {/* ── Assignment List ── */}
       {loading ? (
-        <div className="space-y-2">{[...Array(3)].map((_, i) => <div key={i} className="h-14 rounded-xl bg-slate-800/50 animate-pulse" />)}</div>
+        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {[...Array(3)].map((_, i) => <div key={i} className="h-56 rounded-2xl bg-slate-800/50 animate-pulse" />)}
+        </div>
       ) : assignments.length === 0 ? (
-        <div className="text-center py-8">
-          <ClipboardList className="h-8 w-8 text-slate-700 mx-auto mb-2" />
-          <p className="text-slate-500 text-sm">No assignments yet.</p>
-          <p className="text-slate-600 text-xs mt-1">Click "New Assignment" to create one for your NOVA trainers.</p>
+        <div className="text-center py-12">
+          <ClipboardList className="h-10 w-10 text-slate-700 mx-auto mb-3" />
+          <p className="text-slate-500 text-sm font-bold">No assignments yet.</p>
+          <p className="text-slate-600 text-xs mt-1">Click "New Assignment" above to build one and assign it to a trainer.</p>
         </div>
       ) : (
-        <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {assignments.map(a => {
             const assignedTrainer = trainers.find(t => t.id === a.trainerUserId);
             const isOpen = assigningId === a.id;
-            return (
-              <div key={a.id} className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-                <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center shrink-0">
-                    <ClipboardList className="h-4 w-4 text-yellow-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-white truncate">{a.title}</p>
-                    <p className="text-xs text-slate-500">
-                      {a.totalCases} cases
-                      {a.startAisle != null && ` · Aisles ${a.startAisle}–${a.endAisle}`}
-                      <span className={`ml-2 font-bold ${a.status === "completed" ? "text-green-400" : a.status === "active" ? "text-blue-400" : "text-slate-500"}`}>
-                        {a.status}
-                      </span>
-                    </p>
-                  </div>
+            const statusColor = a.status === "completed"
+              ? "text-green-400"
+              : a.status === "active"
+              ? "text-blue-400"
+              : "text-slate-500";
 
-                  {/* Assign button */}
+            return (
+              <div key={a.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-5 flex flex-col gap-3">
+
+                {/* Card header */}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    {a.assignmentNumber && (
+                      <p className="text-lg font-black text-white">#{a.assignmentNumber}</p>
+                    )}
+                    <p className="text-xs text-slate-400 truncate max-w-[160px]">{a.title}</p>
+                    <span className={`inline-block mt-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
+                      a.type === "PRODUCTION"
+                        ? "bg-orange-500/10 text-orange-300 border-orange-500/30"
+                        : "bg-blue-500/10 text-blue-300 border-blue-500/30"
+                    }`}>
+                      {a.type ?? "TRAINING"}
+                    </span>
+                  </div>
+                  {assignedTrainer ? (
+                    <CheckCircle2 className="h-5 w-5 text-green-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="h-5 w-5 text-slate-600 shrink-0 mt-0.5" />
+                  )}
+                </div>
+
+                {/* Stats */}
+                <div className="space-y-1.5 text-xs text-slate-400">
+                  <div className="flex justify-between">
+                    <span>Cases</span>
+                    <span className="text-white font-bold">{a.totalCases}</span>
+                  </div>
+                  {a.stops != null && (
+                    <div className="flex justify-between">
+                      <span>Stops</span>
+                      <span className="text-white font-bold">{a.stops}</span>
+                    </div>
+                  )}
+                  {a.startAisle != null && (
+                    <div className="flex justify-between">
+                      <span>Aisles</span>
+                      <span className="text-white font-bold">{a.startAisle}–{a.endAisle}</span>
+                    </div>
+                  )}
+                  {a.doorNumber != null && (
+                    <div className="flex justify-between items-center">
+                      <span className="flex items-center gap-1">
+                        <FileText className="h-3 w-3" /> Door
+                      </span>
+                      <span className="text-yellow-300 font-bold">{a.doorNumber}</span>
+                    </div>
+                  )}
+                  {a.goalTimeMinutes && (
+                    <div className="flex justify-between">
+                      <span>Goal</span>
+                      <span className="text-white font-bold">{a.goalTimeMinutes} min</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span>Status</span>
+                    <span className={`font-bold capitalize ${statusColor}`}>{a.status}</span>
+                  </div>
+                </div>
+
+                {/* Assigned trainer */}
+                <div className="border-t border-slate-800 pt-2.5">
+                  {assignedTrainer ? (
+                    <p className="text-xs text-green-300 font-semibold truncate">
+                      ✓ {assignedTrainer.fullName ?? assignedTrainer.username}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-600 italic">Unassigned</p>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="mt-auto flex gap-2">
+                  <Link
+                    href={`/nova/assignments/${a.id}`}
+                    className="flex-1 rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold text-center hover:border-slate-500 hover:text-white transition"
+                  >
+                    View Details
+                  </Link>
                   <button
                     onClick={() => setAssigningId(isOpen ? null : a.id)}
-                    className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-bold transition ${assignedTrainer ? "border-green-500/30 bg-green-500/10 text-green-400" : "border-slate-700 text-slate-400 hover:border-yellow-400 hover:text-yellow-400"}`}
+                    className={`flex-1 rounded-xl border px-3 py-2 text-xs font-bold flex items-center justify-center gap-1 transition ${
+                      isOpen
+                        ? "border-yellow-400 bg-yellow-400/10 text-yellow-400"
+                        : assignedTrainer
+                        ? "border-green-500/30 bg-green-500/10 text-green-400 hover:border-yellow-400 hover:bg-yellow-400/5 hover:text-yellow-400"
+                        : "border-slate-700 hover:border-yellow-400 hover:text-yellow-400"
+                    }`}
                   >
-                    {assignedTrainer ? `→ ${assignedTrainer.fullName ?? assignedTrainer.username}` : "Assign Trainer"}
-                    <ChevronDown className={`h-3 w-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                    <ClipboardList className="h-3 w-3" />
+                    {assignedTrainer ? "Reassign" : "Assign"}
                   </button>
                 </div>
 
                 {/* Trainer dropdown */}
                 {isOpen && (
-                  <div className="mt-2 ml-12 space-y-1">
-                    <button onClick={() => handleAssign(a.id, "")}
-                      className="w-full text-left rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-500 hover:border-slate-500 hover:text-white transition">
+                  <div className="space-y-1 border-t border-slate-800 pt-2">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Assign to trainer:</p>
+                    <button
+                      onClick={() => handleAssign(a.id, "")}
+                      className="w-full text-left rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-500 hover:border-slate-500 hover:text-white transition"
+                    >
                       — Unassign —
                     </button>
                     {trainers.length === 0 ? (
-                      <p className="text-xs text-slate-600 px-3 py-2">No trainers in system yet. Invite a trainer first.</p>
+                      <p className="text-xs text-slate-600 px-1 py-1">No trainers yet. Invite a trainer first.</p>
                     ) : trainers.map(t => (
-                      <button key={t.id} onClick={() => handleAssign(a.id, t.id)}
-                        className={`w-full text-left rounded-lg border px-3 py-2 text-xs font-bold transition ${a.trainerUserId === t.id ? "border-green-500/30 bg-green-500/10 text-green-400" : "border-slate-700 text-white hover:border-yellow-400 hover:bg-yellow-400/5"}`}>
+                      <button
+                        key={t.id}
+                        onClick={() => handleAssign(a.id, t.id)}
+                        className={`w-full text-left rounded-lg border px-3 py-2 text-xs font-bold transition ${
+                          a.trainerUserId === t.id
+                            ? "border-green-500/30 bg-green-500/10 text-green-400"
+                            : "border-slate-700 text-white hover:border-yellow-400 hover:bg-yellow-400/5"
+                        }`}
+                      >
                         {t.fullName ?? t.username}
-                        {a.trainerUserId === t.id && <span className="ml-2 text-green-400 font-normal">✓ Assigned</span>}
+                        <span className="ml-1 text-[10px] font-normal text-slate-500 capitalize">
+                          {t.role}
+                        </span>
+                        {a.trainerUserId === t.id && <span className="ml-2 text-green-400 font-normal">✓</span>}
                       </button>
                     ))}
                   </div>

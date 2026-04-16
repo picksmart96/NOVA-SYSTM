@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { assignmentsTable, assignmentStopsTable } from "@workspace/db";
-import { eq, count, avg, sum } from "drizzle-orm";
+import { eq, count, avg, sum, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 const router = Router();
@@ -28,7 +28,17 @@ router.get("/assignments/summary", async (req, res) => {
 router.get("/assignments", async (req, res) => {
   try {
     const assignments = await db.select().from(assignmentsTable);
-    res.json(assignments);
+    // Attach stop counts
+    const counts = await db
+      .select({
+        assignmentId: assignmentStopsTable.assignmentId,
+        stops: sql<number>`count(*)`.mapWith(Number),
+      })
+      .from(assignmentStopsTable)
+      .groupBy(assignmentStopsTable.assignmentId);
+    const countMap = Object.fromEntries(counts.map(c => [c.assignmentId, c.stops]));
+    const result = assignments.map(a => ({ ...a, stops: countMap[a.id] ?? 0 }));
+    res.json(result);
   } catch (err) {
     req.log.error({ err }, "Error listing assignments");
     res.status(500).json({ error: "Internal server error" });
