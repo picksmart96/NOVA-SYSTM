@@ -6,6 +6,7 @@ import {
   ClipboardList, Warehouse, LogOut, ChevronRight,
   Mail, Building2, User, RefreshCw, Clock,
   TrendingUp, AlertTriangle, CheckCircle2, XCircle,
+  PlayCircle, Activity,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/authStore";
 
@@ -458,6 +459,115 @@ function SendTrialLink({ senderName }: { senderName: string }) {
   );
 }
 
+// ─── NOVA Activity Panel ──────────────────────────────────────────────────────
+interface NovaLaunch {
+  id: string;
+  createdAt: string;
+  meta: string | null;
+  username: string | null;
+  fullName: string | null;
+  companyName: string | null;
+  role: string | null;
+}
+
+function timeAgo(ts: string): string {
+  const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function NovaActivity() {
+  const jwtToken = useAuthStore((s) => s.jwtToken);
+  const [launches, setLaunches] = useState<NovaLaunch[]>([]);
+  const [loading, setLoading]   = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch(`${BASE}/api/metrics/nova-launches`, {
+        headers: { Authorization: `Bearer ${jwtToken}` },
+      });
+      if (!r.ok) throw new Error("Failed");
+      const d = await r.json() as { launches: NovaLaunch[] };
+      setLaunches(d.launches);
+    } catch {
+      /* silently fail */
+    } finally {
+      setLoading(false);
+    }
+  }, [jwtToken]);
+
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 30_000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  return (
+    <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 rounded-xl bg-yellow-400/10 border border-yellow-400/30 flex items-center justify-center">
+            <Activity className="h-4 w-4 text-yellow-400" />
+          </div>
+          <div>
+            <p className="text-sm font-black text-white">NOVA Sessions</p>
+            <p className="text-xs text-slate-500">Live trainer activity</p>
+          </div>
+        </div>
+        <button onClick={load} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-white transition">
+          <RefreshCw className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-14 rounded-xl bg-slate-800/50 animate-pulse" />
+          ))}
+        </div>
+      ) : launches.length === 0 ? (
+        <div className="text-center py-8">
+          <PlayCircle className="h-8 w-8 text-slate-700 mx-auto mb-2" />
+          <p className="text-slate-500 text-sm">No NOVA sessions yet.</p>
+          <p className="text-slate-600 text-xs mt-1">Sessions appear here when trainers start them.</p>
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+          {launches.map((lnch) => {
+            let selectorName = "";
+            try {
+              const parsed = JSON.parse(lnch.meta ?? "{}");
+              selectorName = parsed.selectorName ?? parsed.selectorNovaId ?? "";
+            } catch { /* ignore */ }
+
+            return (
+              <div key={lnch.id} className="flex items-center gap-3 rounded-xl bg-slate-950 border border-slate-800 px-3 py-2.5">
+                <div className="h-8 w-8 rounded-lg bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center shrink-0">
+                  <Zap className="h-4 w-4 text-yellow-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-white truncate">
+                    {selectorName ? `Selector: ${selectorName}` : "Session started"}
+                  </p>
+                  <p className="text-xs text-slate-500 truncate">
+                    {lnch.companyName ?? lnch.fullName ?? lnch.username ?? "Unknown"} · {lnch.role ?? "trainer"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 text-xs text-slate-600 shrink-0">
+                  <Clock className="h-3 w-3" />
+                  {timeAgo(lnch.createdAt)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function CommandPage() {
   const { currentUser, logout } = useAuthStore();
@@ -546,6 +656,14 @@ export default function CommandPage() {
             Trial Activity
           </p>
           <TrialSignups />
+        </div>
+
+        {/* ── Full-width: NOVA Sessions ── */}
+        <div className="mt-8">
+          <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">
+            NOVA Trainer Sessions
+          </p>
+          <NovaActivity />
         </div>
       </div>
     </div>

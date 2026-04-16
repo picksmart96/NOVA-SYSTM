@@ -12,7 +12,7 @@ const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
 
 export default function NovaTrainerPage() {
   const { selectors } = useTrainerStore();
-  const { lock, jwtToken } = useAuthStore();
+  const { lock, jwtToken, currentUser } = useAuthStore();
   const { profile, fetchProfile } = useWarehouseProfileStore();
   const [, navigate] = useLocation();
 
@@ -55,6 +55,19 @@ export default function NovaTrainerPage() {
     await new Promise((r) => setTimeout(r, 300));
     setLoading(false);
     setActiveNovaId(cleaned);
+
+    fetch(`${API_BASE}/api/track`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(jwtToken ? { Authorization: `Bearer ${jwtToken}` } : {}),
+      },
+      body: JSON.stringify({
+        event: "nova_trainer_launched",
+        userId: (currentUser as any)?.id ?? undefined,
+        meta: JSON.stringify({ selectorNovaId: cleaned, selectorName: found.name }),
+      }),
+    }).catch(() => {});
   };
 
   if (matchedSelector) {

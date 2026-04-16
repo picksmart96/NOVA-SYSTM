@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { novaMetricsTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { novaMetricsTable, psaUsers } from "@workspace/db";
+import { eq, sql, desc } from "drizzle-orm";
 
 const router = Router();
 
@@ -66,6 +66,34 @@ router.get("/metrics/events", async (req, res) => {
     res.json(rows);
   } catch (err) {
     req.log.error({ err }, "Error fetching metric events");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/metrics/nova-launches — recent NOVA Trainer session launches (owner only)
+router.get("/metrics/nova-launches", async (req, res) => {
+  try {
+    const rows = await db
+      .select({
+        id:           novaMetricsTable.id,
+        event:        novaMetricsTable.event,
+        userId:       novaMetricsTable.userId,
+        meta:         novaMetricsTable.meta,
+        createdAt:    novaMetricsTable.createdAt,
+        username:     psaUsers.username,
+        fullName:     psaUsers.fullName,
+        companyName:  psaUsers.companyName,
+        role:         psaUsers.role,
+      })
+      .from(novaMetricsTable)
+      .leftJoin(psaUsers, eq(novaMetricsTable.userId, psaUsers.id))
+      .where(eq(novaMetricsTable.event, "nova_trainer_launched"))
+      .orderBy(desc(novaMetricsTable.createdAt))
+      .limit(30);
+
+    res.json({ launches: rows });
+  } catch (err) {
+    req.log.error({ err }, "Error fetching nova launches");
     res.status(500).json({ error: "Internal server error" });
   }
 });
