@@ -1,14 +1,24 @@
-import { useMemo, useState } from "react";
-import { Activity, Mic } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Activity, Mic, Settings } from "lucide-react";
 import { useTrainerStore } from "@/lib/trainerStore";
 import { useAuthStore } from "@/lib/authStore";
 import { ASSIGNMENTS } from "@/data/assignments";
 import NovaTrainerSession from "@/components/nova/NovaTrainerSession";
 import LockedAction from "@/components/paywall/LockedAction";
+import { useWarehouseProfileStore } from "@/lib/warehouseProfileStore";
+import { useLocation } from "wouter";
+
+const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
 
 export default function NovaTrainerPage() {
   const { selectors } = useTrainerStore();
-  const { lock } = useAuthStore();
+  const { lock, jwtToken } = useAuthStore();
+  const { profile, fetchProfile } = useWarehouseProfileStore();
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    if (jwtToken) fetchProfile(jwtToken, API_BASE);
+  }, [jwtToken, fetchProfile]);
 
   const [novaIdInput, setNovaIdInput] = useState("");
   const [activeNovaId, setActiveNovaId] = useState("");
@@ -150,7 +160,41 @@ export default function NovaTrainerPage() {
           </div>
         )}
 
-        <p className="mt-8 text-center text-slate-600 text-sm">
+        {/* Warehouse profile banner */}
+        {profile ? (
+          <div className="mt-6 rounded-2xl border border-green-500/20 bg-green-500/5 px-4 py-3 flex items-center gap-3">
+            <div className="w-7 h-7 rounded-lg bg-green-500/20 flex items-center justify-center shrink-0">
+              <Settings className="h-3.5 w-3.5 text-green-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-green-300 font-bold truncate">
+                Warehouse: {profile.systemType?.replace("-", " ")} · {profile.locationFormat?.replace("-", " ")}
+              </p>
+              <p className="text-[10px] text-slate-500 mt-0.5">NOVA calibrated for your operation</p>
+            </div>
+            <button
+              onClick={() => navigate("/warehouse-setup")}
+              className="text-[10px] text-slate-500 hover:text-slate-300 transition shrink-0"
+            >
+              Edit
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => navigate("/warehouse-setup")}
+            className="mt-6 w-full rounded-2xl border border-dashed border-yellow-400/30 bg-yellow-400/5 px-4 py-3 flex items-center gap-3 hover:border-yellow-400/60 transition"
+          >
+            <div className="w-7 h-7 rounded-lg bg-yellow-400/10 flex items-center justify-center shrink-0">
+              <Settings className="h-3.5 w-3.5 text-yellow-400" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm text-yellow-400 font-bold">Configure Your Warehouse</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">Set your location format, pallet system & more</p>
+            </div>
+          </button>
+        )}
+
+        <p className="mt-6 text-center text-slate-600 text-sm">
           PickSmart Academy — Voice Training System
         </p>
 

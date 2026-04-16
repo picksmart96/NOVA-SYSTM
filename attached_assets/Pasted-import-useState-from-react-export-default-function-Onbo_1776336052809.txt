@@ -1,0 +1,73 @@
+import { useState } from "react";
+
+export default function OnboardingPage() {
+  const [form, setForm] = useState({
+    system_type: "",
+    location_format: "",
+    check_method: "",
+    pallet_type: "",
+    performance_metric: "",
+    main_problems: "",
+  });
+
+  const handleSubmit = async () => {
+    const user = JSON.parse(localStorage.getItem("user"));
+
+    await fetch("/save-warehouse-profile", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ...form,
+        company_id: user.id,
+      }),
+    });
+
+    window.location.href = "/dashboard";
+  };
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h1>🚀 Setup Your Warehouse</h1>
+
+      <select onChange={(e)=>setForm({...form, system_type:e.target.value})}>
+        <option>Select System</option>
+        <option>Voice</option>
+        <option>RF Scanner</option>
+        <option>Paper</option>
+      </select>
+
+      <select onChange={(e)=>setForm({...form, location_format:e.target.value})}>
+        <option>Location Format</option>
+        <option>Aisle-Slot</option>
+        <option>Bin System</option>
+      </select>
+
+      <select onChange={(e)=>setForm({...form, check_method:e.target.value})}>
+        <option>Verification Method</option>
+        <option>Check Digits</option>
+        <option>Barcode Scan</option>
+      </select>
+
+      <select onChange={(e)=>setForm({...form, pallet_type:e.target.value})}>
+        <option>Pallet Setup</option>
+        <option>Alpha / Bravo</option>
+        <option>Single Pallet</option>
+      </select>
+
+      <select onChange={(e)=>setForm({...form, performance_metric:e.target.value})}>
+        <option>Performance Metric</option>
+        <option>Cases per Hour</option>
+        <option>Lines per Hour</option>
+      </select>
+
+      <input
+        placeholder="Main problems (speed, accuracy, stacking)"
+        onChange={(e)=>setForm({...form, main_problems:e.target.value})}
+      />
+
+      <button onClick={handleSubmit}>Save & Start NOVA</button>
+    </div>
+  );
+}

@@ -80,6 +80,7 @@ import NovaSalesVoiceAgent from "@/pages/NovaSalesVoiceAgent";
 import PaymentSuccessPage from "@/pages/payment-success";
 import PaymentCancelPage from "@/pages/payment-cancel";
 import RegisterPage from "@/pages/register";
+import WarehouseSetupPage from "@/pages/warehouse-setup";
 
 function RedirectToOwner() {
   const [, navigate] = useLocation();
@@ -231,6 +232,9 @@ function Router() {
       </Route>
       <Route path="/register">
         <RegisterPage />
+      </Route>
+      <Route path="/warehouse-setup">
+        <GatedRoute><WarehouseSetupPage /></GatedRoute>
       </Route>
 
       {/* ── Gated — requires active subscription to view any content ── */}

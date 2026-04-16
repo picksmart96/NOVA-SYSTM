@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { systemDefaultsTable, doorCodesTable, slotMasterTable } from "@workspace/db";
+import { systemDefaultsTable, doorCodesTable, slotMasterTable, warehouseProfilesTable } from "@workspace/db";
 import { eq, ilike, or, sql } from "drizzle-orm";
+import { requireAuth } from "../middleware/requireAuth.js";
 
 const router = Router();
 
@@ -56,6 +57,84 @@ router.get("/warehouse/slots", async (req, res) => {
     res.json(slots);
   } catch (err) {
     req.log.error({ err }, "Error listing slots");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Warehouse Profile ─────────────────────────────────────────────────────────
+
+router.get("/warehouse/profile", requireAuth, async (req, res) => {
+  try {
+    const companyId = req.psaUser!.sub;
+    const [profile] = await db
+      .select()
+      .from(warehouseProfilesTable)
+      .where(eq(warehouseProfilesTable.companyId, companyId))
+      .limit(1);
+    if (!profile) {
+      res.status(404).json({ error: "No profile found" });
+      return;
+    }
+    res.json(profile);
+  } catch (err) {
+    req.log.error({ err }, "Error fetching warehouse profile");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/warehouse/profile", requireAuth, async (req, res) => {
+  try {
+    const companyId = req.psaUser!.sub;
+    const {
+      systemType,
+      locationFormat,
+      checkMethod,
+      palletType,
+      performanceMetric,
+      mainProblems,
+    } = req.body as {
+      systemType?: string;
+      locationFormat?: string;
+      checkMethod?: string;
+      palletType?: string;
+      performanceMetric?: string;
+      mainProblems?: string[];
+    };
+
+    const existing = await db
+      .select({ id: warehouseProfilesTable.id })
+      .from(warehouseProfilesTable)
+      .where(eq(warehouseProfilesTable.companyId, companyId))
+      .limit(1);
+
+    const values = {
+      systemType: systemType ?? null,
+      locationFormat: locationFormat ?? null,
+      checkMethod: checkMethod ?? null,
+      palletType: palletType ?? null,
+      performanceMetric: performanceMetric ?? null,
+      mainProblems: mainProblems ?? [],
+      updatedAt: new Date(),
+    };
+
+    if (existing.length > 0) {
+      await db
+        .update(warehouseProfilesTable)
+        .set(values)
+        .where(eq(warehouseProfilesTable.companyId, companyId));
+    } else {
+      await db.insert(warehouseProfilesTable).values({ companyId, ...values });
+    }
+
+    const [updated] = await db
+      .select()
+      .from(warehouseProfilesTable)
+      .where(eq(warehouseProfilesTable.companyId, companyId))
+      .limit(1);
+
+    res.json(updated);
+  } catch (err) {
+    req.log.error({ err }, "Error saving warehouse profile");
     res.status(500).json({ error: "Internal server error" });
   }
 });
