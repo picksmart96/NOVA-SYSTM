@@ -12,7 +12,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
-import { Mic, ArrowLeft, Volume2, CheckCircle2, Box, Headphones } from "lucide-react";
+import { Mic, ArrowLeft, Volume2, CheckCircle2, Box, Headphones, Clock, TrendingUp, TrendingDown, Minus, Zap, Target } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 
@@ -196,22 +196,127 @@ export default function VoiceSessionPage() {
 
   const currentStop = stops[currentStopIndex];
   const nextStop = stops[currentStopIndex + 1];
-  const progress = Math.round((stops.filter(s => s.status === 'picked').length / stops.length) * 100);
-  
+  const pickedCount = stops.filter(s => s.status === 'picked').length;
+  const progress = Math.round((pickedCount / stops.length) * 100);
+
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  // ── ES3 Performance Calculator ─────────────────────────────────────────────
+  // Standard UPH is derived from the assignment's own goal time + total cases.
+  // Falls back to 90 UPH if goal data is unavailable.
+  const standardUPH = (assignment.goalTimeMinutes ?? 0) > 0
+    ? Math.round(assignment.totalCases / ((assignment.goalTimeMinutes ?? 60) / 60))
+    : 90;
+
+  const hoursWorked = elapsedSeconds / 3600;
+  const currentUPH = hoursWorked > 0.005 ? Math.round(pickedCount / hoursWorked) : 0;
+
+  // Efficiency: actual UPH vs. standard UPH
+  const efficiency = currentUPH > 0 && standardUPH > 0
+    ? Math.round((currentUPH / standardUPH) * 100)
+    : 0;
+
+  // Earned time (how long it *should* have taken to pick this many units)
+  const earnedSeconds = standardUPH > 0 ? (pickedCount / standardUPH) * 3600 : 0;
+
+  // Positive = ahead of pace, negative = behind
+  const paceDeltaSeconds = hoursWorked > 0.005 ? Math.round(earnedSeconds - elapsedSeconds) : 0;
+
+  // Projected time to finish at current rate
+  const remaining = stops.length - pickedCount;
+  const projectedMinutesLeft = currentUPH > 0
+    ? Math.round((remaining / currentUPH) * 60)
+    : null;
+
+  const efficiencyColor =
+    efficiency >= 100 ? "text-green-400" :
+    efficiency >= 85  ? "text-yellow-400" :
+    efficiency > 0    ? "text-red-400" :
+                        "text-slate-500";
+
+  const efficiencyBg =
+    efficiency >= 100 ? "bg-green-500/10 border-green-500/30" :
+    efficiency >= 85  ? "bg-yellow-400/10 border-yellow-400/30" :
+    efficiency > 0    ? "bg-red-500/10 border-red-500/30" :
+                        "bg-slate-800/50 border-slate-700/30";
+
+  const paceLabel =
+    paceDeltaSeconds > 30  ? "Ahead" :
+    paceDeltaSeconds < -30 ? "Behind" :
+                             "On Pace";
+
+  const PaceIcon =
+    paceDeltaSeconds > 30  ? TrendingUp :
+    paceDeltaSeconds < -30 ? TrendingDown :
+                             Minus;
+
   if (sessionState === 'completed') {
+    const finalUPH = hoursWorked > 0.005 ? Math.round(pickedCount / hoursWorked) : 0;
+    const finalEff = finalUPH > 0 && standardUPH > 0 ? Math.round((finalUPH / standardUPH) * 100) : 0;
+    const perfBand =
+      finalEff >= 110 ? { label: "Outstanding", color: "text-green-300", bg: "bg-green-500/10 border-green-500/30" } :
+      finalEff >= 100 ? { label: "On Target", color: "text-green-400", bg: "bg-green-500/10 border-green-500/30" } :
+      finalEff >= 85  ? { label: "Acceptable", color: "text-yellow-400", bg: "bg-yellow-400/10 border-yellow-400/30" } :
+      finalEff > 0    ? { label: "Below Standard", color: "text-red-400", bg: "bg-red-500/10 border-red-500/30" } :
+                        { label: "—", color: "text-slate-400", bg: "bg-slate-800 border-slate-700" };
     return (
-      <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center p-4">
-        <CheckCircle2 className="h-24 w-24 text-green-500 mb-6" />
-        <h1 className="text-4xl font-black text-foreground mb-2">Assignment Complete</h1>
-        <p className="text-muted-foreground text-xl mb-8">Good job. Returning to assignments...</p>
+      <div className="min-h-[100dvh] bg-[#0f141a] flex flex-col items-center justify-center p-6 gap-6">
+        <CheckCircle2 className="h-20 w-20 text-green-400" />
+        <div className="text-center">
+          <h1 className="text-3xl font-black text-white mb-1">Assignment Complete</h1>
+          <p className="text-slate-400">Here's how you performed</p>
+        </div>
+
+        {/* Performance Summary */}
+        <div className="w-full max-w-sm rounded-3xl border border-slate-800 bg-slate-900 p-6 space-y-4">
+          <div className={`rounded-2xl border px-4 py-3 text-center ${perfBand.bg}`}>
+            <p className="text-xs font-bold uppercase tracking-widest text-white/40 mb-1">Performance Band</p>
+            <p className={`text-2xl font-black ${perfBand.color}`}>{perfBand.label}</p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-2xl bg-slate-800 p-3 text-center">
+              <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">UPH</p>
+              <p className="text-xl font-black text-white">{finalUPH || "—"}</p>
+              <p className="text-[10px] text-slate-600">std {standardUPH}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-800 p-3 text-center">
+              <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Eff%</p>
+              <p className={`text-xl font-black ${perfBand.color}`}>{finalEff > 0 ? `${finalEff}%` : "—"}</p>
+              <p className="text-[10px] text-slate-600">target 100%</p>
+            </div>
+            <div className="rounded-2xl bg-slate-800 p-3 text-center">
+              <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Time</p>
+              <p className="text-xl font-black text-white">{formatTime(elapsedSeconds)}</p>
+              <p className="text-[10px] text-slate-600">goal {assignment.goalTimeMinutes}m</p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between px-1 pt-1">
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-widest">Cases Picked</p>
+              <p className="text-lg font-black text-white">{pickedCount} / {stops.length}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-slate-500 uppercase tracking-widest">Pace</p>
+              <p className={`text-lg font-black ${
+                paceDeltaSeconds > 30 ? "text-green-400" :
+                paceDeltaSeconds < -30 ? "text-red-400" : "text-yellow-400"
+              }`}>
+                {elapsedSeconds > 18 ? paceLabel : "—"}
+              </p>
+            </div>
+          </div>
+        </div>
+
         <Link href="/nova">
-          <Button variant="outline" size="lg">Return Now</Button>
+          <Button size="lg" className="bg-yellow-400 text-slate-950 font-black hover:bg-yellow-300">
+            Return to Assignments
+          </Button>
         </Link>
       </div>
     );
@@ -321,36 +426,86 @@ export default function VoiceSessionPage() {
         </div>
       </div>
 
-      {/* Bottom HUD */}
-      <div className="absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-md border-t border-white/10 p-4">
-        <div className="container mx-auto max-w-5xl">
-          <div className="flex flex-col md:flex-row items-center gap-6 justify-between">
-            <div className="flex-1 w-full flex items-center gap-4">
-              <div className="w-12 text-right font-mono text-sm text-white/50">
-                {progress}%
-              </div>
-              <div className="flex-1 h-3 bg-white/10 rounded-full overflow-hidden border border-white/5">
-                <div 
-                  className="h-full bg-primary rounded-full transition-all duration-500 ease-out relative"
-                  style={{ width: `${progress}%` }}
-                >
-                  <div className="absolute inset-0 bg-white/20 animate-pulse" />
-                </div>
-              </div>
-              <div className="w-24 text-sm text-white/50 font-medium text-right">
-                {stops.filter(s => s.status === 'picked').length} / {stops.length} stops
-              </div>
+      {/* Bottom HUD — Progress + ES3 Performance Calculator */}
+      <div className="absolute bottom-0 left-0 right-0 bg-black/70 backdrop-blur-md border-t border-white/10">
+
+        {/* Progress bar row */}
+        <div className="px-4 pt-3 pb-2">
+          <div className="flex items-center gap-3 max-w-5xl mx-auto">
+            <span className="w-10 text-right font-mono text-xs text-white/40">{progress}%</span>
+            <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${progress}%` }}
+              />
             </div>
-            
-            {nextStop && (
-              <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-white/5 rounded-lg border border-white/5">
-                <Box className="h-4 w-4 text-white/40" />
-                <div>
-                  <p className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Next Stop</p>
-                  <p className="text-sm font-mono text-white/80">{nextStop.aisle} - {nextStop.slot}</p>
-                </div>
+            <span className="text-xs text-white/40 font-medium">{pickedCount}/{stops.length}</span>
+          </div>
+        </div>
+
+        {/* Performance Stats Grid */}
+        <div className="px-4 pb-3">
+          <div className="max-w-5xl mx-auto grid grid-cols-4 gap-2">
+
+            {/* UPH */}
+            <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-center">
+              <div className="flex items-center justify-center gap-1 mb-0.5">
+                <Zap className="h-3 w-3 text-yellow-400" />
+                <p className="text-[9px] font-bold uppercase tracking-widest text-white/40">UPH</p>
               </div>
-            )}
+              <p className="text-lg font-black text-white leading-none">{currentUPH || "—"}</p>
+              <p className="text-[9px] text-white/30 mt-0.5">std {standardUPH}</p>
+            </div>
+
+            {/* Efficiency */}
+            <div className={`rounded-xl border px-3 py-2 text-center ${efficiencyBg}`}>
+              <div className="flex items-center justify-center gap-1 mb-0.5">
+                <Target className="h-3 w-3 text-white/50" />
+                <p className="text-[9px] font-bold uppercase tracking-widest text-white/40">Eff%</p>
+              </div>
+              <p className={`text-lg font-black leading-none ${efficiencyColor}`}>
+                {efficiency > 0 ? `${efficiency}%` : "—"}
+              </p>
+              <p className="text-[9px] text-white/30 mt-0.5">target 100%</p>
+            </div>
+
+            {/* Pace */}
+            <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-center">
+              <div className="flex items-center justify-center gap-1 mb-0.5">
+                <PaceIcon className="h-3 w-3 text-white/50" />
+                <p className="text-[9px] font-bold uppercase tracking-widest text-white/40">Pace</p>
+              </div>
+              <p className={`text-sm font-black leading-none ${
+                paceLabel === "Ahead" ? "text-green-400" :
+                paceLabel === "Behind" ? "text-red-400" : "text-yellow-400"
+              }`}>
+                {elapsedSeconds > 18 ? paceLabel : "—"}
+              </p>
+              {elapsedSeconds > 18 && Math.abs(paceDeltaSeconds) > 30 && (
+                <p className="text-[9px] text-white/30 mt-0.5">
+                  {Math.abs(Math.round(paceDeltaSeconds / 60))}m {Math.abs(paceDeltaSeconds) % 60}s
+                </p>
+              )}
+            </div>
+
+            {/* ETA */}
+            <div className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-center">
+              <div className="flex items-center justify-center gap-1 mb-0.5">
+                <Clock className="h-3 w-3 text-white/50" />
+                <p className="text-[9px] font-bold uppercase tracking-widest text-white/40">ETA</p>
+              </div>
+              <p className="text-sm font-black text-white leading-none">
+                {projectedMinutesLeft !== null && elapsedSeconds > 18
+                  ? `${projectedMinutesLeft}m`
+                  : "—"}
+              </p>
+              {nextStop && (
+                <p className="text-[9px] text-white/30 mt-0.5 font-mono">
+                  Next: {nextStop.aisle}-{nextStop.slot}
+                </p>
+              )}
+            </div>
+
           </div>
         </div>
       </div>
