@@ -6,7 +6,7 @@ import {
   ClipboardList, Warehouse, LogOut, ChevronRight,
   Mail, Building2, User, RefreshCw, Clock,
   TrendingUp, AlertTriangle, CheckCircle2, XCircle,
-  PlayCircle, Activity,
+  PlayCircle, Activity, FileText,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/authStore";
 
@@ -42,7 +42,8 @@ const NAV_SECTIONS = [
   {
     label: "Owner Only",
     items: [
-      { label: "Control Panel", path: "/control-panel", icon: Shield, desc: "Director accounts, invite links & performance", color: "green" },
+      { label: "Control Panel",      path: "/control-panel",      icon: Shield,    desc: "Director accounts, invite links & performance",      color: "green"  },
+      { label: "Platform Overview",  path: "/platform-overview",  icon: FileText,  desc: "Full platform docs — pages, roles, tech, credentials", color: "yellow" },
     ],
   },
 ];

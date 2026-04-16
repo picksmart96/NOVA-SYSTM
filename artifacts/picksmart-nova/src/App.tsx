@@ -84,6 +84,7 @@ import WarehouseSetupPage from "@/pages/warehouse-setup";
 import TrialSignupPage from "@/pages/TrialSignupPage";
 import AssignmentBuilderPage from "@/pages/AssignmentBuilderPage";
 import UpgradePage from "@/pages/UpgradePage";
+import PlatformOverviewPage from "@/pages/platform-overview";
 import TrialBanner from "@/components/TrialBanner";
 
 function RedirectToOwner() {
@@ -387,6 +388,15 @@ function Router() {
         <Layout>
           <SubscriptionRoute path="/control-panel" requiredRole="owner">
             <ControlPanelPage />
+          </SubscriptionRoute>
+        </Layout>
+      </Route>
+
+      {/* Owner-only Platform Overview */}
+      <Route path="/platform-overview">
+        <Layout>
+          <SubscriptionRoute path="/platform-overview" requiredRole="owner">
+            <PlatformOverviewPage />
           </SubscriptionRoute>
         </Layout>
       </Route>
