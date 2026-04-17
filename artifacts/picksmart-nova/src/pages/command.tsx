@@ -605,62 +605,77 @@ interface Assignment {
   stops?: number;
   status: string;
   trainerUserId?: string | null;
+  selectorUserId?: string | null;
   startAisle?: number;
   endAisle?: number;
   doorNumber?: number;
   goalTimeMinutes?: number | null;
+  printerNumber?: number | null;
+  alphaLabelNumber?: number | null;
+  bravoLabelNumber?: number | null;
 }
-interface Trainer { id: string; username: string; fullName: string | null; role?: string; }
+interface Person { id: string; username: string; fullName: string | null; role?: string; }
 
 // ─── Assignment Manager ───────────────────────────────────────────────────────
 function AssignmentManager() {
   const jwtToken = useAuthStore(s => s.jwtToken);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [trainers,    setTrainers]    = useState<Trainer[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [showCreate,  setShowCreate]  = useState(false);
-  const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [assignments,  setAssignments]  = useState<Assignment[]>([]);
+  const [trainers,     setTrainers]     = useState<Person[]>([]);
+  const [selectors,    setSelectors]    = useState<Person[]>([]);
+  const [loading,      setLoading]      = useState(true);
+  const [showCreate,   setShowCreate]   = useState(false);
+  const [assigningId,  setAssigningId]  = useState<string | null>(null);
+  const [assignMode,   setAssignMode]   = useState<"trainee" | "trainer">("trainee");
 
   // Create form state
-  const [title,       setTitle]       = useState("");
-  const [goalMin,     setGoalMin]     = useState("");
-  const [mode,        setMode]        = useState<BuildMode>("random");
-  const [stops,       setStops]       = useState<Stop[]>([]);
-  const [randCount,   setRandCount]   = useState("20");
-  const [randStart,   setRandStart]   = useState("10");
-  const [randEnd,     setRandEnd]     = useState("30");
-  const [csvErr,      setCsvErr]      = useState("");
-  const [saving,      setSaving]      = useState(false);
-  const [saveErr,     setSaveErr]     = useState("");
+  const [title,        setTitle]        = useState("");
+  const [goalMin,      setGoalMin]      = useState("60");
+  const [doorNum,      setDoorNum]      = useState("1");
+  const [printerNum,   setPrinterNum]   = useState("307");
+  const [alphaLabel,   setAlphaLabel]   = useState("242");
+  const [bravoLabel,   setBravoLabel]   = useState("578");
+  const [mode,         setMode]         = useState<BuildMode>("random");
+  const [stops,        setStops]        = useState<Stop[]>([]);
+  const [randCount,    setRandCount]    = useState("20");
+  const [randStart,    setRandStart]    = useState("10");
+  const [randEnd,      setRandEnd]      = useState("30");
+  const [csvErr,       setCsvErr]       = useState("");
+  const [saving,       setSaving]       = useState(false);
+  const [saveErr,      setSaveErr]      = useState("");
 
   const headers = { "Content-Type": "application/json", Authorization: `Bearer ${jwtToken}` };
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [aRes, uRes] = await Promise.all([
-        fetch(`${BASE}/api/assignments`, { headers }),
-        fetch(`${BASE}/api/auth/users`,  { headers }),
+      const [aRes, uRes, sRes] = await Promise.all([
+        fetch(`${BASE}/api/assignments`,   { headers }),
+        fetch(`${BASE}/api/auth/users`,    { headers }),
+        fetch(`${BASE}/api/users/selectors`, { headers }),
       ]);
       if (aRes.ok) {
         const data = await aRes.json() as Assignment[];
-        setAssignments(Array.isArray(data) ? data.sort((a, b) => new Date(b.status).getTime() - new Date(a.status).getTime()) : []);
+        setAssignments(Array.isArray(data) ? data : []);
       }
       if (uRes.ok) {
-        const d = await uRes.json() as { users?: Trainer[] } | Trainer[];
-        const list: Trainer[] = Array.isArray(d) ? d : (d.users ?? []);
-        setTrainers(list.filter(u => (u as any).role === "trainer" || (u as any).role === "owner" || (u as any).role === "manager"));
+        const d = await uRes.json() as { users?: Person[] } | Person[];
+        const list: Person[] = Array.isArray(d) ? d : (d.users ?? []);
+        setTrainers(list.filter(u => ["trainer","owner","manager","supervisor"].includes((u as any).role ?? "")));
+      }
+      if (sRes.ok) {
+        setSelectors(await sRes.json() as Person[]);
       }
     } finally { setLoading(false); }
-  }, [jwtToken]);
+  }, [jwtToken]); // eslint-disable-line
 
   useEffect(() => { load(); }, [load]);
 
-  async function handleAssign(assignmentId: string, trainerId: string) {
+  // Assign trainee (selectorUserId) OR trainer (trainerUserId)
+  async function handleAssign(assignmentId: string, userId: string, field: "selectorUserId" | "trainerUserId") {
     await fetch(`${BASE}/api/assignments/${assignmentId}`, {
       method: "PATCH",
       headers,
-      body: JSON.stringify({ trainerUserId: trainerId || null }),
+      body: JSON.stringify({ [field]: userId || null }),
     });
     setAssigningId(null);
     load();
@@ -676,12 +691,22 @@ function AssignmentManager() {
       const aRes = await fetch(`${BASE}/api/assignments`, {
         method: "POST", headers,
         body: JSON.stringify({
-          assignmentNumber: Math.floor(1000 + Math.random() * 9000),
-          title: title.trim() || `Training Run ${new Date().toLocaleDateString()}`,
-          startAisle: Math.min(...aisles), endAisle: Math.max(...aisles),
-          totalCases, totalCube: 0, totalPallets: 1, doorNumber: 1,
-          status: "pending", voiceMode: "training",
-          goalTimeMinutes: goalMin ? Number(goalMin) : null, percentComplete: 0,
+          assignmentNumber:  Math.floor(100000 + Math.random() * 900000),
+          title:             title.trim() || `Training Run ${new Date().toLocaleDateString()}`,
+          startAisle:        Math.min(...aisles),
+          endAisle:          Math.max(...aisles),
+          totalCases,
+          totalCube:         0,
+          totalPallets:      1,
+          doorNumber:        Number(doorNum) || 1,
+          printerNumber:     Number(printerNum) || 307,
+          alphaLabelNumber:  Number(alphaLabel) || 242,
+          bravoLabelNumber:  Number(bravoLabel) || 578,
+          goalTimeSeconds:   0,
+          status:            "pending",
+          voiceMode:         "training",
+          goalTimeMinutes:   goalMin ? Number(goalMin) : null,
+          percentComplete:   0,
         }),
       });
       if (!aRes.ok) throw new Error("Failed to create assignment");
@@ -694,7 +719,7 @@ function AssignmentManager() {
         })) }),
       });
       setShowCreate(false);
-      setTitle(""); setGoalMin(""); setStops([]); setMode("random");
+      setTitle(""); setGoalMin("60"); setStops([]); setMode("random");
       load();
     } catch (err: any) {
       setSaveErr(err.message ?? "Failed to save.");
@@ -726,7 +751,9 @@ function AssignmentManager() {
           <ClipboardList className="h-4 w-4 text-yellow-400" /> Assignment Manager
         </h2>
         <div className="flex items-center gap-2">
-          <button onClick={load} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-white transition"><RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /></button>
+          <button onClick={load} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-white transition">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+          </button>
           <button
             onClick={() => { setShowCreate(s => !s); setSaveErr(""); setStops([]); }}
             className="flex items-center gap-1.5 rounded-xl bg-yellow-400 text-slate-950 font-black px-3 py-1.5 text-xs hover:bg-yellow-300 transition"
@@ -741,6 +768,7 @@ function AssignmentManager() {
         <div className="rounded-2xl border border-yellow-400/20 bg-yellow-400/5 p-5 space-y-4">
           <p className="text-sm font-black text-yellow-400">Create Assignment</p>
 
+          {/* Title + Goal */}
           <div className="grid sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-slate-500 mb-1">Assignment Title</label>
@@ -751,6 +779,30 @@ function AssignmentManager() {
               <label className="block text-xs text-slate-500 mb-1">Goal Time (min)</label>
               <input type="number" value={goalMin} onChange={e => setGoalMin(e.target.value)} placeholder="60" min="1"
                 className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder-slate-600 outline-none focus:ring-2 focus:ring-yellow-400/40" />
+            </div>
+          </div>
+
+          {/* Door + Printer + Labels */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Staging Door #</label>
+              <input type="number" value={doorNum} onChange={e => setDoorNum(e.target.value)} placeholder="1"
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-yellow-400/40" />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Printer #</label>
+              <input type="number" value={printerNum} onChange={e => setPrinterNum(e.target.value)} placeholder="307"
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-yellow-400/40" />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Alpha Label #</label>
+              <input type="number" value={alphaLabel} onChange={e => setAlphaLabel(e.target.value)} placeholder="242"
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-yellow-400/40" />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Bravo Label #</label>
+              <input type="number" value={bravoLabel} onChange={e => setBravoLabel(e.target.value)} placeholder="578"
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-yellow-400/40" />
             </div>
           </div>
 
@@ -767,10 +819,10 @@ function AssignmentManager() {
           {/* Mode inputs */}
           {mode === "random" && (
             <div className="grid grid-cols-3 gap-2">
-              {[["Stops", randCount, setRandCount], ["Start Aisle", randStart, setRandStart], ["End Aisle", randEnd, setRandEnd]].map(([lbl, val, setter]) => (
-                <div key={lbl as string}>
-                  <label className="block text-xs text-slate-500 mb-1">{lbl as string}</label>
-                  <input type="number" value={val as string} onChange={e => (setter as Function)(e.target.value)} min="1"
+              {([["Stops", randCount, setRandCount], ["Start Aisle", randStart, setRandStart], ["End Aisle", randEnd, setRandEnd]] as [string, string, React.Dispatch<React.SetStateAction<string>>][]).map(([lbl, val, setter]) => (
+                <div key={lbl}>
+                  <label className="block text-xs text-slate-500 mb-1">{lbl}</label>
+                  <input type="number" value={val} onChange={e => setter(e.target.value)} min="1"
                     className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-yellow-400/40" />
                 </div>
               ))}
@@ -839,143 +891,157 @@ function AssignmentManager() {
         <div className="text-center py-12">
           <ClipboardList className="h-10 w-10 text-slate-700 mx-auto mb-3" />
           <p className="text-slate-500 text-sm font-bold">No assignments yet.</p>
-          <p className="text-slate-600 text-xs mt-1">Click "New Assignment" above to build one and assign it to a trainer.</p>
+          <p className="text-slate-600 text-xs mt-1">Click "New Assignment" to build one, then assign it to a trainee.</p>
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {assignments.map(a => {
+            const assignedTrainee = selectors.find(s => s.id === a.selectorUserId);
             const assignedTrainer = trainers.find(t => t.id === a.trainerUserId);
             const isOpen = assigningId === a.id;
-            const statusColor = a.status === "completed"
-              ? "text-green-400"
-              : a.status === "active"
-              ? "text-blue-400"
-              : "text-slate-500";
+            const statusColor = a.status === "completed" ? "text-green-400"
+              : a.status === "active" ? "text-blue-400" : "text-slate-500";
 
             return (
               <div key={a.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-5 flex flex-col gap-3">
 
                 {/* Card header */}
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    {a.assignmentNumber && (
-                      <p className="text-lg font-black text-white">#{a.assignmentNumber}</p>
-                    )}
-                    <p className="text-xs text-slate-400 truncate max-w-[160px]">{a.title}</p>
-                    <span className={`inline-block mt-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
-                      a.type === "PRODUCTION"
-                        ? "bg-orange-500/10 text-orange-300 border-orange-500/30"
-                        : "bg-blue-500/10 text-blue-300 border-blue-500/30"
-                    }`}>
-                      {a.type ?? "TRAINING"}
-                    </span>
+                  <div className="min-w-0">
+                    {a.assignmentNumber && <p className="text-lg font-black text-white">#{a.assignmentNumber}</p>}
+                    <p className="text-xs text-slate-400 truncate">{a.title}</p>
                   </div>
-                  {assignedTrainer ? (
-                    <CheckCircle2 className="h-5 w-5 text-green-400 shrink-0 mt-0.5" />
-                  ) : (
-                    <AlertTriangle className="h-5 w-5 text-slate-600 shrink-0 mt-0.5" />
-                  )}
+                  {assignedTrainee
+                    ? <CheckCircle2 className="h-5 w-5 text-green-400 shrink-0 mt-0.5" />
+                    : <AlertTriangle className="h-5 w-5 text-slate-600 shrink-0 mt-0.5" />
+                  }
                 </div>
 
                 {/* Stats */}
                 <div className="space-y-1.5 text-xs text-slate-400">
-                  <div className="flex justify-between">
-                    <span>Cases</span>
-                    <span className="text-white font-bold">{a.totalCases}</span>
-                  </div>
-                  {a.stops != null && (
-                    <div className="flex justify-between">
-                      <span>Stops</span>
-                      <span className="text-white font-bold">{a.stops}</span>
-                    </div>
-                  )}
-                  {a.startAisle != null && (
-                    <div className="flex justify-between">
-                      <span>Aisles</span>
-                      <span className="text-white font-bold">{a.startAisle}–{a.endAisle}</span>
-                    </div>
-                  )}
-                  {a.doorNumber != null && (
-                    <div className="flex justify-between items-center">
-                      <span className="flex items-center gap-1">
-                        <FileText className="h-3 w-3" /> Door
-                      </span>
-                      <span className="text-yellow-300 font-bold">{a.doorNumber}</span>
-                    </div>
-                  )}
-                  {a.goalTimeMinutes && (
-                    <div className="flex justify-between">
-                      <span>Goal</span>
-                      <span className="text-white font-bold">{a.goalTimeMinutes} min</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span>Status</span>
-                    <span className={`font-bold capitalize ${statusColor}`}>{a.status}</span>
-                  </div>
+                  <div className="flex justify-between"><span>Cases</span><span className="text-white font-bold">{a.totalCases}</span></div>
+                  {a.startAisle != null && <div className="flex justify-between"><span>Aisles</span><span className="text-white font-bold">{a.startAisle}–{a.endAisle}</span></div>}
+                  {a.doorNumber != null && <div className="flex justify-between"><span>Door</span><span className="text-yellow-300 font-bold">{a.doorNumber}</span></div>}
+                  {a.printerNumber != null && <div className="flex justify-between"><span>Printer</span><span className="text-white font-bold">{a.printerNumber}</span></div>}
+                  {a.alphaLabelNumber != null && <div className="flex justify-between"><span>Alpha Label</span><span className="text-white font-bold">{a.alphaLabelNumber}</span></div>}
+                  {a.bravoLabelNumber != null && <div className="flex justify-between"><span>Bravo Label</span><span className="text-white font-bold">{a.bravoLabelNumber}</span></div>}
+                  {a.goalTimeMinutes && <div className="flex justify-between"><span>Goal</span><span className="text-white font-bold">{a.goalTimeMinutes} min</span></div>}
+                  <div className="flex justify-between"><span>Status</span><span className={`font-bold capitalize ${statusColor}`}>{a.status}</span></div>
                 </div>
 
-                {/* Assigned trainer */}
-                <div className="border-t border-slate-800 pt-2.5">
-                  {assignedTrainer ? (
-                    <p className="text-xs text-green-300 font-semibold truncate">
-                      ✓ {assignedTrainer.fullName ?? assignedTrainer.username}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-slate-600 italic">Unassigned</p>
+                {/* Who it's assigned to */}
+                <div className="border-t border-slate-800 pt-2.5 space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Trainee:</span>
+                    {assignedTrainee
+                      ? <span className="text-xs text-green-300 font-bold truncate">✓ {assignedTrainee.fullName ?? assignedTrainee.username}</span>
+                      : <span className="text-xs text-slate-600 italic">Unassigned</span>
+                    }
+                  </div>
+                  {assignedTrainer && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Trainer:</span>
+                      <span className="text-xs text-blue-300 font-bold truncate">{assignedTrainer.fullName ?? assignedTrainer.username}</span>
+                    </div>
                   )}
                 </div>
 
-                {/* Actions */}
+                {/* Action buttons */}
                 <div className="mt-auto flex gap-2">
-                  <Link
-                    href={`/nova/assignments/${a.id}`}
-                    className="flex-1 rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold text-center hover:border-slate-500 hover:text-white transition"
-                  >
-                    View Details
+                  <Link href={`/nova/assignments/${a.id}`}
+                    className="flex-1 rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold text-center hover:border-slate-500 hover:text-white transition">
+                    Details
                   </Link>
                   <button
-                    onClick={() => setAssigningId(isOpen ? null : a.id)}
+                    onClick={() => {
+                      if (isOpen) { setAssigningId(null); return; }
+                      setAssigningId(a.id);
+                      setAssignMode("trainee");
+                    }}
                     className={`flex-1 rounded-xl border px-3 py-2 text-xs font-bold flex items-center justify-center gap-1 transition ${
-                      isOpen
+                      isOpen && assignMode === "trainee"
                         ? "border-yellow-400 bg-yellow-400/10 text-yellow-400"
-                        : assignedTrainer
+                        : assignedTrainee
                         ? "border-green-500/30 bg-green-500/10 text-green-400 hover:border-yellow-400 hover:bg-yellow-400/5 hover:text-yellow-400"
                         : "border-slate-700 hover:border-yellow-400 hover:text-yellow-400"
                     }`}
                   >
-                    <ClipboardList className="h-3 w-3" />
-                    {assignedTrainer ? "Reassign" : "Assign"}
+                    <Users className="h-3 w-3" />
+                    {assignedTrainee ? "Reassign" : "Assign"}
                   </button>
                 </div>
 
-                {/* Trainer dropdown */}
-                {isOpen && (
+                {/* Assign trainee dropdown */}
+                {isOpen && assignMode === "trainee" && (
                   <div className="space-y-1 border-t border-slate-800 pt-2">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Assign to trainer:</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] font-bold text-yellow-400 uppercase tracking-widest">Assign to Trainee:</p>
+                      <button
+                        onClick={() => setAssignMode("trainer")}
+                        className="text-[10px] text-slate-500 hover:text-blue-400 transition underline"
+                      >
+                        Assign trainer instead
+                      </button>
+                    </div>
                     <button
-                      onClick={() => handleAssign(a.id, "")}
+                      onClick={() => handleAssign(a.id, "", "selectorUserId")}
                       className="w-full text-left rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-500 hover:border-slate-500 hover:text-white transition"
                     >
-                      — Unassign —
+                      — Remove trainee —
                     </button>
-                    {trainers.length === 0 ? (
-                      <p className="text-xs text-slate-600 px-1 py-1">No trainers yet. Invite a trainer first.</p>
-                    ) : trainers.map(t => (
+                    {selectors.length === 0 ? (
+                      <p className="text-xs text-slate-600 px-1 py-2">No trainees registered yet. Invite them first.</p>
+                    ) : selectors.map(s => (
                       <button
-                        key={t.id}
-                        onClick={() => handleAssign(a.id, t.id)}
+                        key={s.id}
+                        onClick={() => handleAssign(a.id, s.id, "selectorUserId")}
                         className={`w-full text-left rounded-lg border px-3 py-2 text-xs font-bold transition ${
-                          a.trainerUserId === t.id
+                          a.selectorUserId === s.id
                             ? "border-green-500/30 bg-green-500/10 text-green-400"
                             : "border-slate-700 text-white hover:border-yellow-400 hover:bg-yellow-400/5"
                         }`}
                       >
+                        {s.fullName ?? s.username}
+                        <span className="ml-1 text-[10px] font-normal text-slate-500">{(s as any).accountNumber}</span>
+                        {a.selectorUserId === s.id && <span className="ml-2 text-green-400">✓</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Assign trainer dropdown */}
+                {isOpen && assignMode === "trainer" && (
+                  <div className="space-y-1 border-t border-slate-800 pt-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Assign Trainer:</p>
+                      <button
+                        onClick={() => setAssignMode("trainee")}
+                        className="text-[10px] text-slate-500 hover:text-yellow-400 transition underline"
+                      >
+                        Assign trainee instead
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => handleAssign(a.id, "", "trainerUserId")}
+                      className="w-full text-left rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-500 hover:border-slate-500 hover:text-white transition"
+                    >
+                      — Remove trainer —
+                    </button>
+                    {trainers.length === 0 ? (
+                      <p className="text-xs text-slate-600 px-1 py-2">No trainers yet. Invite a trainer first.</p>
+                    ) : trainers.map(t => (
+                      <button
+                        key={t.id}
+                        onClick={() => handleAssign(a.id, t.id, "trainerUserId")}
+                        className={`w-full text-left rounded-lg border px-3 py-2 text-xs font-bold transition ${
+                          a.trainerUserId === t.id
+                            ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
+                            : "border-slate-700 text-white hover:border-blue-400 hover:bg-blue-400/5"
+                        }`}
+                      >
                         {t.fullName ?? t.username}
-                        <span className="ml-1 text-[10px] font-normal text-slate-500 capitalize">
-                          {t.role}
-                        </span>
-                        {a.trainerUserId === t.id && <span className="ml-2 text-green-400 font-normal">✓</span>}
+                        <span className="ml-1 text-[10px] font-normal text-slate-500 capitalize">{t.role}</span>
+                        {a.trainerUserId === t.id && <span className="ml-2 text-blue-400">✓</span>}
                       </button>
                     ))}
                   </div>
