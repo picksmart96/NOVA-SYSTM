@@ -39,6 +39,7 @@ import LiveTrackingPage from "@/pages/nova/tracking";
 
 import NovaTrainerPage from "@/pages/nova/NovaTrainerPage";
 import NovaHelpPage from "@/pages/nova-help";
+import TrainingReportsPage from "@/pages/training-reports";
 import TrainerPortalPage from "@/pages/trainer-portal";
 import SupervisorPage from "@/pages/supervisor";
 import ChoosePlanPage from "@/pages/choose-plan";
@@ -309,6 +310,9 @@ function Router() {
       </Route>
       <Route path="/nova-help">
         <Layout><GatedRoute><NovaHelpPage /></GatedRoute></Layout>
+      </Route>
+      <Route path="/training-reports">
+        <Layout><GatedRoute><TrainingReportsPage /></GatedRoute></Layout>
       </Route>
       <Route path="/nova-trainer">
         <GatedRoute><CompanyRoute><NovaTrainerPage /></CompanyRoute></GatedRoute>

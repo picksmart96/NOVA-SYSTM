@@ -1,82 +1,143 @@
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { useTrainerStore } from "@/lib/trainerStore";
 import { useAuthStore } from "@/lib/authStore";
-import { ASSIGNMENTS } from "@/data/assignments";
-import { ClipboardList, Headphones, Clock, Package, DoorOpen, ChevronRight, CheckCircle2, Circle, Activity } from "lucide-react";
+import {
+  ClipboardList, Headphones, Clock, Package, DoorOpen,
+  ChevronRight, CheckCircle2, Circle, Activity, Zap, RefreshCw
+} from "lucide-react";
+
+interface DbAssignment {
+  id: string;
+  assignmentNumber: number;
+  title: string;
+  status: string;
+  totalCases: number;
+  goalTimeMinutes: number | null;
+  startAisle: number;
+  endAisle: number;
+  doorNumber: number;
+  voiceMode: string;
+  printerNumber: number;
+  alphaLabelNumber: number;
+  trainerUserId: string | null;
+  percentComplete: number;
+}
 
 export default function MyAssignmentsPage() {
   const [, navigate] = useLocation();
-  const { currentUser } = useAuthStore();
-  const { selectors, assignments: trainerAssignments } = useTrainerStore();
+  const { currentUser, jwtToken } = useAuthStore();
 
-  const selectorProfile = selectors.find(
-    (s) =>
-      s.email.toLowerCase() === (currentUser?.username ?? "").toLowerCase() ||
-      s.name.toLowerCase().includes(
-        (currentUser?.fullName ?? "").toLowerCase().split(" ")[0]
-      )
-  );
+  const [assignments, setAssignments] = useState<DbAssignment[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState<string | null>(null);
 
-  // Combine static + trainer-created assignments for this selector
-  const myAssignments = [
-    ...ASSIGNMENTS.filter((a) => a.selectorUserId === (selectorProfile?.userId ?? currentUser?.username ?? "")),
-    ...trainerAssignments.filter(
-      (a) =>
-        a.selectorUserId === (selectorProfile?.userId ?? currentUser?.username ?? "")
-    ),
-  ];
+  const fetchAssignments = async () => {
+    if (!jwtToken) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/assignments/mine", {
+        headers: { Authorization: `Bearer ${jwtToken}` },
+      });
+      if (!res.ok) throw new Error("Failed to load");
+      const data: DbAssignment[] = await res.json();
+      setAssignments(data);
+    } catch {
+      setError("Could not load assignments. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchAssignments(); }, [jwtToken]); // eslint-disable-line
 
   const statusColor = (s: string) => {
-    if (s === "active") return "bg-green-500/20 text-green-300 border-green-500/30";
+    if (s === "active")    return "bg-green-500/20 text-green-300 border-green-500/30";
     if (s === "completed") return "bg-slate-700 text-slate-400 border-slate-600";
     return "bg-yellow-400/10 text-yellow-300 border-yellow-400/20";
   };
   const statusLabel = (s: string) => {
-    if (s === "active") return "Active";
+    if (s === "active")    return "Active";
     if (s === "completed") return "Completed";
     return "Pending";
   };
+
+  // Find active/pending assignment for quick-load
+  const activeAssignment = assignments.find(a => a.status === "active" || a.status === "pending");
 
   return (
     <div className="min-h-screen bg-slate-950 text-white px-4 py-8">
       <div className="max-w-2xl mx-auto space-y-6">
 
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-yellow-400/10 border border-yellow-400/30 flex items-center justify-center">
-            <ClipboardList className="h-5 w-5 text-yellow-400" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-yellow-400/10 border border-yellow-400/30 flex items-center justify-center">
+              <ClipboardList className="h-5 w-5 text-yellow-400" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black">My Assignments</h1>
+              <p className="text-slate-400 text-xs">{currentUser?.fullName}</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-black">My Assignments</h1>
-            {selectorProfile && (
-              <p className="text-slate-400 text-sm">{selectorProfile.novaId} · {selectorProfile.level}</p>
-            )}
-          </div>
+          <button
+            onClick={fetchAssignments}
+            className="w-9 h-9 rounded-xl border border-slate-700 bg-slate-900 flex items-center justify-center hover:border-slate-500 transition"
+          >
+            <RefreshCw className={`h-4 w-4 text-slate-400 ${loading ? "animate-spin" : ""}`} />
+          </button>
         </div>
 
-        {/* NOVA Trainer shortcut */}
-        <Link href="/nova-trainer">
-          <div className="rounded-3xl border border-yellow-400/30 bg-yellow-400/5 p-5 flex items-center justify-between cursor-pointer hover:bg-yellow-400/10 transition group">
+        {/* Quick Load Pick — if there's an active/pending assignment */}
+        {activeAssignment && (
+          <div
+            onClick={() => navigate(`/nova/voice/${activeAssignment.id}`)}
+            className="rounded-3xl border border-yellow-400 bg-yellow-400/10 p-6 flex items-center justify-between cursor-pointer hover:bg-yellow-400/15 transition group shadow-[0_0_30px_rgba(250,204,21,0.1)]"
+          >
             <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-2xl bg-yellow-400/20 flex items-center justify-center">
-                <Headphones className="h-5 w-5 text-yellow-400" />
+              <div className="w-12 h-12 rounded-2xl bg-yellow-400 flex items-center justify-center shadow-lg shadow-yellow-400/30">
+                <Zap className="h-6 w-6 text-slate-950" />
               </div>
               <div>
-                <p className="font-black text-yellow-300">NOVA Trainer</p>
-                <p className="text-slate-400 text-sm">Start a voice-directed picking session</p>
+                <p className="font-black text-yellow-300 text-lg">Load Pick</p>
+                <p className="text-slate-400 text-sm">{activeAssignment.title}</p>
+                <p className="text-slate-500 text-xs">
+                  {activeAssignment.totalCases} cases · Aisles {activeAssignment.startAisle}–{activeAssignment.endAisle} · Door {activeAssignment.doorNumber}
+                </p>
               </div>
             </div>
-            <ChevronRight className="h-5 w-5 text-yellow-400 group-hover:translate-x-1 transition-transform" />
+            <ChevronRight className="h-6 w-6 text-yellow-400 group-hover:translate-x-1 transition-transform shrink-0" />
           </div>
-        </Link>
+        )}
 
         {/* Assignment list */}
-        {myAssignments.length === 0 ? (
+        {loading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="rounded-3xl border border-slate-800 bg-slate-900 p-5 animate-pulse">
+                <div className="h-5 w-48 rounded bg-slate-800 mb-3" />
+                <div className="grid grid-cols-4 gap-3">
+                  {[1,2,3,4].map(j => <div key={j} className="h-12 rounded-2xl bg-slate-800" />)}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-8 text-center">
+            <p className="text-red-300 mb-4">{error}</p>
+            <button onClick={fetchAssignments} className="px-5 py-2 rounded-2xl border border-red-500/40 text-red-300 text-sm hover:bg-red-500/10 transition">
+              Retry
+            </button>
+          </div>
+        ) : assignments.length === 0 ? (
           <div className="rounded-3xl border border-slate-800 bg-slate-900 p-10 flex flex-col items-center gap-4 text-center">
             <Activity className="h-10 w-10 text-slate-600" />
-            <p className="text-slate-400 text-sm">
-              No assignments yet. Your trainer will assign one to you.
-            </p>
+            <div>
+              <p className="text-white font-bold mb-1">No Assignments Yet</p>
+              <p className="text-slate-400 text-sm">
+                Your trainer will assign a picking assignment to you. Check back here when they do.
+              </p>
+            </div>
             <Link href="/selector">
               <button className="rounded-2xl border border-slate-700 px-5 py-2 text-sm text-slate-300 hover:border-slate-500 transition">
                 Back to Portal
@@ -85,10 +146,10 @@ export default function MyAssignmentsPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {myAssignments.map((a) => (
+            {assignments.map((a) => (
               <div
                 key={a.id}
-                className="rounded-3xl border border-slate-800 bg-slate-900 p-5 hover:border-slate-600 transition cursor-pointer group"
+                className="rounded-3xl border border-slate-800 bg-slate-900 p-5 hover:border-slate-700 transition cursor-pointer group"
                 onClick={() => navigate(`/nova/assignments/${a.id}`)}
               >
                 <div className="flex items-start justify-between gap-4 mb-4">
@@ -98,21 +159,34 @@ export default function MyAssignmentsPage() {
                       : <Circle className="h-5 w-5 text-yellow-400 shrink-0" />
                     }
                     <div>
-                      <p className="font-black text-white">Assignment #{a.assignmentNumber ?? a.id.slice(-6)}</p>
-                      <p className="text-slate-500 text-xs">{(a as { type?: string }).type ?? "TRAINING"}</p>
+                      <p className="font-black text-white">{a.title || `Assignment #${a.assignmentNumber}`}</p>
+                      <p className="text-slate-500 text-xs uppercase tracking-wider">{a.voiceMode.replace("_", " ")} MODE</p>
                     </div>
                   </div>
-                  <span className={`shrink-0 text-xs px-3 py-1 rounded-full border font-bold ${statusColor(a.status ?? "pending")}`}>
-                    {statusLabel(a.status ?? "pending")}
+                  <span className={`shrink-0 text-xs px-3 py-1 rounded-full border font-bold ${statusColor(a.status)}`}>
+                    {statusLabel(a.status)}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                  <Stat icon={<Package className="h-3.5 w-3.5" />} label="Cases" value={(a as { totalCases?: number }).totalCases ?? "—"} />
-                  <Stat icon={<Clock className="h-3.5 w-3.5" />} label="Goal" value={`${(a as { goalTimeMinutes?: number }).goalTimeMinutes ?? "—"}m`} />
-                  <Stat icon={<Activity className="h-3.5 w-3.5" />} label="Aisles" value={`${(a as { startAisle?: number }).startAisle ?? "?"}–${(a as { endAisle?: number }).endAisle ?? "?"}`} />
-                  <Stat icon={<DoorOpen className="h-3.5 w-3.5" />} label="Door" value={(a as { doorNumber?: number }).doorNumber ?? "—"} />
+                  <Stat icon={<Package className="h-3.5 w-3.5" />} label="Cases" value={a.totalCases} />
+                  <Stat icon={<Clock className="h-3.5 w-3.5" />} label="Goal" value={`${a.goalTimeMinutes ?? "—"}m`} />
+                  <Stat icon={<Activity className="h-3.5 w-3.5" />} label="Aisles" value={`${a.startAisle}–${a.endAisle}`} />
+                  <Stat icon={<DoorOpen className="h-3.5 w-3.5" />} label="Door" value={a.doorNumber} />
                 </div>
+
+                {/* Progress bar if active */}
+                {a.status === "active" && (
+                  <div className="mb-4">
+                    <div className="flex justify-between text-xs text-slate-500 mb-1">
+                      <span>Progress</span>
+                      <span>{Math.round(a.percentComplete ?? 0)}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                      <div className="h-full bg-yellow-400 rounded-full transition-all" style={{ width: `${a.percentComplete ?? 0}%` }} />
+                    </div>
+                  </div>
+                )}
 
                 {a.status !== "completed" && (
                   <div className="flex gap-2">
@@ -121,14 +195,13 @@ export default function MyAssignmentsPage() {
                       className="flex items-center gap-2 rounded-2xl bg-yellow-400 px-4 py-2 text-xs font-black text-slate-950 hover:bg-yellow-300 transition"
                     >
                       <Headphones className="h-3.5 w-3.5" />
-                      Start Voice Session
+                      Load Pick
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); navigate(`/nova/assignments/${a.id}`); }}
                       className="flex items-center gap-2 rounded-2xl border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:border-slate-500 transition"
                     >
-                      View Details
-                      <ChevronRight className="h-3.5 w-3.5" />
+                      Details <ChevronRight className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 )}
@@ -136,6 +209,22 @@ export default function MyAssignmentsPage() {
             ))}
           </div>
         )}
+
+        {/* My Training Reports link */}
+        <Link href="/training-reports">
+          <div className="rounded-3xl border border-slate-700 bg-slate-900 p-5 flex items-center justify-between cursor-pointer hover:border-slate-600 transition group">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                <Activity className="h-5 w-5 text-blue-400" />
+              </div>
+              <div>
+                <p className="font-black text-white">My Training Reports</p>
+                <p className="text-slate-400 text-sm">View NOVA's feedback on past sessions</p>
+              </div>
+            </div>
+            <ChevronRight className="h-5 w-5 text-slate-500 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </Link>
 
         <p className="text-center text-slate-600 text-xs pt-2">
           PickSmart Academy — NOVA Assignment Board
@@ -148,10 +237,7 @@ export default function MyAssignmentsPage() {
 function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number }) {
   return (
     <div className="rounded-2xl bg-slate-950 border border-slate-800 px-3 py-2">
-      <div className="flex items-center gap-1.5 text-slate-500 mb-1">
-        {icon}
-        <span className="text-xs">{label}</span>
-      </div>
+      <div className="flex items-center gap-1.5 text-slate-500 mb-1">{icon}<span className="text-xs">{label}</span></div>
       <p className="text-sm font-bold text-white">{value}</p>
     </div>
   );

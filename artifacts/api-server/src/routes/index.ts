@@ -24,6 +24,7 @@ import trialRouter from "./trial.js";
 import slotMasterRouter from "./slotMaster.js";
 import alertsRouter from "./alerts.js";
 import positionsRouter from "./positions.js";
+import pickingReportsRouter from "./pickingReports.js";
 
 const router: IRouter = Router();
 
@@ -52,5 +53,6 @@ router.use(mistakesRouter);
 router.use(slotMasterRouter);
 router.use(alertsRouter);
 router.use(positionsRouter);
+router.use(pickingReportsRouter);
 
 export default router;

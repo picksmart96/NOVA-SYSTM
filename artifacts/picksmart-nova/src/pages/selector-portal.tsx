@@ -660,11 +660,17 @@ export default function SelectorPortalPage() {
         {/* ── Portal Cards Grid ────────────────────────────────────────────── */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <PortalCard
-            href="/nova-trainer"
+            href="/nova"
             accent
-            icon={<Headphones className="h-6 w-6 text-yellow-400" />}
+            icon={<Zap className="h-6 w-6 text-yellow-400" />}
+            title="Load Pick"
+            description="Load your assigned picking session and start picking with NOVA."
+          />
+          <PortalCard
+            href="/nova-trainer"
+            icon={<Headphones className="h-5 w-5 text-slate-300" />}
             title="NOVA Trainer"
-            description="Practice voice-directed picking with your assignment."
+            description="Practice voice-directed picking with a demo session."
           />
           <PortalCard
             href="/nova-help"
@@ -695,6 +701,12 @@ export default function SelectorPortalPage() {
             icon={<Star className="h-5 w-5 text-slate-300" />}
             title="Leaderboard"
             description="See how you rank among your team."
+          />
+          <PortalCard
+            href="/training-reports"
+            icon={<TrendingUp className="h-5 w-5 text-slate-300" />}
+            title="Training Reports"
+            description="View NOVA's AI feedback from your picking sessions."
           />
         </div>
       </div>
