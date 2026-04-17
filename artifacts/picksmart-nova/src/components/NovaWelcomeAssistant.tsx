@@ -23,6 +23,12 @@ interface NovaWelcomeAssistantProps {
   userName: string;
   lang?: string;
   onDismiss: () => void;
+  /**
+   * Called whenever NWA starts or stops using the microphone / TTS.
+   * active=true  → NWA owns the audio session (portal should pause its own loop)
+   * active=false → NWA is idle / done (portal may resume its loop)
+   */
+  onActiveChange?: (active: boolean) => void;
 }
 
 // After these phase transitions NOVA continues speaking automatically
@@ -48,7 +54,7 @@ export function markWelcomeSeen(user: string) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss }: NovaWelcomeAssistantProps) {
+export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss, onActiveChange }: NovaWelcomeAssistantProps) {
   const [uiState,     setUiState]     = useState<UiState>("booting");
   const [aiPhase,     setAiPhase]     = useState<AiPhase>("greeting");
   const [currentText, setCurrentText] = useState("NOVA is starting up…");
@@ -72,6 +78,19 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
   const mainRetryCount   = useRef(0);
 
   useEffect(() => { aiPhaseRef.current = aiPhase; }, [aiPhase]);
+
+  // ── Signal the parent when NWA owns vs. releases the audio session ──────────
+  // "listening", "wake", "speaking", "thinking" → NWA is using mic or TTS
+  //   → parent should pause any concurrent speech recognition loop
+  // "idle", "done", "booting" → NWA is silent → parent may resume its loop
+  const onActiveChangeRef = useRef(onActiveChange);
+  useEffect(() => { onActiveChangeRef.current = onActiveChange; }, [onActiveChange]);
+
+  useEffect(() => {
+    const active = uiState === "listening" || uiState === "wake"
+                || uiState === "speaking"  || uiState === "thinking";
+    onActiveChangeRef.current?.(active);
+  }, [uiState]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -442,6 +461,9 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
     killWake();
     try { window.speechSynthesis.cancel(); } catch {}
     markWelcomeSeen(userName);
+    // Always release the audio session before unmounting so the portal can
+    // restart its recognition loop even if uiState didn't change.
+    onActiveChangeRef.current?.(false);
     onDismiss();
   };
 

@@ -107,6 +107,12 @@ export default function SelectorPortalPage() {
   const recLoopRef  = useRef<any>(null);
   const loopActiveRef = useRef(false);
   const loopRestartRef = useRef<(() => void) | null>(null);
+  // Tracks whether the NOVA Welcome Assistant currently owns the audio session.
+  // When true the portal pauses its own speech-recognition loop so the two
+  // recognizers don't fight each other (Chrome only permits one at a time).
+  const novaActiveRef = useRef(false);
+  const stopLoopRef   = useRef<(() => void) | null>(null);
+  const startLoopRef  = useRef<(() => void) | null>(null);
 
   const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window;
   const canListen =
@@ -191,6 +197,9 @@ export default function SelectorPortalPage() {
 
   const startLoop = useCallback(() => {
     if (!canListen) return;
+    // Don't restart while the NOVA Welcome Assistant owns the audio session —
+    // Chrome only allows one SpeechRecognition at a time.
+    if (novaActiveRef.current) return;
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR || loopActiveRef.current) return;
     try { recLoopRef.current?.abort(); } catch { /* ignore */ }
@@ -241,6 +250,26 @@ export default function SelectorPortalPage() {
   }, [canListen, lang, speakTodayFocus, speakLatestUpdate, speakAssignment]); // eslint-disable-line
 
   useEffect(() => { loopRestartRef.current = startLoop; }, [startLoop]);
+  useEffect(() => { stopLoopRef.current  = stopLoop;  }, [stopLoop]);
+  useEffect(() => { startLoopRef.current = startLoop; }, [startLoop]);
+
+  // ── Coordinate with NOVA Welcome Assistant ────────────────────────────────
+  // The NWA runs its own SpeechRecognition session.  Chrome allows only one
+  // concurrent session — when NWA is active we MUST stop our loop, and resume
+  // once NWA hands the mic back.
+  const handleNovaActiveChange = useCallback((active: boolean) => {
+    novaActiveRef.current = active;
+    if (active) {
+      stopLoopRef.current?.();
+    } else {
+      // Small delay to let NWA fully clean up its recognizer before we start ours
+      if (!mutedRef.current) {
+        setTimeout(() => {
+          if (!novaActiveRef.current) startLoopRef.current?.();
+        }, 500);
+      }
+    }
+  }, []);
 
   // Start always-on loop on mount
   useEffect(() => {
@@ -305,6 +334,7 @@ export default function SelectorPortalPage() {
             markWelcomeSeen(currentUser?.username ?? "");
             setShowWelcome(false);
           }}
+          onActiveChange={handleNovaActiveChange}
         />
       )}
 
