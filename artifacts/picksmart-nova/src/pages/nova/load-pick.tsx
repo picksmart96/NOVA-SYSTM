@@ -190,65 +190,95 @@ export default function NovaLoadPickPage() {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
     stopListening();
-    const rec = new SR();
-    rec.continuous     = false;
-    rec.interimResults = false;
-    rec.lang           = novaRecogLang(lang);
-    let gotResult      = false;
 
-    rec.onstart  = () => { setIsListening(true); setMicLabel(hint); };
-    rec.onerror  = (e: any) => {
-      setIsListening(false);
-      recRef.current = null;
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") return;
-      // Auto-retry on network/no-speech errors
-      if (!gotResult) {
-        const p = phaseRef.current;
-        const needsMic = ["equip_enter","equip_confirm","pallet_enter","pallet_confirm","safety","say_load_pick"].includes(p);
-        if (needsMic) setTimeout(() => startListening(hint, onResult), 800);
-      }
-    };
-    rec.onend = () => {
-      setIsListening(false);
-      recRef.current = null;
-      // If mic dropped before user spoke, restart
-      if (!gotResult) {
-        const p = phaseRef.current;
-        const needsMic = ["equip_enter","equip_confirm","pallet_enter","pallet_confirm","safety"].includes(p);
-        if (needsMic) setTimeout(() => startListening(hint, onResult), 600);
-      }
-    };
-    rec.onresult = (e: any) => {
-      gotResult = true;
-      const heard = (e.results?.[0]?.[0]?.transcript || "").toLowerCase().trim();
+    // iOS: TTS and SpeechRecognition share the same audio session.
+    // Cancel any lingering speech BEFORE opening the mic, then wait 350ms
+    // for iOS to release the audio session and hand it to the mic.
+    try { window.speechSynthesis.cancel(); } catch {}
 
-      // ── ES3 voice commands: Repeat / Faster / Slower ─────────────────────
-      if (/\brepeat\b|repita|repetir/i.test(heard)) {
-        gotResult = false; // allow restart
-        if (lastSpeechRef.current) speak(lastSpeechRef.current, () => startListening(hint, onResult));
-        return;
-      }
-      if (/\bfaster\b|más.?rápido|mas.?rapido/i.test(heard)) {
-        speechRateRef.current = Math.min(1.9, speechRateRef.current + 0.15);
-        gotResult = false;
-        speak(lang === "es" ? "Más rápido." : "Faster.", () => startListening(hint, onResult));
-        return;
-      }
-      if (/\bslower\b|más.?lento|mas.?lento/i.test(heard)) {
-        speechRateRef.current = Math.max(0.7, speechRateRef.current - 0.15);
-        gotResult = false;
-        speak(lang === "es" ? "Más lento." : "Slower.", () => startListening(hint, onResult));
-        return;
-      }
-      // ─────────────────────────────────────────────────────────────────────
-      onResult(heard);
+    const doStart = () => {
+      const rec = new SR();
+      rec.continuous     = false;
+      rec.interimResults = false;
+      rec.lang           = novaRecogLang(lang);
+      let gotResult      = false;
+
+      rec.onstart  = () => { setIsListening(true); setMicLabel(hint); };
+      rec.onerror  = (e: any) => {
+        setIsListening(false);
+        recRef.current = null;
+        if (e.error === "not-allowed" || e.error === "service-not-allowed") return;
+        if (!gotResult) {
+          const p = phaseRef.current;
+          const needsMic = ["equip_enter","equip_confirm","pallet_enter","pallet_confirm","safety","say_load_pick"].includes(p);
+          if (needsMic) setTimeout(() => startListening(hint, onResult), 900);
+        }
+      };
+      rec.onend = () => {
+        setIsListening(false);
+        recRef.current = null;
+        if (!gotResult) {
+          const p = phaseRef.current;
+          const needsMic = ["equip_enter","equip_confirm","pallet_enter","pallet_confirm","safety"].includes(p);
+          if (needsMic) setTimeout(() => startListening(hint, onResult), 700);
+        }
+      };
+      rec.onresult = (e: any) => {
+        gotResult = true;
+        const heard = (e.results?.[0]?.[0]?.transcript || "").toLowerCase().trim();
+        if (/\brepeat\b|repita|repetir/i.test(heard)) {
+          gotResult = false;
+          if (lastSpeechRef.current) speak(lastSpeechRef.current, () => startListening(hint, onResult));
+          return;
+        }
+        if (/\bfaster\b|más.?rápido|mas.?rapido/i.test(heard)) {
+          speechRateRef.current = Math.min(1.9, speechRateRef.current + 0.15);
+          gotResult = false;
+          speak(lang === "es" ? "Más rápido." : "Faster.", () => startListening(hint, onResult));
+          return;
+        }
+        if (/\bslower\b|más.?lento|mas.?lento/i.test(heard)) {
+          speechRateRef.current = Math.max(0.7, speechRateRef.current - 0.15);
+          gotResult = false;
+          speak(lang === "es" ? "Más lento." : "Slower.", () => startListening(hint, onResult));
+          return;
+        }
+        onResult(heard);
+      };
+      recRef.current = rec;
+      try { rec.start(); } catch {}
     };
-    recRef.current = rec;
-    try { rec.start(); } catch {}
+
+    // 350ms gap: gives iOS audio session time to release from TTS → mic
+    setTimeout(doStart, 350);
   }, [lang]); // eslint-disable-line
 
   const isYes = (s: string) => /yes|yeah|yep|okay|ok|confirm|correct|right|sure|si|sí|afirm/i.test(s);
   const isNo  = (s: string) => /\bno\b|nope|cancel|negative|wrong|fail|deny/i.test(s);
+
+  // ── On-screen keypad handlers ─────────────────────────────────────────────
+  const handleEquipKey = (key: string) => {
+    if (key === "⌫") { setEquipInput(prev => prev.slice(0, -1)); return; }
+    if (key === "✓") {
+      const val = equipInput.trim();
+      if (val) { stopListening(); submitEquip(val); }
+      else     { stopListening(); doEquipEnter(); }
+      return;
+    }
+    setEquipInput(prev => (prev + key).slice(0, 8)); // max 8 chars
+  };
+
+  const handlePalletKey = (key: string) => {
+    if (key === "⌫") { setPalletInput(prev => prev.slice(0, -1)); return; }
+    if (key === "✓") {
+      const n = parseInt(palletInput, 10);
+      if (!isNaN(n) && n > 0) { stopListening(); submitPallet(palletInput); }
+      else                    { stopListening(); doPalletEnter(equipId); }
+      return;
+    }
+    // Pallet count: max 2 digits
+    setPalletInput(prev => (prev + key).slice(0, 2));
+  };
 
   // ── Steps ──────────────────────────────────────────────────────────────────
 
@@ -620,41 +650,36 @@ export default function NovaLoadPickPage() {
         {/* ── EQUIPMENT ENTER ── */}
         {phase === "equip_enter" && (
           <div className="w-full space-y-3">
-            {/* Listening badge */}
-            <div className={`flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold uppercase tracking-widest ${
+            {/* Status badge */}
+            <div className={`flex items-center justify-center gap-2 py-1.5 text-xs font-bold uppercase tracking-widest ${
               isListening ? "text-green-400" : isSpeaking ? "text-yellow-400" : "text-slate-500"
             }`}>
               {isListening && <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />}
               {isSpeaking  && <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />}
-              {isListening ? "NOVA is listening — say your equipment ID"
+              {isListening ? "Listening — say your equipment ID"
                : isSpeaking ? "NOVA is speaking…"
-               : "Say or type your equipment ID"}
+               : "Use keypad or say your equipment ID"}
             </div>
-            <label className="block text-xs text-slate-500 font-bold uppercase tracking-widest text-center">Equipment ID</label>
-            <div className="rounded-2xl border border-slate-700 bg-slate-900 p-1">
-              <input
-                type="text"
-                value={equipInput}
-                onChange={e => setEquipInput(e.target.value.replace(/\s/g, "").toUpperCase())}
-                onKeyDown={e => { if (e.key === "Enter") { if (equipInput.trim()) submitEquip(equipInput); } }}
-                placeholder="e.g. 0001"
-                className="w-full bg-transparent px-4 py-3 text-white text-3xl font-black tracking-[0.3em] text-center placeholder:text-slate-700 outline-none"
-              />
+            {/* Display */}
+            <div className="rounded-2xl bg-slate-900 border border-slate-700 py-4 text-center">
+              <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mb-1">Equipment ID</p>
+              <p className="text-5xl font-black tracking-[0.3em] text-white min-h-[60px] flex items-center justify-center">
+                {equipInput || <span className="text-slate-700 text-3xl">– – – –</span>}
+              </p>
             </div>
-            {/* Always-enabled: when empty, re-prompt; when filled, submit */}
-            <button
-              onClick={() => {
-                if (equipInput.trim()) {
-                  submitEquip(equipInput);
-                } else {
-                  // Re-prompt NOVA and restart listening
-                  stopListening();
-                  doEquipEnter();
-                }
-              }}
-              className="w-full py-5 rounded-3xl bg-yellow-400 text-slate-950 font-black text-xl hover:bg-yellow-300 active:scale-95 transition shadow-lg shadow-yellow-400/20">
-              {equipInput.trim() ? "Confirm Equipment ID" : "Tap to Repeat Prompt"}
-            </button>
+            {/* Number keypad */}
+            <div className="grid grid-cols-3 gap-2">
+              {["1","2","3","4","5","6","7","8","9","⌫","0","✓"].map(key => (
+                <button key={key} onClick={() => handleEquipKey(key)}
+                  className={`py-4 rounded-2xl font-black text-2xl active:scale-95 transition select-none ${
+                    key === "✓" ? "bg-yellow-400 text-slate-950 shadow-lg shadow-yellow-400/20"
+                    : key === "⌫" ? "bg-slate-700 text-white text-xl"
+                    : "bg-slate-800 text-white hover:bg-slate-700"
+                  }`}>
+                  {key}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -680,45 +705,36 @@ export default function NovaLoadPickPage() {
         {/* ── PALLET ENTER ── */}
         {phase === "pallet_enter" && (
           <div className="w-full space-y-3">
-            {/* Listening badge */}
-            <div className={`flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold uppercase tracking-widest ${
+            {/* Status badge */}
+            <div className={`flex items-center justify-center gap-2 py-1.5 text-xs font-bold uppercase tracking-widest ${
               isListening ? "text-green-400" : isSpeaking ? "text-yellow-400" : "text-slate-500"
             }`}>
               {isListening && <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />}
               {isSpeaking  && <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />}
-              {isListening ? "NOVA is listening — say the pallet count"
+              {isListening ? "Listening — say the pallet count"
                : isSpeaking ? "NOVA is speaking…"
-               : "Say or type the pallet count"}
+               : "Use keypad or say the pallet count"}
             </div>
-            <label className="block text-xs text-slate-500 font-bold uppercase tracking-widest text-center">
-              Max Pallets — Jack {equipId}
-            </label>
-            <div className="rounded-2xl border border-slate-700 bg-slate-900 p-1">
-              <input
-                type="number" min="1" max="20"
-                value={palletInput}
-                onChange={e => setPalletInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") { if (palletInput.trim()) submitPallet(palletInput); } }}
-                placeholder="e.g. 2"
-                className="w-full bg-transparent px-4 py-3 text-white text-3xl font-black tracking-[0.3em] text-center placeholder:text-slate-700 outline-none"
-              />
+            {/* Display */}
+            <div className="rounded-2xl bg-slate-900 border border-slate-700 py-4 text-center">
+              <p className="text-xs text-slate-500 uppercase font-bold tracking-widest mb-1">Max Pallets — Jack {equipId}</p>
+              <p className="text-6xl font-black text-white min-h-[72px] flex items-center justify-center">
+                {palletInput || <span className="text-slate-700 text-3xl">–</span>}
+              </p>
             </div>
-            {/* Always-enabled: when empty/invalid, re-prompt; when valid, submit */}
-            <button
-              onClick={() => {
-                const n = parseInt(palletInput, 10);
-                if (palletInput.trim() && !isNaN(n) && n > 0) {
-                  submitPallet(palletInput);
-                } else {
-                  stopListening();
-                  doPalletEnter(equipId);
-                }
-              }}
-              className="w-full py-5 rounded-3xl bg-yellow-400 text-slate-950 font-black text-xl hover:bg-yellow-300 active:scale-95 transition shadow-lg shadow-yellow-400/20">
-              {palletInput.trim() && !isNaN(parseInt(palletInput)) && parseInt(palletInput) > 0
-                ? "Confirm Pallet Count"
-                : "Tap to Repeat Prompt"}
-            </button>
+            {/* Number keypad — pallet counts 1–9 + clear + 0 + confirm */}
+            <div className="grid grid-cols-3 gap-2">
+              {["1","2","3","4","5","6","7","8","9","⌫","0","✓"].map(key => (
+                <button key={key} onClick={() => handlePalletKey(key)}
+                  className={`py-4 rounded-2xl font-black text-2xl active:scale-95 transition select-none ${
+                    key === "✓" ? "bg-yellow-400 text-slate-950 shadow-lg shadow-yellow-400/20"
+                    : key === "⌫" ? "bg-slate-700 text-white text-xl"
+                    : "bg-slate-800 text-white hover:bg-slate-700"
+                  }`}>
+                  {key}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
