@@ -138,10 +138,19 @@ export default function VoiceSessionPage() {
   const signOnRecRef        = useRef<any>(null);
   const signOnRetryCountRef = useRef(0);
 
+  // ── Page-level unmount guard (kills ALL retries on navigate away) ─────────
+  const unmountedRef = useRef(false);
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => { unmountedRef.current = true; };
+  }, []);
+
   // ── Qty confirmation voice ─────────────────────────────────────────────────
   const [qtyInput, setQtyInput]             = useState<string>("");
   const [isListeningQty, setIsListeningQty] = useState(false);
   const qtyRecognitionRef                   = useRef<any>(null);
+  const qtyRetryCountRef                    = useRef(0);
+  const qtyRetryDelayRef                    = useRef(500);
 
   // ── Mistake tracking ───────────────────────────────────────────────────────
   const [mistakeCount, setMistakeCount]     = useState(0);
@@ -226,8 +235,10 @@ export default function VoiceSessionPage() {
   // ── Keep sessionStateRef in sync (critical for mic guards) ───────────────
   useEffect(() => {
     sessionStateRef.current = sessionState;
-    // Reset sign-on retry counter on every state change so fresh retries are allowed
+    // Reset retry counters on every state change so each new phase gets fresh retries
     signOnRetryCountRef.current = 0;
+    qtyRetryCountRef.current    = 0;
+    qtyRetryDelayRef.current    = 500;
   }, [sessionState]);
 
   // ── Timer ─────────────────────────────────────────────────────────────────
@@ -282,9 +293,9 @@ export default function VoiceSessionPage() {
 
   const startSignOnListening = useCallback((hint: string, onHeard: (text: string) => void) => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
+    if (!SR || unmountedRef.current) return;
     // Hard stop: if we left sign-on phases entirely, don't restart
-    if (!SIGN_ON_STATES.includes(sessionStateRef.current as SessionState)) return;
+    if (!(SIGN_ON_STATES as readonly string[]).includes(sessionStateRef.current)) return;
     // Retry cap — prevents runaway loop if mic keeps failing
     if (signOnRetryCountRef.current >= 5) {
       signOnRetryCountRef.current = 0;
@@ -295,7 +306,7 @@ export default function VoiceSessionPage() {
     stopSignOnListening();
     // 350ms gap for iOS audio-session to release from TTS
     setTimeout(() => {
-      if (!SIGN_ON_STATES.includes(sessionStateRef.current as SessionState)) return;
+      if (unmountedRef.current || !(SIGN_ON_STATES as readonly string[]).includes(sessionStateRef.current)) return;
       const rec = new SR();
       signOnRecRef.current = rec;
       rec.continuous = false;
@@ -309,11 +320,11 @@ export default function VoiceSessionPage() {
       };
       rec.onerror = (e: any) => {
         setIsListeningSignOn(false);
-        if (gotResult) return;
-        if (e.error === "not-allowed" || e.error === "audio-capture") return; // no retry — no permission
-        if (!SIGN_ON_STATES.includes(sessionStateRef.current as SessionState)) return;
+        if (gotResult || unmountedRef.current) return;
+        if (e.error === "not-allowed" || e.error === "audio-capture") return;
+        if (!(SIGN_ON_STATES as readonly string[]).includes(sessionStateRef.current)) return;
         signOnRetryCountRef.current++;
-        const delay = Math.min(500 * signOnRetryCountRef.current, 3000); // backoff: 500, 1000, 1500…
+        const delay = Math.min(500 * signOnRetryCountRef.current, 3000);
         setTimeout(() => startSignOnListening(hint, onHeard), delay);
       };
       rec.onend = () => setIsListeningSignOn(false);
@@ -330,7 +341,16 @@ export default function VoiceSessionPage() {
   // ── Qty voice recognition ──────────────────────────────────────────────────
   const startQtyListening = useCallback((expectedQty: number, stopId: string) => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
+    // Hard stops
+    if (!SR || unmountedRef.current) return;
+    if (sessionStateRef.current !== 'confirm_qty') return;
+    // Retry cap — after 6 consecutive failures, stop and let user tap Ready
+    if (qtyRetryCountRef.current >= 6) {
+      qtyRetryCountRef.current = 0;
+      qtyRetryDelayRef.current = 500;
+      setIsListeningQty(false);
+      return;
+    }
 
     try { qtyRecognitionRef.current?.stop(); } catch {}
 
@@ -340,23 +360,33 @@ export default function VoiceSessionPage() {
     rec.lang = lang === "es" ? "es-US" : "en-US";
     let gotResult = false;
 
-    rec.onstart  = () => setIsListeningQty(true);
-    rec.onerror  = (e: any) => {
+    rec.onstart = () => {
+      qtyRetryCountRef.current = 0;   // successful open — reset
+      qtyRetryDelayRef.current = 500;
+      setIsListeningQty(true);
+    };
+    rec.onerror = (e: any) => {
       setIsListeningQty(false);
-      if (!gotResult && e.error !== "not-allowed") {
-        // Auto-retry on mic drop
-        setTimeout(() => startQtyListening(expectedQty, stopId), 700);
-      }
+      if (gotResult || unmountedRef.current || sessionStateRef.current !== 'confirm_qty') return;
+      if (e.error === "not-allowed" || e.error === "audio-capture") return; // no retry
+      qtyRetryCountRef.current++;
+      const delay = Math.min(qtyRetryDelayRef.current, 4000);
+      qtyRetryDelayRef.current = Math.min(delay * 1.5, 4000);
+      setTimeout(() => startQtyListening(expectedQty, stopId), delay);
     };
     rec.onend = () => {
       setIsListeningQty(false);
-      if (!gotResult) {
-        // Auto-retry if nothing heard
-        setTimeout(() => startQtyListening(expectedQty, stopId), 500);
-      }
+      if (gotResult || unmountedRef.current || sessionStateRef.current !== 'confirm_qty') return;
+      // Nothing heard — retry with backoff (not a hard error, but don't spam)
+      qtyRetryCountRef.current++;
+      const delay = Math.min(qtyRetryDelayRef.current, 4000);
+      qtyRetryDelayRef.current = Math.min(delay * 1.3, 4000);
+      setTimeout(() => startQtyListening(expectedQty, stopId), delay);
     };
     rec.onresult = (e: any) => {
       gotResult = true;
+      qtyRetryCountRef.current = 0;
+      qtyRetryDelayRef.current = 500;
       const heard = (e.results?.[0]?.[0]?.transcript?.trim() || "").toLowerCase();
       if (!heard) return;
 
@@ -380,7 +410,6 @@ export default function VoiceSessionPage() {
       }
       // ──────────────────────────────────────────────────────────────────────
 
-      // Extract number from speech (handles "two" → 2, word numbers, and digits)
       const NUM_WORDS: Record<string,number> = {
         one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,
         eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,
@@ -396,14 +425,14 @@ export default function VoiceSessionPage() {
         setQtyInput(String(said));
         handleQtySubmit(said, expectedQty, stopId);
       } else {
-        // Nothing recognized as number — retry
+        // Not a valid number — retry once quickly
         gotResult = false;
-        setTimeout(() => startQtyListening(expectedQty, stopId), 400);
+        qtyRetryCountRef.current++;
+        setTimeout(() => startQtyListening(expectedQty, stopId), 600);
       }
     };
     qtyRecognitionRef.current = rec;
-    setIsListeningQty(true);
-    try { rec.start(); } catch {}
+    try { rec.start(); } catch { qtyRetryCountRef.current++; }
   }, [lang]); // eslint-disable-line
 
   // ── Sign-on step functions ─────────────────────────────────────────────────
@@ -559,16 +588,16 @@ export default function VoiceSessionPage() {
     rec.onend   = () => {
       cmdActiveRef.current = false;
       cmdRecRef.current    = null;
-      if (sessionStateRef.current === "picking") {
+      if (!unmountedRef.current && sessionStateRef.current === "picking") {
         setTimeout(() => cmdLoopRef.current?.(), 700);
       }
     };
     rec.onerror = (e: any) => {
       cmdActiveRef.current = false;
       cmdRecRef.current    = null;
-      if (e.error === "not-allowed") return;
-      if (sessionStateRef.current === "picking") {
-        setTimeout(() => cmdLoopRef.current?.(), 1000);
+      if (e.error === "not-allowed" || e.error === "audio-capture") return;
+      if (!unmountedRef.current && sessionStateRef.current === "picking") {
+        setTimeout(() => cmdLoopRef.current?.(), 1500);
       }
     };
     rec.onresult = (e: any) => {
