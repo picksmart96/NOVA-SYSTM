@@ -56,8 +56,8 @@ const SAFETY_ITEMS = [
 
 // ─── TTS helper ─────────────────────────────────────────────────────────────
 
-function speakText(text: string, lang: string, onEnd?: () => void) {
-  novaSpeak(text, lang, onEnd, { rate: 1, pitch: 1 });
+function speakText(text: string, lang: string, onEnd?: () => void, rate = 0.95) {
+  novaSpeak(text, lang, onEnd, { rate, pitch: 1 });
 }
 
 // ─── Phase label map ─────────────────────────────────────────────────────────
@@ -139,6 +139,10 @@ export default function NovaTrainerPage() {
   // Batch complete sub-steps
   const [batchStep, setBatchStep] = useState(0);
 
+  // Speech rate (voice speed control: "NOVA faster" / "NOVA slower")
+  const [novaRate, setNovaRate] = useState(0.95);
+  const novaRateRef = useRef(0.95);
+
   // Refs
   const recognitionRef = useRef<any>(null);
   const shouldKeepListeningRef = useRef(false);
@@ -154,6 +158,7 @@ export default function NovaTrainerPage() {
   // Keep refs in sync
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { safetyIndexRef.current = safetyIndex; }, [safetyIndex]);
+  useEffect(() => { novaRateRef.current = novaRate; }, [novaRate]);
   useEffect(() => { equipmentIdRef.current = equipmentId; }, [equipmentId]);
   useEffect(() => { maxPalletsRef.current = maxPallets; }, [maxPallets]);
   useEffect(() => { currentStopIndexRef.current = currentStopIndex; }, [currentStopIndex]);
@@ -178,7 +183,22 @@ export default function NovaTrainerPage() {
       setPromptText(text);
       setSpeaking(true);
       addLog("NOVA", text);
-      speakText(text, lang, () => setSpeaking(false));
+
+      // Pause mic while NOVA speaks so her voice doesn't get recognised
+      shouldKeepListeningRef.current = false;
+      try { recognitionRef.current?.stop(); } catch {}
+
+      speakText(text, lang, () => {
+        setSpeaking(false);
+        // Auto-restart mic after NOVA finishes — hands-free for selectors
+        const p = phaseRef.current;
+        if (!["IDLE", "SAFETY_FAILED"].includes(p)) {
+          shouldKeepListeningRef.current = true;
+          setTimeout(() => {
+            try { recognitionRef.current?.start(); } catch {}
+          }, 350);
+        }
+      }, novaRateRef.current);
     },
     [addLog, lang]
   );
@@ -243,6 +263,29 @@ export default function NovaTrainerPage() {
       setPromptAndSpeak("No input received.");
       return true;
     }
+
+    // ── Voice speed control ──────────────────────────────────────────────
+    if (input.includes("nova faster") || input === "faster" || input === "speed up") {
+      const next = Math.min(novaRateRef.current + 0.15, 1.8);
+      novaRateRef.current = next;
+      setNovaRate(next);
+      setPromptAndSpeak("Okay, speaking faster.");
+      return true;
+    }
+    if (input.includes("nova slower") || input === "slower" || input === "slow down") {
+      const next = Math.max(novaRateRef.current - 0.15, 0.5);
+      novaRateRef.current = next;
+      setNovaRate(next);
+      setPromptAndSpeak("Okay, speaking slower.");
+      return true;
+    }
+    if (input.includes("nova normal") || input === "normal speed") {
+      novaRateRef.current = 0.95;
+      setNovaRate(0.95);
+      setPromptAndSpeak("Back to normal speed.");
+      return true;
+    }
+
     if (input === "repeat labels") { setPromptAndSpeak("Repeating label instructions."); return true; }
     if (input === "makeup skips") { setPromptAndSpeak("Makeup skips requested."); return true; }
     if (input === "get drops") { setPromptAndSpeak("Get drops requested."); return true; }
@@ -297,7 +340,17 @@ export default function NovaTrainerPage() {
     const input = normalizeSpeech(rawInput);
     const phase = phaseRef.current;
 
-    // Global shortcuts (not during SIGN_ON flow)
+    // Speed commands work at any point during an active session
+    if (phase !== "IDLE" && (
+      input.includes("nova faster") || input === "faster" || input === "speed up" ||
+      input.includes("nova slower") || input === "slower" || input === "slow down" ||
+      input.includes("nova normal") || input === "normal speed"
+    )) {
+      handleCommandShortcuts(input);
+      return;
+    }
+
+    // Global shortcuts (not during SIGN_ON flow or SAFETY)
     if (!["IDLE", "SIGN_ON", "SIGN_ON_CONFIRM", "PALLET_COUNT", "PALLET_COUNT_CONFIRM", "SAFETY"].includes(phase)) {
       if (handleCommandShortcuts(input)) return;
     }
@@ -919,7 +972,7 @@ export default function NovaTrainerPage() {
               </div>
             )}
 
-            {/* Picking: check code input */}
+            {/* Picking: location display + check code input */}
             {isPicking && currentStop && (
               <div className="w-full max-w-sm">
                 <div className="text-center mb-4">
@@ -928,31 +981,48 @@ export default function NovaTrainerPage() {
                   <p className="text-sm text-slate-400 mt-1">Stop {currentStopIndex + 1} of {stops.length} · Qty: {currentStop.qty}</p>
                 </div>
 
-                <div className="flex gap-2">
-                  <input
-                    ref={codeInputRef}
-                    value={codeInput}
-                    onChange={(e) => { setCodeInput(e.target.value); setLastCodeWrong(false); }}
-                    onKeyDown={(e) => e.key === "Enter" && submitCheckCode()}
-                    disabled={speaking}
-                    maxLength={6}
-                    placeholder="Check code…"
-                    className={`flex-1 bg-slate-950 border rounded-xl px-4 py-3 text-white font-mono text-center text-xl placeholder:text-slate-600 focus:outline-none transition disabled:opacity-40 ${
-                      lastCodeWrong ? "border-red-500 focus:border-red-400" : "border-slate-700 focus:border-yellow-400"
-                    }`}
-                  />
-                  <button
-                    onClick={submitCheckCode}
-                    disabled={!codeInput || speaking}
-                    className="px-5 py-3 rounded-xl bg-yellow-400 text-slate-950 font-black hover:bg-yellow-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <ChevronRight className="h-6 w-6" />
-                  </button>
-                </div>
-                {lastCodeWrong && (
-                  <div className="mt-2 flex items-center gap-2 text-red-400 text-xs">
-                    <AlertTriangle className="h-3.5 w-3.5" /> Invalid check code. Try again.
+                {/* Voice mode: no keyboard needed — mic handles check codes */}
+                {micMode === "browser" ? (
+                  <div className="text-center py-3">
+                    <p className="text-xs text-slate-500">
+                      {speaking ? "Wait for NOVA…" : "Say the check code out loud"}
+                    </p>
+                    {lastCodeWrong && (
+                      <div className="mt-2 flex items-center justify-center gap-2 text-red-400 text-xs">
+                        <AlertTriangle className="h-3.5 w-3.5" /> Wrong code — say it again
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  /* Button / keyboard fallback for devices without mic */
+                  <>
+                    <div className="flex gap-2">
+                      <input
+                        ref={codeInputRef}
+                        value={codeInput}
+                        onChange={(e) => { setCodeInput(e.target.value); setLastCodeWrong(false); }}
+                        onKeyDown={(e) => e.key === "Enter" && submitCheckCode()}
+                        disabled={speaking}
+                        maxLength={6}
+                        placeholder="Check code…"
+                        className={`flex-1 bg-slate-950 border rounded-xl px-4 py-3 text-white font-mono text-center text-xl placeholder:text-slate-600 focus:outline-none transition disabled:opacity-40 ${
+                          lastCodeWrong ? "border-red-500 focus:border-red-400" : "border-slate-700 focus:border-yellow-400"
+                        }`}
+                      />
+                      <button
+                        onClick={submitCheckCode}
+                        disabled={!codeInput || speaking}
+                        className="px-5 py-3 rounded-xl bg-yellow-400 text-slate-950 font-black hover:bg-yellow-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <ChevronRight className="h-6 w-6" />
+                      </button>
+                    </div>
+                    {lastCodeWrong && (
+                      <div className="mt-2 flex items-center gap-2 text-red-400 text-xs">
+                        <AlertTriangle className="h-3.5 w-3.5" /> Invalid check code. Try again.
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -1008,20 +1078,28 @@ export default function NovaTrainerPage() {
               </button>
             )}
 
-            {/* Mic toggle */}
+            {/* Mic status + speed indicator */}
             {isActive && (
-              <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
-                {micMode === "browser" ? (
-                  <>
-                    <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                    Browser mic active — speak your response
-                  </>
-                ) : (
-                  <>
-                    <MicOff className="h-3.5 w-3.5" />
-                    No mic detected — use buttons above
-                  </>
-                )}
+              <div className="mt-4 space-y-1.5">
+                <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+                  {micMode === "browser" ? (
+                    <>
+                      <span className={`inline-block w-2 h-2 rounded-full ${listening ? "bg-green-400 animate-pulse" : speaking ? "bg-yellow-400" : "bg-slate-600"}`} />
+                      {speaking ? "NOVA speaking — mic paused" : listening ? "Listening — speak your response" : "Mic ready"}
+                    </>
+                  ) : (
+                    <>
+                      <MicOff className="h-3.5 w-3.5" />
+                      No mic detected — use buttons above
+                    </>
+                  )}
+                </div>
+                {/* Voice speed badge */}
+                <div className="flex items-center justify-center gap-1.5 text-xs text-slate-600">
+                  <Volume2 className="h-3 w-3" />
+                  <span>Speed: {novaRate < 0.8 ? "Slow" : novaRate > 1.3 ? "Fast" : "Normal"}</span>
+                  <span className="text-slate-700">· Say "NOVA faster" or "NOVA slower"</span>
+                </div>
               </div>
             )}
           </div>
