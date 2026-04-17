@@ -103,6 +103,10 @@ export default function NovaLoadPickPage() {
   const equipIdRef  = useRef("");
   const safetyRef   = useRef(0);
   const recRef      = useRef<any>(null);
+  // Always-on gate wake listener
+  const [gateListening, setGateListening] = useState(false);
+  const gateRecRef  = useRef<any>(null);
+  const gateLoopRef = useRef<(() => void) | null>(null);
 
   useEffect(() => { phaseRef.current  = phase;      }, [phase]);
   useEffect(() => { asgnRef.current   = asgn;       }, [asgn]);
@@ -289,8 +293,76 @@ export default function NovaLoadPickPage() {
     }
   }, [jwtToken, currentUser, doSayLoadPick]); // eslint-disable-line
 
+  // ── Gate auto-wake — listen for "Hey NOVA" / "Load Pick" without any tap ──
+  const handleTapStartRef = useRef<(() => void) | null>(null);
+
+  const stopGateListen = useCallback(() => {
+    setGateListening(false);
+    try { gateRecRef.current?.abort(); } catch {}
+    gateRecRef.current = null;
+  }, []);
+
+  const startGateListen = useCallback(() => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR || phaseRef.current !== "gate") return;
+    stopGateListen();
+
+    const rec = new SR();
+    rec.continuous     = true;
+    rec.interimResults = false;
+    rec.lang           = novaRecogLang(lang);
+    rec.maxAlternatives = 1;
+
+    rec.onstart = () => setGateListening(true);
+    rec.onend   = () => {
+      setGateListening(false);
+      gateRecRef.current = null;
+      // Restart if still on gate
+      if (phaseRef.current === "gate") {
+        setTimeout(() => { if (phaseRef.current === "gate") gateLoopRef.current?.(); }, 900);
+      }
+    };
+    rec.onerror = (e: any) => {
+      setGateListening(false);
+      gateRecRef.current = null;
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") return;
+      if (phaseRef.current === "gate") {
+        setTimeout(() => { if (phaseRef.current === "gate") gateLoopRef.current?.(); }, 1200);
+      }
+    };
+    rec.onresult = (e: any) => {
+      const text = (e.results?.[e.results.length - 1]?.[0]?.transcript || "").toLowerCase().trim();
+      if (/nova|load.?pick|cargar|turno|start|empezar|hola/i.test(text)) {
+        stopGateListen();
+        // Attempt TTS unlock (may work if browser allows from SR callback)
+        try {
+          const u = new SpeechSynthesisUtterance("\u200B");
+          u.volume = 0;
+          window.speechSynthesis.speak(u);
+        } catch {}
+        handleTapStartRef.current?.();
+      }
+    };
+
+    gateRecRef.current = rec;
+    try { rec.start(); } catch {}
+  }, [lang, stopGateListen]);
+
+  useEffect(() => { gateLoopRef.current = startGateListen; }, [startGateListen]);
+
+  // Start gate listener on mount; stop when leaving gate phase
+  useEffect(() => {
+    const t = setTimeout(() => { if (phaseRef.current === "gate") startGateListen(); }, 800);
+    return () => { clearTimeout(t); stopGateListen(); };
+  }, []); // eslint-disable-line
+
+  useEffect(() => {
+    if (phase !== "gate") stopGateListen();
+  }, [phase, stopGateListen]);
+
   // ── Gate tap — unlocks audio ──────────────────────────────────────────────
   const handleTapStart = () => {
+    stopGateListen();
     try {
       const u = new SpeechSynthesisUtterance("\u200B");
       u.volume = 0;
@@ -299,6 +371,8 @@ export default function NovaLoadPickPage() {
     } catch {}
     loadAssignment();
   };
+
+  useEffect(() => { handleTapStartRef.current = handleTapStart; }, [handleTapStart]);
 
   // ── Reset helper ──────────────────────────────────────────────────────────
   const resetAll = () => {
@@ -393,9 +467,24 @@ export default function NovaLoadPickPage() {
         {/* ── GATE ── */}
         {phase === "gate" && (
           <div className="w-full flex flex-col items-center gap-4">
-            <p className="text-slate-400 text-sm text-center leading-relaxed">
-              Tap below — NOVA will guide you through each sign-on step. Tap the buttons to answer at every step.
-            </p>
+            {/* Always-listening indicator */}
+            {gateListening ? (
+              <div className="flex items-center gap-2 rounded-2xl border border-green-500/30 bg-green-500/10 px-5 py-3">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+                </span>
+                <span className="text-green-300 text-sm font-semibold">
+                  {lang === "es" ? "NOVA escuchando — di \"Cargar Turno\"" : "NOVA listening — say \"Load Pick\" or \"Hey NOVA\""}
+                </span>
+              </div>
+            ) : (
+              <p className="text-slate-400 text-sm text-center leading-relaxed">
+                {lang === "es"
+                  ? "Di \"Cargar Turno\" o toca abajo para empezar."
+                  : "Say \"Load Pick\" or tap below — NOVA guides every step with tap buttons."}
+              </p>
+            )}
             <button onClick={handleTapStart}
               className="w-full py-5 rounded-3xl bg-yellow-400 text-slate-950 font-black text-xl hover:bg-yellow-300 active:scale-95 transition shadow-xl shadow-yellow-400/30 flex items-center justify-center gap-3">
               <Zap className="h-6 w-6" /> Tap to Start Load Pick

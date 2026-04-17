@@ -333,6 +333,9 @@ export default function NovaHelpPage() {
   const [safetyIndex, setSafetyIndex]   = useState(0);
   const [chatHistory, setChatHistory]   = useState<ChatMessage[]>([]);
   const chatHistoryRef                  = useRef<ChatMessage[]>([]);
+  // Always-on wake detection
+  const [alwaysListening, setAlwaysListening] = useState(false);
+  const [ttsReady,        setTtsReady]        = useState(false);
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const sessionActiveRef   = useRef(false);
@@ -342,6 +345,10 @@ export default function NovaHelpPage() {
   const safetyIndexRef     = useRef(0);
   const ttsUnlockedRef     = useRef(false);
   const moodCheckActiveRef = useRef(false);
+  // Always-on wake refs
+  const alwaysRecRef       = useRef<any>(null);
+  const alwaysActiveRef    = useRef(false);
+  const ttsReadyRef        = useRef(false);
 
   // ── Screen lock / audio keep-alive refs ───────────────────────────────────
   const wakeLockRef        = useRef<WakeLockSentinel | null>(null);
@@ -819,6 +826,97 @@ export default function NovaHelpPage() {
   useEffect(() => { handleSafetyCheckInputRef.current = handleSafetyCheckInput; }, [handleSafetyCheckInput]);
   useEffect(() => { startSafetyCheckRef.current      = startSafetyCheck;      }, [startSafetyCheck]);
 
+  // ── Always-On Wake Detection ("Hey NOVA" → auto-start session) ─────────────
+  //
+  // Runs as soon as the page loads.  No button tap required to START listening.
+  // Tapping any button (or the one-time "Enable Voice" pill) is only needed
+  // once to satisfy the browser's audio-unlock policy for TTS output.
+
+  const stopAlwaysListen = useCallback(() => {
+    alwaysActiveRef.current = false;
+    setAlwaysListening(false);
+    try { alwaysRecRef.current?.abort(); } catch { /* ignore */ }
+    alwaysRecRef.current = null;
+  }, []);
+
+  const startAlwaysListenRef = useRef<(() => void) | null>(null);
+  const startSessionRef      = useRef<(() => void) | null>(null);
+
+  const startAlwaysListen = useCallback(() => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR || sessionActiveRef.current) return;
+    stopAlwaysListen();
+
+    const rec = new SR();
+    rec.continuous     = true;
+    rec.interimResults = false;
+    rec.lang           = ttsLang;
+    rec.maxAlternatives = 1;
+
+    rec.onstart = () => { alwaysActiveRef.current = true; setAlwaysListening(true); };
+
+    rec.onend = () => {
+      alwaysActiveRef.current = false;
+      setAlwaysListening(false);
+      alwaysRecRef.current = null;
+      // Auto-restart unless session is now active
+      if (!sessionActiveRef.current) {
+        setTimeout(() => {
+          if (!sessionActiveRef.current) startAlwaysListenRef.current?.();
+        }, 900);
+      }
+    };
+
+    rec.onerror = (e: any) => {
+      alwaysActiveRef.current = false;
+      setAlwaysListening(false);
+      alwaysRecRef.current = null;
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") return; // Mic denied — give up
+      if (!sessionActiveRef.current) {
+        setTimeout(() => {
+          if (!sessionActiveRef.current) startAlwaysListenRef.current?.();
+        }, 1200);
+      }
+    };
+
+    rec.onresult = (e: any) => {
+      const results = Array.from(e.results as any[]).slice(e.resultIndex);
+      for (const result of results as any[]) {
+        if (!result.isFinal) continue;
+        const text = (result[0]?.transcript || "").toLowerCase().trim();
+        // Wake words: "nova", "hey nova", "hola nova", "oye nova"
+        if (/\bnova\b|hey nova|hola nova|oye nova/i.test(text)) {
+          stopAlwaysListen();
+          if (!sessionActiveRef.current) {
+            startSessionRef.current?.();
+          }
+          return;
+        }
+      }
+    };
+
+    alwaysRecRef.current = rec;
+    try { rec.start(); } catch { /* ignore */ }
+  }, [ttsLang, stopAlwaysListen]);
+
+  useEffect(() => { startAlwaysListenRef.current = startAlwaysListen; }, [startAlwaysListen]);
+
+  // Mount: kick off always-on listener after a short delay
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (!sessionActiveRef.current) startAlwaysListenRef.current?.();
+    }, 800);
+    return () => {
+      clearTimeout(t);
+      stopAlwaysListen();
+    };
+  }, []); // eslint-disable-line
+
+  // When session becomes active, stop the always-on listener
+  useEffect(() => {
+    if (sessionActive) stopAlwaysListen();
+  }, [sessionActive, stopAlwaysListen]);
+
   // ── Build personalized greeting ───────────────────────────────────────────
   const buildGreeting = (): string => {
     const name   = firstName || "there";
@@ -908,6 +1006,9 @@ export default function NovaHelpPage() {
     }
   };
 
+  // Keep startSessionRef in sync (regular fn, not useCallback — update every render)
+  useEffect(() => { startSessionRef.current = startSession; });
+
   // ── Session end ───────────────────────────────────────────────────────────
   const endSession = () => {
     sessionActiveRef.current = false;
@@ -925,6 +1026,8 @@ export default function NovaHelpPage() {
     setLastQuestion("");
     setErrorMsg("");
     ttsUnlockedRef.current = false;
+    // Resume always-on wake listener after session ends
+    setTimeout(() => startAlwaysListenRef.current?.(), 1000);
   };
 
   // ── Stop NOVA speaking ─────────────────────────────────────────────────────
@@ -1626,29 +1729,69 @@ export default function NovaHelpPage() {
           </button>
         )}
 
-        {/* Start / text input — text input always visible */}
+        {/* ── Always-on wake indicator + start controls ── */}
         <div className="w-full space-y-3">
 
-          {/* Personalized greeting card for logged-in users (pre-session) */}
+          {/* Always-listening badge — shows when mic is running in background */}
+          {!sessionActive && alwaysListening && (
+            <div className="flex items-center justify-center gap-2 rounded-2xl border border-violet-500/30 bg-violet-900/20 px-4 py-3">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-violet-500" />
+              </span>
+              <span className="text-violet-300 text-sm font-semibold">
+                {isSpanish ? "NOVA está escuchando — di \"Hola NOVA\"" : "NOVA is listening — say \"Hey NOVA\""}
+              </span>
+            </div>
+          )}
+
+          {/* One-time TTS unlock — tap to enable voice output, then stay hands-free forever */}
+          {!sessionActive && !ttsReady && (
+            <LockedAction
+              onAllowedClick={() => {
+                unlockTTS();
+                ttsReadyRef.current = true;
+                setTtsReady(true);
+                // If mic already detected wake word and session should have started, start now
+                startAlwaysListenRef.current?.();
+              }}
+              className="w-full"
+            >
+              <button className="w-full py-4 rounded-2xl bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-bold text-base tracking-wide transition-all duration-200 shadow-[0_0_24px_rgba(139,92,246,0.4)] flex items-center justify-center gap-3">
+                <Mic className="h-5 w-5" />
+                {isSpanish
+                  ? "Toca una vez para activar la voz de NOVA"
+                  : "Tap once to enable NOVA's voice"}
+              </button>
+            </LockedAction>
+          )}
+
+          {/* After TTS enabled — smaller voice hint, can also start session explicitly */}
+          {!sessionActive && ttsReady && (
+            <LockedAction onAllowedClick={startSession} className="w-full">
+              <button className="w-full py-3 rounded-xl border border-violet-500/40 bg-violet-900/20 hover:bg-violet-800/30 text-violet-300 font-semibold text-sm tracking-wide transition-all duration-200 flex items-center justify-center gap-2">
+                <Mic className="h-4 w-4 animate-pulse" />
+                {isSpanish ? "O toca para iniciar sesión de voz ahora" : "Or tap to start voice session now"}
+              </button>
+            </LockedAction>
+          )}
+
+          {/* Personalized stat card */}
           {!sessionActive && isRealUser && firstName && (
-            <div className="rounded-2xl border border-violet-500/30 bg-violet-950/40 p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-7 h-7 rounded-full bg-violet-600 flex items-center justify-center text-xs font-bold">N</div>
-                <span className="text-violet-300 text-xs font-bold uppercase tracking-wider">NOVA</span>
-              </div>
-              <p className="text-white text-sm leading-relaxed mb-1">
-                <span className="font-bold text-yellow-300">Hey {firstName}!</span> Welcome back.
+            <div className="rounded-2xl border border-violet-500/20 bg-violet-950/30 p-4">
+              <p className="text-white text-sm leading-relaxed">
+                <span className="font-bold text-yellow-300">Hey {firstName}!</span>{" "}
                 {yestLog
-                  ? <> Yesterday you hit <span className="font-bold text-green-400">{yestLog.pickRate}%</span> in {yestLog.hours}h.{" "}
+                  ? <>Yesterday you hit <span className="font-bold text-green-400">{yestLog.pickRate}%</span> in {yestLog.hours}h.{" "}
                       {userGoal
                         ? yestLog.pickRate >= userGoal.targetRate
                           ? <span className="text-green-400">Above your goal — amazing!</span>
-                          : <span className="text-yellow-400">Your goal is {userGoal.targetRate}% — let's close that gap today.</span>
+                          : <span className="text-yellow-400">Your goal is {userGoal.targetRate}% — let's close that gap.</span>
                         : null}
                     </>
                   : userGoal
-                    ? <> Your goal this week is <span className="font-bold text-yellow-400">{userGoal.targetRate}%</span>. Let's go after it.</>
-                    : <> Log your performance on the Leaderboard so I can track it with you.</>}
+                    ? <>Your goal this week is <span className="font-bold text-yellow-400">{userGoal.targetRate}%</span>.</>
+                    : <>Log your performance so NOVA can track it with you.</>}
               </p>
             </div>
           )}
@@ -1671,16 +1814,6 @@ export default function NovaHelpPage() {
               →
             </button>
           </form>
-
-          {/* ── Optional voice button (collapses after session starts) ── */}
-          {!sessionActive && (
-            <LockedAction onAllowedClick={startSession} className="w-full">
-              <button className="w-full py-3 rounded-xl border border-violet-500/40 bg-violet-900/20 hover:bg-violet-800/30 text-violet-300 font-semibold text-sm tracking-wide transition-all duration-200 flex items-center justify-center gap-2">
-                <Mic className="h-4 w-4" />
-                {isSpanish ? "O toca para usar voz" : "Or tap to use voice"}
-              </button>
-            </LockedAction>
-          )}
         </div>
 
         {/* Session log */}
