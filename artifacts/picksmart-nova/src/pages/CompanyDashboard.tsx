@@ -101,7 +101,7 @@ function InviteCard({ card }: { card: RoleCard }) {
       const data = await res.json() as { token?: string; error?: string };
       if (!res.ok) { setError(data.error ?? "Failed to generate link. Please try again."); return; }
 
-      const finalUrl = `${appUrl}/invite?token=${data.token}`;
+      const finalUrl = `${appUrl}/invite/${data.token}`;
       setLink(finalUrl);
 
       // Update the alert with the real URL (fire-and-forget)

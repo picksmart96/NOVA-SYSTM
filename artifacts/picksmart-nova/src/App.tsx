@@ -186,6 +186,9 @@ function Router() {
       <Route path="/invite/:token">
         <InvitePage />
       </Route>
+      <Route path="/invite">
+        <InvitePage />
+      </Route>
       <Route path="/forgot">
         <ForgotPage />
       </Route>

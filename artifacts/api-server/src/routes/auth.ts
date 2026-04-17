@@ -296,7 +296,7 @@ router.post("/auth/invite", requireAuth, async (req, res) => {
 
     // ── Fire alert so Command Center is notified immediately ──
     const appUrl = process.env.APP_URL ?? "https://nova-warehouse-control.replit.app";
-    const builtInviteUrl = inviteUrl ?? `${appUrl}/invite?token=${token}`;
+    const builtInviteUrl = inviteUrl ?? `${appUrl}/invite/${token}`;
     await db.insert(psaAlerts).values({
       type: "invite_shared",
       message: `${creator?.fullName ?? creator?.username ?? "Someone"} generated a ${role} invite link`,

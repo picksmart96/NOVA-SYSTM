@@ -45,7 +45,9 @@ export default function InvitePage() {
   const [, navigate] = useLocation();
   const { loginWithToken } = useAuthStore();
 
-  const token = params?.token ?? "";
+  // Support both /invite/:token (correct) and /invite?token= (legacy broken links)
+  const queryToken = new URLSearchParams(window.location.search).get("token") ?? "";
+  const token = params?.token || queryToken;
 
   const [step, setStep]       = useState<Step>("loading");
   const [invite, setInvite]   = useState<InviteData | null>(null);

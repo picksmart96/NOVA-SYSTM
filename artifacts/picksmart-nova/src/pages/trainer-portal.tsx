@@ -73,7 +73,7 @@ export default function TrainerPortalPage() {
       });
       if (res.ok) {
         const { token } = await res.json() as { token: string };
-        setInviteLink(`${window.location.origin}${BASE}/invite?token=${token}`);
+        setInviteLink(`${window.location.origin}${BASE}/invite/${token}`);
       }
     } catch { /* silent */ }
     setForm({ fullName: "", email: "", age: "", level: "Beginner", notes: "" });
