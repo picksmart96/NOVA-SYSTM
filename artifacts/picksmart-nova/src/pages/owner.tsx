@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon, FlaskConical, DollarSign, Building2, CreditCard, Plus, Send, AlertCircle, Phone, FileText, X, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Clock, Youtube, TrendingUp, BarChart3, Briefcase, ChevronRight, Edit3, Trash2, Loader2 } from "lucide-react";
+import { Copy, ExternalLink, Globe, Key, Link as LucideLink, ShieldCheck, Users, BookOpen, Mic, LayoutDashboard, Activity, Shield, UserPlus, Check, Mail, Share2, Warehouse as WarehouseIcon, FlaskConical, DollarSign, Building2, CreditCard, Plus, Send, AlertCircle, Phone, FileText, X, ChevronDown, ChevronUp, MessageCircle, CheckCircle2, Clock, Youtube, TrendingUp, BarChart3, Briefcase, ChevronRight, Edit3, Trash2, Loader2, Zap } from "lucide-react";
 import { Link } from "wouter";
 import { OWNER_TOKEN } from "./owner-access";
 import { useAuthStore, AuthAccount, AuthRole } from "@/lib/authStore";
