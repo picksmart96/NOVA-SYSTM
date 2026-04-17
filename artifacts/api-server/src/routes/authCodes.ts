@@ -70,10 +70,10 @@ function buildCodeEmail(name: string, code: string, type: "verify" | "reset" | "
 </html>`;
 }
 
-function buildRawMessage({ to, from, subject, html }: { to: string; from: string; subject: string; html: string }): string {
+function buildRawMessage({ to, subject, html }: { to: string; subject: string; html: string }): string {
   const boundary = `----=_Part_${Date.now()}`;
   const lines = [
-    `From: ${from}`, `To: ${to}`, `Subject: ${subject}`,
+    `To: ${to}`, `Subject: ${subject}`,
     `MIME-Version: 1.0`, `Content-Type: multipart/alternative; boundary="${boundary}"`, ``,
     `--${boundary}`, `Content-Type: text/plain; charset="UTF-8"`, ``,
     `Your PickSmart NOVA verification code is inside this email.`, ``,
@@ -101,7 +101,6 @@ router.post("/auth/send-code", async (req, res) => {
     const connectors = new ReplitConnectors();
     const html = buildCodeEmail(name, code, type as "verify" | "reset" | "username");
     const raw = buildRawMessage({
-      from: "PickSmart NOVA <picksmart@picksmartacademy.net>",
       to: email,
       subject: subjects[type] ?? subjects.verify,
       html,
@@ -134,7 +133,6 @@ router.post("/auth/send-username", async (req, res) => {
     const connectors = new ReplitConnectors();
     const html = buildCodeEmail(name, "", "username", username);
     const raw = buildRawMessage({
-      from: "PickSmart NOVA <picksmart@picksmartacademy.net>",
       to: email,
       subject: "Your PickSmart NOVA username",
       html,

@@ -10,7 +10,7 @@ type Mode = "password" | "username";
 
 export default function ForgotPage() {
   const [, navigate] = useLocation();
-  const { getUserByEmail, resetPassword } = useAuthStore();
+  const { resetPassword } = useAuthStore();
 
   const [mode, setMode] = useState<Mode>("password");
   const [step, setStep] = useState<Step>("choose");
@@ -25,21 +25,29 @@ export default function ForgotPage() {
 
   async function handleSendCode() {
     setError("");
-    const account = getUserByEmail(email.trim());
-    if (!account) {
-      setError("No account found with that email address.");
+    if (!email.trim() || !email.includes("@")) {
+      setError("Please enter a valid email address.");
       return;
     }
     setLoading(true);
     try {
+      // Look up user by email via API (works for all DB-backed accounts)
+      const lookupRes = await fetch(`${BASE}/api/auth/lookup-by-email?email=${encodeURIComponent(email.trim())}`);
+      const lookup = await lookupRes.json().catch(() => ({}));
+      if (!lookup.found) {
+        setError("No account found with that email address.");
+        setLoading(false);
+        return;
+      }
+
       if (mode === "username") {
         const r = await fetch(`${BASE}/api/auth/send-username`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: email.trim(), name: account.fullName, username: account.username }),
+          body: JSON.stringify({ email: email.trim(), name: lookup.name ?? "there", username: lookup.username }),
         });
         if (r.ok) {
-          setFoundUsername(account.username);
+          setFoundUsername(lookup.username ?? "");
           setStep("done");
         } else {
           const d = await r.json().catch(() => ({}));
@@ -49,7 +57,7 @@ export default function ForgotPage() {
         const r = await fetch(`${BASE}/api/auth/send-code`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: email.trim(), name: account.fullName, type: "reset" }),
+          body: JSON.stringify({ email: email.trim(), name: lookup.name ?? "there", type: "reset" }),
         });
         if (r.ok) {
           setStep("code");
@@ -87,15 +95,29 @@ export default function ForgotPage() {
     }
   }
 
-  function handleResetPassword() {
+  async function handleResetPassword() {
     setError("");
     if (newPassword.length < 6) { setError("Password must be at least 6 characters."); return; }
     if (newPassword !== confirmPassword) { setError("Passwords do not match."); return; }
-    const ok = resetPassword(email.trim(), newPassword);
-    if (ok) {
-      setStep("done");
-    } else {
-      setError("Could not reset password. Please try again.");
+    setLoading(true);
+    try {
+      const r = await fetch(`${BASE}/api/auth/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), newPassword }),
+      });
+      if (r.ok) {
+        // Also update local store if the account exists there
+        resetPassword(email.trim(), newPassword);
+        setStep("done");
+      } else {
+        const d = await r.json().catch(() => ({}));
+        setError(d.error ?? "Could not reset password. Please try again.");
+      }
+    } catch {
+      setError("Network error. Try again.");
+    } finally {
+      setLoading(false);
     }
   }
 

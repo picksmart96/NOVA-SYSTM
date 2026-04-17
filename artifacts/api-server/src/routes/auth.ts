@@ -451,6 +451,27 @@ router.post("/auth/invite/accept", async (req, res) => {
   }
 });
 
+// ── GET /api/auth/lookup-by-email — check if a user exists by email ──────────
+router.get("/auth/lookup-by-email", async (req, res) => {
+  const email = (req.query.email as string)?.trim().toLowerCase();
+  if (!email) { res.status(400).json({ error: "email required" }); return; }
+  try {
+    const [user] = await db
+      .select({ id: psaUsers.id, fullName: psaUsers.fullName, username: psaUsers.username })
+      .from(psaUsers)
+      .where(eq(psaUsers.email, email))
+      .limit(1);
+    if (!user) {
+      res.json({ found: false });
+    } else {
+      res.json({ found: true, name: user.fullName, username: user.username });
+    }
+  } catch (err) {
+    logger.error({ err }, "[Auth] Lookup-by-email error");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ── POST /api/auth/reset-password ─────────────────────────────────────────────
 router.post("/auth/reset-password", async (req, res) => {
   const { email, newPassword } = req.body as { email?: string; newPassword?: string };

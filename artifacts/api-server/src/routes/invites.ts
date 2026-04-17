@@ -8,18 +8,15 @@ const router = Router();
 // Build a base64-encoded RFC 2822 email message for Gmail API
 function buildRawMessage({
   to,
-  from,
   subject,
   html,
 }: {
   to: string;
-  from: string;
   subject: string;
   html: string;
 }): string {
   const boundary = `----=_Part_${Date.now()}`;
   const lines = [
-    `From: ${from}`,
     `To: ${to}`,
     `Subject: ${subject}`,
     `MIME-Version: 1.0`,
@@ -129,7 +126,6 @@ router.post("/invites/send", async (req, res) => {
 
     // Use the Gmail connector (Google-mail integration via Replit)
     const raw = buildRawMessage({
-      from: "PickSmart NOVA <picksmart@picksmartacademy.net>",
       to: email,
       subject: `You've been invited to PickSmart NOVA as ${roleLabel}`,
       html,
