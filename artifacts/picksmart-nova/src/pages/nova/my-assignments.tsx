@@ -121,10 +121,10 @@ export default function MyAssignmentsPage() {
                   <p className="text-xs font-black uppercase tracking-widest text-yellow-400">My Picks</p>
                 </div>
 
-                {/* Quick Load Pick */}
+                {/* Quick Load Pick — goes through NOVA safety gate first */}
                 {activePick && (
                   <div
-                    onClick={() => navigate(`/nova/voice/${activePick.id}`)}
+                    onClick={() => navigate("/nova/load-pick")}
                     className="rounded-3xl border border-yellow-400 bg-yellow-400/10 p-6 flex items-center justify-between cursor-pointer hover:bg-yellow-400/15 transition group shadow-[0_0_30px_rgba(250,204,21,0.1)]"
                   >
                     <div className="flex items-center gap-4">

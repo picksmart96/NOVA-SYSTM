@@ -311,7 +311,10 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
     speak(text, () => afterSpeak(micOk));
   }, [callNova, speak, afterSpeak]);
 
-  // ── Auto-start on mount ───────────────────────────────────────────────────
+  // ── Tap-gate: wait for user gesture before starting TTS ──────────────────
+  // (browsers block auto-play TTS without a user gesture)
+
+  const [ttsGated, setTtsGated] = useState(true);
 
   const didStartRef = useRef(false);
   useEffect(() => {
@@ -319,9 +322,14 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
     didStartRef.current = true;
     const micOk = !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition;
     setCanMic(micOk);
-    const t = setTimeout(() => startConversation(micOk), 700);
-    return () => clearTimeout(t);
+    // Do NOT auto-start — wait for the tap gate below
   }, []); // eslint-disable-line
+
+  const handleTapStart = useCallback(() => {
+    setTtsGated(false);
+    const micOk = !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition;
+    startConversation(micOk);
+  }, [startConversation]);
 
   // ── Manual mic toggle ─────────────────────────────────────────────────────
 
@@ -439,16 +447,28 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
           </div>
         </div>
 
+        {/* Tap-to-start gate */}
+        {ttsGated && uiState === "booting" && (
+          <button
+            onClick={handleTapStart}
+            className="mt-2 px-8 py-4 rounded-2xl bg-yellow-400 text-slate-950 font-black text-lg hover:bg-yellow-300 active:scale-95 transition shadow-lg shadow-yellow-400/30"
+          >
+            Tap to Talk with NOVA
+          </button>
+        )}
+
         {/* Status */}
-        <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
-          {uiState === "booting"  && "NOVA starting…"}
-          {isThinking             && "NOVA is thinking…"}
-          {isSpeaking             && "NOVA is speaking"}
-          {isListening            && "Listening — speak now"}
-          {isWake                 && 'Say "Hey NOVA" to respond'}
-          {uiState === "idle"     && (canMic ? "Tap mic or type below" : "Type your response below")}
-          {uiState === "done"     && "Shift check-in complete!"}
-        </p>
+        {!ttsGated && (
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
+            {uiState === "booting"  && "NOVA starting…"}
+            {isThinking             && "NOVA is thinking…"}
+            {isSpeaking             && "NOVA is speaking"}
+            {isListening            && "Listening — speak now"}
+            {isWake                 && 'Say "Hey NOVA" to respond'}
+            {uiState === "idle"     && (canMic ? "Tap mic or type below" : "Type your response below")}
+            {uiState === "done"     && "Shift check-in complete!"}
+          </p>
+        )}
 
         {/* Live transcript or current text */}
         <div className="w-full max-w-md min-h-[72px] flex items-center justify-center text-center px-2">

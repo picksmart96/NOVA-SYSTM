@@ -660,11 +660,11 @@ export default function SelectorPortalPage() {
         {/* ── Portal Cards Grid ────────────────────────────────────────────── */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <PortalCard
-            href="/nova"
+            href="/nova/load-pick"
             accent
             icon={<Zap className="h-6 w-6 text-yellow-400" />}
             title="Load Pick"
-            description="Load your assigned picking session and start picking with NOVA."
+            description="Sign on with NOVA, complete your safety checklist, and start picking."
           />
           <PortalCard
             href="/nova-trainer"
