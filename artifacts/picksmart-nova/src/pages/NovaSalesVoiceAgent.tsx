@@ -421,7 +421,10 @@ export default function NovaSalesVoiceAgent() {
 
   const { getAccountByNumber } = useAuthStore();
 
+  const [wakeMode, setWakeMode] = useState(false);
+  const wakeModeRef       = useRef(false);
   const recognitionRef    = useRef<any>(null);
+  const wakeRecRef        = useRef<any>(null);
   const sendMessageRef    = useRef<((text: string) => void) | null>(null);
   const endRef            = useRef<HTMLDivElement>(null);
   const sessionIdRef      = useRef<string>(crypto.randomUUID());
@@ -508,6 +511,59 @@ export default function NovaSalesVoiceAgent() {
     try { recognitionRef.current?.start(); } catch { /* already started */ }
   }, []);
 
+  // ── Wake word listener — runs in background, detects "hey nova" / "nova" ─────
+  const stopWakeListening = useCallback(() => {
+    wakeModeRef.current = false;
+    try { wakeRecRef.current?.stop(); wakeRecRef.current?.abort?.(); } catch { /* ignore */ }
+    wakeRecRef.current = null;
+  }, []);
+
+  const startWakeListening = useCallback(() => {
+    if (!canListen) return;
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    wakeModeRef.current = true;
+    try { wakeRecRef.current?.stop(); } catch { /* ignore */ }
+    wakeRecRef.current = null;
+
+    const rec = new SR();
+    rec.lang = "en-US";
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.onresult = (e: any) => {
+      const transcript = (e.results?.[e.results.length - 1]?.[0]?.transcript ?? "").toLowerCase().trim();
+      if (transcript.includes("nova") && wakeModeRef.current) {
+        stopWakeListening();
+        setWakeMode(false);
+        speechStartRef.current = false;
+        const welcome = isSupportMode
+          ? "Hi! I'm NOVA, your PickSmart Academy support assistant. To get started, please share your account number — it starts with PSA, like PSA-0001."
+          : "Hi! My name is NOVA and I'll be assisting you today. I hope I'm doing a good job so far! So — what's your name?";
+        setIsSpeaking(true);
+        setNowSpeakingText(welcome);
+        novaSpeak(welcome, "en", () => {
+          setIsSpeaking(false);
+          setNowSpeakingText("");
+          setTimeout(startListening, 300);
+        }, { onStart: () => { speechStartRef.current = true; } });
+      }
+    };
+    rec.onerror = () => {
+      if (wakeModeRef.current) {
+        wakeRecRef.current = null;
+        setTimeout(() => { if (wakeModeRef.current) startWakeListening(); }, 600);
+      }
+    };
+    rec.onend = () => {
+      if (wakeModeRef.current) {
+        wakeRecRef.current = null;
+        setTimeout(() => { if (wakeModeRef.current) startWakeListening(); }, 600);
+      }
+    };
+    wakeRecRef.current = rec;
+    try { rec.start(); } catch { /* ignore */ }
+  }, [canListen, isSupportMode, stopWakeListening, startListening]);
+
   // ── Voice recognition setup ─────────────────────────────────────────────────
   useEffect(() => {
     if (!canListen) return;
@@ -550,48 +606,10 @@ export default function NovaSalesVoiceAgent() {
     autoListenRef.current = true;
     speechStartRef.current = false;
     setTtsUnlocked(true);
-
-    const welcome = isSupportMode
-      ? "Hi! I'm NOVA, your PickSmart Academy support assistant. To get started, please share your account number — it starts with PSA, like PSA-0001. You can find it on your Selector Portal or in your welcome email."
-      : "Hi! My name is NOVA and I'll be assisting you today. If you ever feel like I'm not the right fit, I can send a request to my boss — it usually takes about 24 hours to reply, but I'm fully certified and here to help. I hope I'm doing a good job so far! So — what's your name?";
-
-    if (!canSpeak) {
-      setTimeout(startListening, 300);
-      return;
-    }
-
-    // Show the speaking UI immediately so the user sees feedback
-    setIsSpeaking(true);
-    setNowSpeakingText(welcome);
-
-    // 3-second watchdog — if onstart never fires, speech was silently blocked
-    const watchdog = setTimeout(() => {
-      if (!speechStartRef.current) {
-        // Speech never actually started — clear speaking state and move on
-        setIsSpeaking(false);
-        setNowSpeakingText("");
-        setErrorMsg("Your browser blocked audio. For full voice, open the app in a new tab or use the deployed site.");
-        setTimeout(startListening, 300);
-      }
-    }, 3000);
-
-    novaSpeak(welcome, "en",
-      // onDone
-      () => {
-        clearTimeout(watchdog);
-        setIsSpeaking(false);
-        setNowSpeakingText("");
-        setTimeout(startListening, 300);
-      },
-      // opts — onStart fires when audio actually begins
-      {
-        onStart: () => {
-          speechStartRef.current = true;
-          clearTimeout(watchdog);
-        },
-      }
-    );
-  }, [canSpeak, startListening]);
+    // Enter wake mode — NOVA waits silently for "Hey NOVA"
+    setWakeMode(true);
+    startWakeListening();
+  }, [startWakeListening]);
 
   // ── Track event ─────────────────────────────────────────────────────────────
   async function trackEvent(event: string, dealId?: string) {
@@ -857,9 +875,9 @@ export default function NovaSalesVoiceAgent() {
             </div>
 
             <div>
-              <h2 className="text-2xl font-black text-white mb-2">Tap to hear NOVA speak</h2>
+              <h2 className="text-2xl font-black text-white mb-2">Wake NOVA with your voice</h2>
               <p className="text-slate-400 text-sm leading-relaxed">
-                Browsers require a tap before playing audio. Tap the button below and NOVA will greet you out loud.
+                Tap below to activate the mic, then say <span className="text-yellow-400 font-bold">"Hey NOVA"</span> and she'll greet you.
               </p>
             </div>
 
@@ -867,8 +885,8 @@ export default function NovaSalesVoiceAgent() {
               onClick={handleActivate}
               className="w-full flex items-center justify-center gap-3 rounded-3xl bg-yellow-400 px-8 py-5 font-black text-slate-950 text-lg hover:bg-yellow-300 active:scale-95 transition shadow-[0_0_40px_rgba(250,204,21,0.3)]"
             >
-              <Volume2 className="h-6 w-6" />
-              Activate NOVA Voice
+              <Mic className="h-6 w-6" />
+              Activate Mic
             </button>
 
             <button
@@ -952,6 +970,38 @@ export default function NovaSalesVoiceAgent() {
             className="mt-10 rounded-2xl border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-bold text-slate-400 hover:border-red-400/50 hover:text-red-300 transition"
           >
             Stop listening
+          </button>
+        </div>
+      )}
+
+      {/* ── Wake mode — NOVA sleeping, waiting for "Hey NOVA" ── */}
+      {ttsUnlocked && wakeMode && !isSpeaking && !isListening && (
+        <div className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-[#060d1f] px-6">
+          <div className="relative flex items-center justify-center mb-10" style={{ width: 280, height: 280 }}>
+            {/* Dim static rings — sleeping look */}
+            <div className="absolute rounded-full border border-slate-700/60" style={{ width: 280, height: 280 }} />
+            <div className="absolute rounded-full border border-slate-700/50" style={{ width: 210, height: 210 }} />
+            <div className="absolute rounded-full border border-slate-600/50" style={{ width: 150, height: 150 }} />
+            {/* Slow dim breathing pulse */}
+            <div className="absolute rounded-full border border-slate-500/30 animate-ping" style={{ width: 110, height: 110, animationDuration: "3s" }} />
+            {/* Center — dim mic */}
+            <div className="relative z-10 w-16 h-16 rounded-full bg-slate-800 border border-slate-600 flex items-center justify-center">
+              <Mic className="h-7 w-7 text-slate-500" />
+            </div>
+          </div>
+
+          <h2 className="text-3xl font-black text-white mb-2">{isSupportMode ? "NOVA Support" : "NOVA"}</h2>
+          <p className="text-xs font-bold tracking-[0.25em] uppercase text-slate-500 mb-4">Sleeping</p>
+          <p className="text-slate-400 text-base text-center max-w-xs leading-relaxed">
+            Say <span className="text-yellow-400 font-bold">"Hey NOVA"</span> to wake me up
+          </p>
+          <p className="text-slate-600 text-xs text-center mt-2">Mic is on and listening</p>
+
+          <button
+            onClick={() => { stopWakeListening(); setWakeMode(false); }}
+            className="mt-10 text-slate-600 text-sm hover:text-slate-400 transition underline"
+          >
+            Skip wake word — use text
           </button>
         </div>
       )}

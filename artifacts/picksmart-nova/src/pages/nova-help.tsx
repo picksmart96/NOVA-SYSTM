@@ -48,15 +48,29 @@ function isSafetyTrigger(text: string): boolean {
     t.includes("hacer seguridad")||t.includes("iniciar seguridad");
 }
 function isSafetyConfirm(text: string): boolean {
-  const t = text.toLowerCase().trim().replace(/[.,!?;:]+$/, "");
+  const t = text.toLowerCase().trim().replace(/[.,!?;:'"]+$/, "");
   const has = (...terms: string[]) => terms.some((x) => t.includes(x));
-  return has("yes","yeah","yep","yea","okay","ok","correct","affirmative","right","sure","go","confirm","that's","thats")||
-    t === "si"||t === "sí"||has("sí","bueno","listo","correcto");
+  return (
+    has("yes","yeah","yep","yea","yup","okay","ok","correct","affirmative","right",
+        "sure","go","confirm","that's","thats","good","looks good","all good",
+        "checked","works","working","fine","clear","check","all clear","ready",
+        "it's fine","its fine","good to go","ten four","10-4","roger","copy") ||
+    t === "si" || t === "sí" || t === "aye" || t === "check" ||
+    has("sí","bueno","listo","correcto","bien","perfecto","claro","de acuerdo","está bien","esta bien")
+  );
 }
 function isSafetyDeny(text: string): boolean {
-  const t = text.toLowerCase().trim().replace(/[.,!?;:]+$/, "");
-  return t === "no"||t.startsWith("no ")||t.includes("nope")||t.includes("negative")||
-    t.includes("fail")||t.includes("bad")||t.includes("broken")||t.includes("not okay")||t.includes("not ok");
+  const t = text.toLowerCase().trim().replace(/[.,!?;:'"]+$/, "");
+  return (
+    t === "no" || t.startsWith("no ") || t.endsWith(" no") ||
+    t.includes("nope") || t.includes("negative") ||
+    t.includes("fail") || t.includes("bad") || t.includes("broken") ||
+    t.includes("not okay") || t.includes("not ok") || t.includes("doesn't work") ||
+    t.includes("doesn't") || t.includes("does not") || t.includes("not working") ||
+    t.includes("issue") || t.includes("problem") || t.includes("damaged") ||
+    t.includes("no good") || t.includes("malo") || t.includes("roto") ||
+    t.includes("falla") || t.includes("no funciona")
+  );
 }
 
 // ─── Mood detection ──────────────────────────────────────────────────────────
@@ -790,7 +804,10 @@ export default function NovaHelpPage() {
       }
       return;
     }
-    safetySpeak(isSpanish ? `No escuché bien. ${item}` : `Didn't catch that. ${item}`);
+    // Give a helpful prompt — say yes to confirm, no to flag an issue
+    safetySpeak(isSpanish
+      ? `Di "sí" si está bien, o "no" si hay un problema. ${item}`
+      : `Say "yes" if it's okay, or "no" if there's an issue. ${item}`);
   }, [isSpanish, safetySpeak]);
 
   // Assign forward refs
