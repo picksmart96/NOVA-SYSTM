@@ -97,12 +97,16 @@ export default function SelectorPortalPage() {
   });
 
   // ── Voice / Speech state ───────────────────────────────────────────────────
-  const [muted, setMuted] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [novaStatus, setNovaStatus] = useState<string>("");
-  const mutedRef = useRef(false);
-  const recognitionRef = useRef<any>(null);
+  const [muted,          setMuted]          = useState(false);
+  const [isListening,    setIsListening]    = useState(false);
+  const [isSpeaking,     setIsSpeaking]     = useState(false);
+  const [novaStatus,     setNovaStatus]     = useState<string>("");
+  const [ttsReady,       setTtsReady]       = useState(false);
+  const mutedRef    = useRef(false);
+  const ttsReadyRef = useRef(false);
+  const recLoopRef  = useRef<any>(null);
+  const loopActiveRef = useRef(false);
+  const loopRestartRef = useRef<(() => void) | null>(null);
 
   const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window;
   const canListen =
@@ -114,13 +118,6 @@ export default function SelectorPortalPage() {
     setIsSpeaking(true);
     novaSpeak(text, lang, () => { setIsSpeaking(false); onDone?.(); });
   }, [canSpeak, lang]);
-
-  const toggleMute = () => {
-    const next = !mutedRef.current;
-    mutedRef.current = next;
-    setMuted(next);
-    if (next && canSpeak) { window.speechSynthesis.cancel(); setIsSpeaking(false); }
-  };
 
   const speakTodayFocus = useCallback(() => {
     let message = NOVA_TEXT.todayFocusHeader(lang);
@@ -183,41 +180,93 @@ export default function SelectorPortalPage() {
     };
   }, [lang]);
 
-  // ── Voice recognition setup ────────────────────────────────────────────────
-  useEffect(() => {
-    if (!canListen) return;
-    const SpeechRecognitionClass = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const recognition = new SpeechRecognitionClass();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = novaRecogLang(lang);
+  // ── Always-on continuous voice loop ────────────────────────────────────────
+  // Listens indefinitely — no tap required. After each command, auto-restarts.
+  const stopLoop = useCallback(() => {
+    loopActiveRef.current = false;
+    setIsListening(false);
+    try { recLoopRef.current?.abort(); } catch { /* ignore */ }
+    recLoopRef.current = null;
+  }, []);
 
-    recognition.onstart = () => { setIsListening(true); setNovaStatus(NOVA_TEXT.listeningStatus(lang)); };
-    recognition.onend   = () => { setIsListening(false); };
-    recognition.onerror = () => {
-      setIsListening(false);
-      setNovaStatus(NOVA_TEXT.cantHear(lang));
-      setTimeout(() => setNovaStatus(""), 3000);
+  const startLoop = useCallback(() => {
+    if (!canListen) return;
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR || loopActiveRef.current) return;
+    try { recLoopRef.current?.abort(); } catch { /* ignore */ }
+    recLoopRef.current = null;
+
+    const rec = new SR();
+    rec.continuous     = true;
+    rec.interimResults = false;
+    rec.lang           = novaRecogLang(lang);
+    rec.maxAlternatives = 1;
+
+    rec.onstart = () => {
+      loopActiveRef.current = true;
+      setIsListening(true);
+      setNovaStatus(NOVA_TEXT.listeningStatus(lang));
     };
 
-    recognition.onresult = (event: any) => {
-      const text = (event.results?.[0]?.[0]?.transcript ?? "").toLowerCase();
+    rec.onend = () => {
+      loopActiveRef.current = false;
+      recLoopRef.current = null;
+      setIsListening(false);
+      // Auto-restart — keep the loop alive
+      setTimeout(() => { if (!mutedRef.current) loopRestartRef.current?.(); }, 600);
+    };
+
+    rec.onerror = (e: any) => {
+      loopActiveRef.current = false;
+      recLoopRef.current = null;
+      setIsListening(false);
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") return; // Mic denied
+      setTimeout(() => { if (!mutedRef.current) loopRestartRef.current?.(); }, 1000);
+    };
+
+    rec.onresult = (event: any) => {
+      const text = (event.results?.[event.results.length - 1]?.[0]?.transcript ?? "").toLowerCase().trim();
+      if (!text) return;
       setNovaStatus(`${NOVA_TEXT.heardCommand(lang)}"${text}"`);
 
       const cmd = matchNovaCommand(text, lang);
-      if (cmd === "focus") {
-        speakTodayFocus();
-      } else if (cmd === "update") {
-        speakLatestUpdate();
-      } else if (cmd === "assignment") {
-        speakAssignment();
-      } else {
-        speak(NOVA_TEXT.unknownCommand(lang), () => setNovaStatus(""));
-      }
+      if (cmd === "focus")      { speakTodayFocus();  }
+      else if (cmd === "update")     { speakLatestUpdate(); }
+      else if (cmd === "assignment") { speakAssignment();   }
+      // Ignore unrecognised words — don't interrupt with "didn't catch that"
     };
 
-    recognitionRef.current = recognition;
-  }, [speakTodayFocus, speakLatestUpdate, speakAssignment, lang]);
+    recLoopRef.current = rec;
+    try { rec.start(); } catch { /* ignore double-start */ }
+  }, [canListen, lang, speakTodayFocus, speakLatestUpdate, speakAssignment]); // eslint-disable-line
+
+  useEffect(() => { loopRestartRef.current = startLoop; }, [startLoop]);
+
+  // Start always-on loop on mount
+  useEffect(() => {
+    const t = setTimeout(() => { if (!mutedRef.current) startLoop(); }, 900);
+    return () => { clearTimeout(t); stopLoop(); };
+  }, []); // eslint-disable-line
+
+  // Restart loop when lang changes
+  useEffect(() => {
+    stopLoop();
+    const t = setTimeout(() => { if (!mutedRef.current) startLoop(); }, 600);
+    return () => clearTimeout(t);
+  }, [lang, startLoop, stopLoop]);
+
+  // Toggle mute — also pauses/resumes the loop
+  const toggleMuteAndLoop = () => {
+    const next = !mutedRef.current;
+    mutedRef.current = next;
+    setMuted(next);
+    if (next) {
+      if (canSpeak) { window.speechSynthesis.cancel(); setIsSpeaking(false); }
+      stopLoop();
+    } else {
+      startLoop();
+    }
+  };
 
   // ── Speak incoming coaching messages ───────────────────────────────────────
   useEffect(() => {
@@ -232,18 +281,16 @@ export default function SelectorPortalPage() {
     void markCoachRead(newest.id);
   }, [coachMsgs, speak, markCoachRead]);
 
-  const startVoiceCommand = () => {
-    if (!recognitionRef.current) {
-      speak(NOVA_TEXT.noVoiceSupport(lang));
-      return;
-    }
-    if (isListening) {
-      recognitionRef.current.stop();
-    } else {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-      recognitionRef.current.start();
-    }
+  // One-time TTS unlock (called from a tap handler to satisfy browser policy)
+  const unlockTTS = () => {
+    if (ttsReadyRef.current) return;
+    try {
+      const u = new SpeechSynthesisUtterance("\u200B");
+      u.volume = 0;
+      window.speechSynthesis.speak(u);
+    } catch { /* ignore */ }
+    ttsReadyRef.current = true;
+    setTtsReady(true);
   };
 
   return (
@@ -319,16 +366,13 @@ export default function SelectorPortalPage() {
             ? "border-violet-500/50 bg-violet-500/5"
             : "border-slate-700 bg-slate-900"
         }`}>
-          <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
+          <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-yellow-400 mb-1">NOVA Voice Assistant</p>
               <h2 className="text-2xl font-black">Ask NOVA</h2>
-              <p className="text-slate-400 text-sm mt-1">
-                Tap to speak — or use the quick buttons below.
-              </p>
             </div>
             <button
-              onClick={toggleMute}
+              onClick={toggleMuteAndLoop}
               className="rounded-xl border border-slate-700 p-2.5 text-slate-400 hover:border-slate-500 hover:text-white transition"
               title={muted ? "Unmute NOVA" : "Mute NOVA"}
             >
@@ -336,65 +380,91 @@ export default function SelectorPortalPage() {
             </button>
           </div>
 
-          {/* Big ask button */}
-          <button
-            onClick={startVoiceCommand}
-            disabled={!canListen}
-            className={`w-full flex items-center justify-center gap-3 rounded-2xl py-4 text-lg font-black transition ${
-              isListening
-                ? "bg-yellow-400 text-slate-950 animate-pulse"
-                : canListen
-                ? "bg-yellow-400 text-slate-950 hover:bg-yellow-300"
-                : "bg-slate-800 text-slate-500 cursor-not-allowed"
-            }`}
-          >
-            {isListening ? (
-              <><MicOff className="h-6 w-6" /> Stop Listening</>
-            ) : (
-              <><Mic className="h-6 w-6" /> 🎧 Ask NOVA</>
-            )}
-          </button>
+          {/* One-time TTS unlock — tap once, then everything is voice-only */}
+          {!ttsReady && !muted && (
+            <button
+              onClick={() => {
+                unlockTTS();
+                // Also speak the greeting if TTS was just unlocked
+                const name = currentUser?.fullName?.split(" ")[0] ?? (lang === "es" ? "amigo" : "there");
+                const hour = new Date().getHours();
+                setTimeout(() => speak(NOVA_TEXT.greeting(name, hour, lang)), 200);
+              }}
+              className="w-full mb-4 flex items-center justify-center gap-2 rounded-2xl bg-yellow-400 text-slate-950 font-black text-base py-4 hover:bg-yellow-300 active:scale-95 transition shadow-lg shadow-yellow-400/20"
+            >
+              <Mic className="h-5 w-5" />
+              {lang === "es" ? "Toca una vez para activar la voz de NOVA" : "Tap once to enable NOVA's voice"}
+            </button>
+          )}
 
-          {/* Status line */}
-          {(novaStatus || isListening || isSpeaking) && (
-            <div className="mt-3 flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full shrink-0 ${
-                isListening ? "bg-yellow-400 animate-ping" : isSpeaking ? "bg-violet-400 animate-pulse" : "bg-slate-500"
-              }`} />
-              <p className="text-sm text-slate-400">
-                {novaStatus || (isListening ? "Listening for your command…" : isSpeaking ? "NOVA is speaking…" : "")}
-              </p>
+          {/* Always-listening status — shows when mic is active */}
+          {!muted && (
+            <div className="flex items-center gap-3 mb-4">
+              {isListening ? (
+                <>
+                  <span className="relative flex h-3 w-3 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-400" />
+                  </span>
+                  <p className="text-sm text-yellow-300 font-semibold">
+                    {lang === "es"
+                      ? "NOVA escuchando — di \"enfoque de hoy\", \"mi tarea\", o \"última actualización\""
+                      : "NOVA listening — say \"today's focus\", \"my assignment\", or \"supervisor update\""}
+                  </p>
+                </>
+              ) : isSpeaking ? (
+                <>
+                  <span className="relative flex h-3 w-3 shrink-0">
+                    <span className="animate-pulse absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-violet-400" />
+                  </span>
+                  <p className="text-sm text-violet-300 font-semibold">
+                    {novaStatus || (lang === "es" ? "NOVA está hablando…" : "NOVA is speaking…")}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <span className="relative flex h-3 w-3 shrink-0">
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-slate-600" />
+                  </span>
+                  <p className="text-sm text-slate-500">
+                    {novaStatus || (lang === "es" ? "Reconectando micrófono…" : "Reconnecting mic…")}
+                  </p>
+                </>
+              )}
             </div>
           )}
 
-          {/* Quick voice commands */}
-          <div className="mt-4 flex flex-wrap gap-2">
+          {/* Quick tap chips — always visible, tap instead of speaking */}
+          <div className="flex flex-wrap gap-2">
             <button
-              onClick={speakTodayFocus}
-              className="flex items-center gap-2 rounded-xl bg-slate-800 border border-slate-700 hover:border-yellow-400/50 hover:bg-slate-750 transition px-4 py-2 text-sm font-semibold text-slate-300"
+              onClick={() => { unlockTTS(); speakTodayFocus(); }}
+              className="flex items-center gap-2 rounded-xl bg-slate-800 border border-slate-700 hover:border-yellow-400/50 hover:bg-slate-750 transition px-4 py-2.5 text-sm font-semibold text-slate-300"
             >
               <Zap className="h-3.5 w-3.5 text-yellow-400" />
-              Today's Focus
+              {lang === "es" ? "Enfoque de hoy" : "Today's Focus"}
             </button>
             <button
-              onClick={speakAssignment}
-              className="flex items-center gap-2 rounded-xl bg-slate-800 border border-slate-700 hover:border-blue-400/50 transition px-4 py-2 text-sm font-semibold text-slate-300"
+              onClick={() => { unlockTTS(); speakAssignment(); }}
+              className="flex items-center gap-2 rounded-xl bg-slate-800 border border-slate-700 hover:border-blue-400/50 transition px-4 py-2.5 text-sm font-semibold text-slate-300"
             >
               <DoorOpen className="h-3.5 w-3.5 text-blue-300" />
-              My Assignment
+              {lang === "es" ? "Mi Tarea" : "My Assignment"}
             </button>
             <button
-              onClick={speakLatestUpdate}
-              className="flex items-center gap-2 rounded-xl bg-slate-800 border border-slate-700 hover:border-violet-400/50 transition px-4 py-2 text-sm font-semibold text-slate-300"
+              onClick={() => { unlockTTS(); speakLatestUpdate(); }}
+              className="flex items-center gap-2 rounded-xl bg-slate-800 border border-slate-700 hover:border-violet-400/50 transition px-4 py-2.5 text-sm font-semibold text-slate-300"
             >
               <Megaphone className="h-3.5 w-3.5 text-violet-300" />
-              Supervisor Update
+              {lang === "es" ? "Actualización" : "Supervisor Update"}
             </button>
           </div>
 
-          {/* Voice command hints */}
-          <p className="mt-4 text-xs text-slate-600">
-            Voice commands: <span className="text-slate-500">"today's focus"</span> · <span className="text-slate-500">"my assignment"</span> · <span className="text-slate-500">"supervisor update"</span>
+          {/* Voice command hint */}
+          <p className="mt-3 text-xs text-slate-600">
+            {lang === "es"
+              ? "Di: \"enfoque de hoy\" · \"mi tarea\" · \"última actualización\""
+              : "Say: \"today's focus\" · \"my assignment\" · \"supervisor update\""}
           </p>
         </div>
 
