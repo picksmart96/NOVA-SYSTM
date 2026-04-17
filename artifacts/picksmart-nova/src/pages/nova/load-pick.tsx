@@ -82,6 +82,20 @@ interface DbAssignment {
   selectorUserId: string | null;
 }
 
+// ── Practice assignment used when no real assignment is assigned ──────────────
+const PRACTICE_ASSIGNMENT: DbAssignment = {
+  id:               "practice",
+  title:            "Practice Sign-On",
+  totalCases:       20,
+  startAisle:       1,
+  endAisle:         10,
+  goalTimeMinutes:  45,
+  doorNumber:       1,
+  totalPallets:     2,
+  status:           "active",
+  selectorUserId:   null,
+};
+
 // ── Button shared styles ──────────────────────────────────────────────────────
 const btnConfirm = "flex-1 py-5 rounded-3xl bg-green-600 text-white font-black text-xl hover:bg-green-500 active:scale-95 transition select-none";
 const btnDeny    = "flex-1 py-5 rounded-3xl bg-slate-800 border border-slate-600 text-slate-200 font-black text-xl hover:bg-slate-700 active:scale-95 transition select-none";
@@ -322,13 +336,14 @@ export default function NovaLoadPickPage() {
   const finishSafety = useCallback(() => {
     const a = assignmentRef.current;
     setPhase("all_clear");
+    const isPractice = a?.id === "practice";
     const msg = lang === "es"
-      ? `Controles completados. Cargando turno. Pasillos ${a?.startAisle} al ${a?.endAisle}. ${a?.totalCases} cajas. Tiempo estimado ${a?.goalTimeMinutes ?? "?"} minutos.`
-      : `All safety checks complete. Load Picks. Aisles ${a?.startAisle} through ${a?.endAisle}. ${a?.totalCases} cases. Goal time ${a?.goalTimeMinutes ?? "?"} minutes.`;
+      ? `Controles completados. ${isPractice ? "¡Excelente práctica! Ya conoces el proceso de arranque." : `Cargando turno. Pasillos ${a?.startAisle} al ${a?.endAisle}. ${a?.totalCases} cajas. Tiempo estimado ${a?.goalTimeMinutes ?? "?"} minutos.`}`
+      : `All safety checks complete. ${isPractice ? "Excellent practice! You know the sign-on process now." : `Load Picks. Aisles ${a?.startAisle} through ${a?.endAisle}. ${a?.totalCases} cases. Goal time ${a?.goalTimeMinutes ?? "?"} minutes.`}`;
     speak(msg, () => {
-      setTimeout(() => {
-        if (a) { setPhase("going"); navigate(`/nova/voice/${a.id}`); }
-      }, 1000);
+      if (!isPractice && a) {
+        setTimeout(() => { setPhase("going"); navigate(`/nova/voice/${a.id}`); }, 1000);
+      }
     });
   }, [lang, navigate]); // eslint-disable-line
 
@@ -493,6 +508,18 @@ export default function NovaLoadPickPage() {
               <p className="font-black text-yellow-300 text-lg">No Assignment Yet</p>
               <p className="text-slate-400 text-sm">Your trainer hasn't assigned a pick to you. Check back soon.</p>
             </div>
+            {/* Practice Mode — run the full sign-on without a real assignment */}
+            <button
+              onClick={() => {
+                setAssignment(PRACTICE_ASSIGNMENT);
+                assignmentRef.current = PRACTICE_ASSIGNMENT;
+                startSayLoadPick(PRACTICE_ASSIGNMENT);
+              }}
+              className="w-full py-5 rounded-3xl bg-yellow-400 text-slate-950 font-black text-xl hover:bg-yellow-300 active:scale-95 transition flex items-center justify-center gap-3 shadow-xl shadow-yellow-400/20"
+            >
+              <Zap className="h-6 w-6" /> Practice Sign-On
+            </button>
+            <p className="text-slate-600 text-xs text-center">Practice the full ES3 sign-on flow without a real assignment.</p>
             <button
               onClick={() => { setPhase("gate"); setPrompt(""); }}
               className="w-full py-3 rounded-2xl border border-slate-700 text-slate-300 font-bold hover:border-slate-500 transition flex items-center justify-center gap-2"
@@ -734,22 +761,52 @@ export default function NovaLoadPickPage() {
         ─────────────────────────────────────────── */}
         {(phase === "all_clear" || phase === "going") && !isSpeaking && (
           <div className="w-full space-y-4">
-            <div className="rounded-3xl border border-green-500/30 bg-green-500/10 p-6 text-center space-y-2">
-              <CheckCircle2 className="h-10 w-10 text-green-400 mx-auto" />
-              <p className="font-black text-green-300 text-lg">All Clear — Loading Picks</p>
-              {assignment && (
-                <p className="text-slate-400 text-sm">
-                  Aisles {assignment.startAisle}–{assignment.endAisle} · {assignment.totalCases} cases · Door {assignment.doorNumber}
-                </p>
-              )}
-            </div>
-            {assignment && (
-              <button
-                onClick={() => { setPhase("going"); navigate(`/nova/voice/${assignment.id}`); }}
-                className="w-full py-5 rounded-3xl bg-green-600 text-white font-black text-xl hover:bg-green-500 active:scale-95 transition flex items-center justify-center gap-3"
-              >
-                <Zap className="h-6 w-6" /> Start Picking
-              </button>
+            {assignment?.id === "practice" ? (
+              /* ── Practice Complete ── */
+              <>
+                <div className="rounded-3xl border border-green-500/30 bg-green-500/10 p-6 text-center space-y-2">
+                  <CheckCircle2 className="h-10 w-10 text-green-400 mx-auto" />
+                  <p className="font-black text-green-300 text-lg">Practice Complete!</p>
+                  <p className="text-slate-400 text-sm">You passed all 9 safety checks. Great job going through the full sign-on.</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setPhase("gate");
+                    setPrompt("");
+                    setAssignment(null);
+                    assignmentRef.current = null;
+                    setEquipId("");
+                    setEquipInput("");
+                    setPalletInput("");
+                    setPalletCount(0);
+                    setSafetyIdx(0);
+                  }}
+                  className="w-full py-5 rounded-3xl border border-slate-700 text-slate-300 font-black text-xl hover:border-yellow-400/40 hover:text-white active:scale-95 transition flex items-center justify-center gap-3"
+                >
+                  <RefreshCw className="h-6 w-6" /> Practice Again
+                </button>
+              </>
+            ) : (
+              /* ── Real assignment ── */
+              <>
+                <div className="rounded-3xl border border-green-500/30 bg-green-500/10 p-6 text-center space-y-2">
+                  <CheckCircle2 className="h-10 w-10 text-green-400 mx-auto" />
+                  <p className="font-black text-green-300 text-lg">All Clear — Loading Picks</p>
+                  {assignment && (
+                    <p className="text-slate-400 text-sm">
+                      Aisles {assignment.startAisle}–{assignment.endAisle} · {assignment.totalCases} cases · Door {assignment.doorNumber}
+                    </p>
+                  )}
+                </div>
+                {assignment && (
+                  <button
+                    onClick={() => { setPhase("going"); navigate(`/nova/voice/${assignment.id}`); }}
+                    className="w-full py-5 rounded-3xl bg-green-600 text-white font-black text-xl hover:bg-green-500 active:scale-95 transition flex items-center justify-center gap-3"
+                  >
+                    <Zap className="h-6 w-6" /> Start Picking
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}

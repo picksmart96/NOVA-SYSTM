@@ -27,7 +27,8 @@ function isHumanRequestTrigger(text: string): boolean {
   );
 }
 
-const FREE_QUESTION_LIMIT = 3;
+const FREE_QUESTION_LIMIT_GUEST = 3;
+const FREE_QUESTION_LIMIT_MEMBER = 9999;
 
 // ─── Safety check items ──────────────────────────────────────────────────────
 const SAFETY_ITEMS_EN = [
@@ -253,6 +254,7 @@ export default function NovaHelpPage() {
   const userGoal    = username ? getGoal(username) : null;
   const weekAvg     = username ? getWeekAvg(username) : null;
   const isRealUser  = !!currentUser && !currentUser.isDemoUser;
+  const FREE_QUESTION_LIMIT = isRealUser ? FREE_QUESTION_LIMIT_MEMBER : FREE_QUESTION_LIMIT_GUEST;
 
   // ── Tab navigation ────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<"coach" | "performance">("coach");
