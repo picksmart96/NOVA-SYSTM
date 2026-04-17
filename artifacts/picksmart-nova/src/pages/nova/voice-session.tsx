@@ -269,38 +269,55 @@ export default function VoiceSessionPage() {
     try { signOnRecRef.current?.stop(); } catch {}
   }, []);
 
+  const signOnRetryCountRef = useRef(0);
+  const SIGN_ON_STATES: SessionState[] = ['say_load_pick','equip_enter','equip_confirm','pallet_enter','pallet_confirm','mhe_safety'];
+
   const startSignOnListening = useCallback((hint: string, onHeard: (text: string) => void) => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
+    // Hard stop: if we left sign-on phases entirely, don't restart
+    if (!SIGN_ON_STATES.includes(sessionStateRef.current as SessionState)) return;
+    // Retry cap — prevents runaway loop if mic keeps failing
+    if (signOnRetryCountRef.current >= 5) {
+      signOnRetryCountRef.current = 0;
+      setIsListeningSignOn(false);
+      return;  // user can tap the on-screen button to continue
+    }
+
     stopSignOnListening();
+    // 350ms gap for iOS audio-session to release from TTS
     setTimeout(() => {
-      try {
-        window.speechSynthesis.cancel();
-      } catch {}
-      setTimeout(() => {
-        const rec = new SR();
-        signOnRecRef.current = rec;
-        rec.continuous = false;
-        rec.interimResults = false;
-        rec.lang = lang === "es" ? "es-US" : "en-US";
-        let gotResult = false;
-        rec.onstart = () => setIsListeningSignOn(true);
-        rec.onerror = (e: any) => {
-          setIsListeningSignOn(false);
-          if (!gotResult && e.error !== "not-allowed") {
-            setTimeout(() => startSignOnListening(hint, onHeard), 800);
-          }
-        };
-        rec.onend = () => setIsListeningSignOn(false);
-        rec.onresult = (e: any) => {
-          gotResult = true;
-          const heard = (e.results?.[0]?.[0]?.transcript?.trim() || "").toLowerCase();
-          if (heard) onHeard(heard);
-        };
-        try { rec.start(); } catch {}
-      }, 350);
-    }, 80);
-  }, [lang, stopSignOnListening]);
+      if (!SIGN_ON_STATES.includes(sessionStateRef.current as SessionState)) return;
+      const rec = new SR();
+      signOnRecRef.current = rec;
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.lang = lang === "es" ? "es-US" : "en-US";
+      let gotResult = false;
+
+      rec.onstart = () => {
+        signOnRetryCountRef.current = 0;  // successful open resets count
+        setIsListeningSignOn(true);
+      };
+      rec.onerror = (e: any) => {
+        setIsListeningSignOn(false);
+        if (gotResult) return;
+        if (e.error === "not-allowed" || e.error === "audio-capture") return; // no retry — no permission
+        if (!SIGN_ON_STATES.includes(sessionStateRef.current as SessionState)) return;
+        signOnRetryCountRef.current++;
+        const delay = Math.min(500 * signOnRetryCountRef.current, 3000); // backoff: 500, 1000, 1500…
+        setTimeout(() => startSignOnListening(hint, onHeard), delay);
+      };
+      rec.onend = () => setIsListeningSignOn(false);
+      rec.onresult = (e: any) => {
+        gotResult = true;
+        signOnRetryCountRef.current = 0;
+        const heard = (e.results?.[0]?.[0]?.transcript?.trim() || "").toLowerCase();
+        if (heard) onHeard(heard);
+      };
+      try { rec.start(); } catch { signOnRetryCountRef.current++; }
+    }, 350);
+  }, [lang, stopSignOnListening]); // eslint-disable-line
 
   // ── Qty voice recognition ──────────────────────────────────────────────────
   const startQtyListening = useCallback((expectedQty: number, stopId: string) => {

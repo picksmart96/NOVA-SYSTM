@@ -58,13 +58,18 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
   const [canMic,      setCanMic]      = useState(false);
 
   // Stable refs — avoids stale closures in recognition callbacks
-  const messagesRef   = useRef<Message[]>([]);
-  const aiPhaseRef    = useRef<AiPhase>("greeting");
-  const processingRef = useRef(false);
-  const mainRecRef    = useRef<any>(null);
-  const wakeRecRef    = useRef<any>(null);
-  const wakeActiveRef = useRef(false);
-  const chatLogRef    = useRef<HTMLDivElement>(null);
+  const messagesRef      = useRef<Message[]>([]);
+  const aiPhaseRef       = useRef<AiPhase>("greeting");
+  const processingRef    = useRef(false);
+  const mainRecRef       = useRef<any>(null);
+  const wakeRecRef       = useRef<any>(null);
+  const wakeActiveRef    = useRef(false);
+  const chatLogRef       = useRef<HTMLDivElement>(null);
+  // ── Freeze-prevention ───────────────────────────────────────────────────────
+  const dismissedRef     = useRef(false);          // set true on dismiss — stops ALL retries
+  const wakeRetryDelay   = useRef(500);            // exponential backoff for wake restarts
+  const wakeRetryCount   = useRef(0);              // total consecutive failures
+  const mainRetryCount   = useRef(0);
 
   useEffect(() => { aiPhaseRef.current = aiPhase; }, [aiPhase]);
 
@@ -144,28 +149,52 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
 
   const startWakeListen = useCallback(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR || wakeActiveRef.current || processingRef.current) return;
-
-    // iOS: cancel any lingering TTS, then wait 350ms before opening mic
-    try { window.speechSynthesis.cancel(); } catch {}
+    // Hard stops: dismissed, already active, or too many consecutive failures
+    if (!SR || dismissedRef.current || wakeActiveRef.current || processingRef.current) return;
+    if (wakeRetryCount.current >= 8) {
+      // Too many failures — give browser a 10s cooldown before trying again
+      wakeRetryCount.current = 0;
+      wakeRetryDelay.current = 500;
+      setTimeout(() => { if (!dismissedRef.current) startWakeRef.current(); }, 10000);
+      return;
+    }
 
     setTimeout(() => {
-      if (wakeActiveRef.current || processingRef.current) return; // guard double-start
+      if (dismissedRef.current || wakeActiveRef.current || processingRef.current) return;
       const rec = new SR();
       rec.continuous     = false;
       rec.interimResults = false;
       rec.lang = novaRecogLang(lang);
 
-      rec.onstart  = () => { wakeActiveRef.current = true; };
+      rec.onstart  = () => {
+        wakeActiveRef.current = true;
+        wakeRetryCount.current = 0;   // successful open — reset backoff
+        wakeRetryDelay.current = 500;
+      };
       rec.onend    = () => {
         wakeActiveRef.current = false;
-        if (!processingRef.current) setTimeout(() => startWakeRef.current(), 500);
+        if (dismissedRef.current || processingRef.current) return;
+        wakeRetryCount.current++;
+        const delay = Math.min(wakeRetryDelay.current, 5000);
+        wakeRetryDelay.current = Math.min(delay * 1.5, 5000);
+        setTimeout(() => startWakeRef.current(), delay);
       };
-      rec.onerror  = () => {
+      rec.onerror  = (e: any) => {
         wakeActiveRef.current = false;
-        setTimeout(() => startWakeRef.current(), 800);
+        if (dismissedRef.current) return;
+        if (e.error === "not-allowed" || e.error === "audio-capture") {
+          // No permission or device busy — don't retry rapidly
+          setTimeout(() => startWakeRef.current(), 5000);
+          return;
+        }
+        wakeRetryCount.current++;
+        const delay = Math.min(wakeRetryDelay.current, 5000);
+        wakeRetryDelay.current = Math.min(delay * 1.5, 5000);
+        setTimeout(() => startWakeRef.current(), delay);
       };
       rec.onresult = (e: any) => {
+        wakeRetryCount.current = 0;
+        wakeRetryDelay.current = 500;
         const heard = (e.results?.[0]?.[0]?.transcript || "").toLowerCase().trim();
         const isWake = heard.includes("hey nova") || heard.includes("hola nova") || heard === "nova";
         if (isWake) {
@@ -176,7 +205,7 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
       };
 
       wakeRecRef.current = rec;
-      try { rec.start(); } catch {}
+      try { rec.start(); } catch { wakeRetryCount.current++; }
     }, 350);
   }, [lang]);
 
@@ -184,14 +213,21 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
 
   const startListen = useCallback(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR || processingRef.current) return;
+    if (!SR || dismissedRef.current || processingRef.current) return;
+    if (mainRetryCount.current >= 5) {
+      // Too many failures — back off and return to wake mode
+      mainRetryCount.current = 0;
+      setUiState("wake");
+      setTimeout(() => { if (!dismissedRef.current) startWakeRef.current(); }, 3000);
+      return;
+    }
     killWake();
 
     // iOS: cancel any lingering TTS, then wait 350ms for audio session handoff to mic
     try { window.speechSynthesis.cancel(); } catch {}
 
     setTimeout(() => {
-      if (processingRef.current) return;
+      if (dismissedRef.current || processingRef.current) return;
       const rec = new SR();
       rec.continuous     = false;
       rec.interimResults = true;
@@ -200,6 +236,7 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
       let finalText = "";
 
       rec.onstart = () => {
+        mainRetryCount.current = 0;  // successful open — reset counter
         setUiState("listening");
         setTranscript("");
         finalText = "";
@@ -216,7 +253,9 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
       };
       rec.onend = () => {
         mainRecRef.current = null;
+        if (dismissedRef.current) return;
         if (finalText.trim()) {
+          mainRetryCount.current = 0;
           const lower = finalText.toLowerCase();
           if (lower === "hey nova" || lower === "hola nova" || lower === "nova") {
             setUiState("listening");
@@ -231,10 +270,17 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
       };
       rec.onerror = (e: any) => {
         mainRecRef.current = null;
+        if (dismissedRef.current) return;
+        if (e.error === "not-allowed" || e.error === "audio-capture") {
+          setUiState("wake");
+          setTimeout(() => startWakeRef.current(), 5000);
+          return;
+        }
         if (e.error === "no-speech") {
           setUiState("wake");
           setTimeout(() => startWakeRef.current(), 300);
         } else if (e.error !== "aborted") {
+          mainRetryCount.current++;
           setUiState("wake");
           setTimeout(() => startWakeRef.current(), 500);
         }
@@ -396,6 +442,7 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
   // ── Dismiss ───────────────────────────────────────────────────────────────
 
   const handleDismiss = () => {
+    dismissedRef.current = true;   // ← kills ALL pending retries immediately
     killRec();
     killWake();
     try { window.speechSynthesis.cancel(); } catch {}
