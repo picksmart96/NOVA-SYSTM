@@ -136,6 +136,9 @@ function getRecognitionCtor(): SpeechRecognitionCtor | null {
 const voiceInputSupported = !!getRecognitionCtor();
 
 // ─── TTS ─────────────────────────────────────────────────────────────────────
+// Safety timer ensures onEnd always fires even when iOS TTS silently fails
+// (a known WebKit bug where SpeechSynthesisUtterance.onend never fires for
+// auto-triggered or background utterances).
 function speakText(text: string, lang: string, onEnd?: () => void) {
   if (!("speechSynthesis" in window)) { onEnd?.(); return; }
   try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
@@ -143,7 +146,18 @@ function speakText(text: string, lang: string, onEnd?: () => void) {
   u.lang = lang;
   u.rate = 1.05;
   u.pitch = 1;
-  if (onEnd) u.onend = onEnd;
+
+  let done = false;
+  const safetyMs = Math.max(5000, text.length * 75 + 3000);
+  const safetyTimer = onEnd
+    ? setTimeout(() => { if (!done) { done = true; onEnd(); } }, safetyMs)
+    : undefined;
+
+  if (onEnd) {
+    u.onend   = () => { if (!done) { done = true; clearTimeout(safetyTimer); onEnd(); } };
+    u.onerror = () => { if (!done) { done = true; clearTimeout(safetyTimer); onEnd(); } };
+  }
+
   const voices = window.speechSynthesis.getVoices();
   const root = lang.split("-")[0];
   const preferred =

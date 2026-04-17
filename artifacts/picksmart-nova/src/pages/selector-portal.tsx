@@ -115,6 +115,12 @@ export default function SelectorPortalPage() {
   const novaActiveRef = useRef(false);
   const stopLoopRef   = useRef<(() => void) | null>(null);
   const startLoopRef  = useRef<(() => void) | null>(null);
+  // Stable refs for the speak callbacks — lets startLoop read the latest
+  // data without capturing stale closures, and removes these from startLoop's
+  // dependency array so startLoop's identity never changes on data load.
+  const speakTodayFocusRef  = useRef<(() => void)>(() => {});
+  const speakLatestUpdateRef = useRef<(() => void)>(() => {});
+  const speakAssignmentRef  = useRef<(() => void)>(() => {})
 
   const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window;
   const canListen =
@@ -129,14 +135,36 @@ export default function SelectorPortalPage() {
     isSpeakingRef.current = true;
     stopLoopRef.current?.();
     setIsSpeaking(true);
+
+    // Safety timer: if iOS TTS onend silently never fires (a known iOS WebKit
+    // bug on auto-triggered speech), this guarantees isSpeakingRef resets and
+    // the recognition loop restarts — otherwise voice is permanently frozen.
+    let done = false;
+    const safetyMs = Math.max(5000, text.length * 75 + 3000);
+    const safetyTimer = setTimeout(() => {
+      if (!done) {
+        done = true;
+        isSpeakingRef.current = false;
+        setIsSpeaking(false);
+        onDone?.();
+        if (!mutedRef.current && !novaActiveRef.current) {
+          setTimeout(() => startLoopRef.current?.(), 400);
+        }
+      }
+    }, safetyMs);
+
     novaSpeak(text, lang, () => {
-      isSpeakingRef.current = false;
-      setIsSpeaking(false);
-      onDone?.();
-      // Restart the recognition loop after TTS ends, unless NWA owns the mic
-      // or the user has muted voice commands.
-      if (!mutedRef.current && !novaActiveRef.current) {
-        setTimeout(() => startLoopRef.current?.(), 400);
+      if (!done) {
+        done = true;
+        clearTimeout(safetyTimer);
+        isSpeakingRef.current = false;
+        setIsSpeaking(false);
+        onDone?.();
+        // Restart the recognition loop after TTS ends, unless NWA owns the mic
+        // or the user has muted voice commands.
+        if (!mutedRef.current && !novaActiveRef.current) {
+          setTimeout(() => startLoopRef.current?.(), 400);
+        }
       }
     });
   }, [canSpeak, lang]);
@@ -258,20 +286,28 @@ export default function SelectorPortalPage() {
       setNovaStatus(`${NOVA_TEXT.heardCommand(lang)}"${text}"`);
 
       const cmd = matchNovaCommand(text, lang);
-      if (cmd === "focus")      { speakTodayFocus();  }
-      else if (cmd === "update")     { speakLatestUpdate(); }
-      else if (cmd === "assignment") { speakAssignment();   }
+      // Use refs so the handler always calls the LATEST version of each
+      // speak function — avoids stale closures when data loads after mount.
+      if (cmd === "focus")           { speakTodayFocusRef.current();  }
+      else if (cmd === "update")     { speakLatestUpdateRef.current(); }
+      else if (cmd === "assignment") { speakAssignmentRef.current();   }
       // Ignore unrecognised words — don't interrupt with "didn't catch that"
     };
 
     recLoopRef.current = rec;
     try { rec.start(); } catch { /* ignore double-start */ }
-  }, [canListen, lang, speakTodayFocus, speakLatestUpdate, speakAssignment]); // eslint-disable-line
+  // speakTodayFocus/LatestUpdate/Assignment removed from deps — we use refs
+  // so startLoop's identity is stable across data loads. This prevents the
+  // lang-change effect from firing on every data update and causing iOS crashes.
+  }, [canListen, lang]); // eslint-disable-line
 
-  useEffect(() => { loopRestartRef.current = startLoop; }, [startLoop]);
-  useEffect(() => { stopLoopRef.current  = stopLoop;  }, [stopLoop]);
-  useEffect(() => { startLoopRef.current = startLoop; }, [startLoop]);
-  useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
+  useEffect(() => { loopRestartRef.current  = startLoop;         }, [startLoop]);
+  useEffect(() => { stopLoopRef.current    = stopLoop;           }, [stopLoop]);
+  useEffect(() => { startLoopRef.current   = startLoop;          }, [startLoop]);
+  useEffect(() => { isSpeakingRef.current  = isSpeaking;         }, [isSpeaking]);
+  useEffect(() => { speakTodayFocusRef.current  = speakTodayFocus;  }, [speakTodayFocus]);
+  useEffect(() => { speakLatestUpdateRef.current = speakLatestUpdate; }, [speakLatestUpdate]);
+  useEffect(() => { speakAssignmentRef.current  = speakAssignment;  }, [speakAssignment]);
 
   // ── Coordinate with NOVA Welcome Assistant ────────────────────────────────
   // The NWA runs its own SpeechRecognition session.  Chrome allows only one
@@ -297,12 +333,16 @@ export default function SelectorPortalPage() {
     return () => { clearTimeout(t); stopLoop(); };
   }, []); // eslint-disable-line
 
-  // Restart loop when lang changes
+  // Restart loop when lang changes ONLY — intentionally using refs so that
+  // data loads that change startLoop's identity don't trigger abort/restart
+  // cycles (those cycles cause rapid onerror→retry floods on iOS → page freeze).
   useEffect(() => {
-    stopLoop();
-    const t = setTimeout(() => { if (!mutedRef.current) startLoop(); }, 600);
+    stopLoopRef.current?.();
+    const t = setTimeout(() => {
+      if (!mutedRef.current) startLoopRef.current?.();
+    }, 600);
     return () => clearTimeout(t);
-  }, [lang, startLoop, stopLoop]);
+  }, [lang]); // eslint-disable-line
 
   // Toggle mute — also pauses/resumes the loop
   const toggleMuteAndLoop = () => {
