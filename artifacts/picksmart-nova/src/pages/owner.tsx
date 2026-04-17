@@ -4487,8 +4487,368 @@ function ContractsTab() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ⚡ Test Assignments Section
+// Pre-loaded NOVA picking assignments ready to assign to any trainee
+// ─────────────────────────────────────────────────────────────────────────────
 
-const TABS = ["Dashboard", "Control Panel", "Contracts", "Revenue", "CRM", "Chat Logs", "NOVA Metrics", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests", "Lesson Videos", "Post Moderation", "Weekly Reports"] as const;
+// Real picking stops based on NOVA Master Aisle/Slot Reference
+// Each template is a complete, ready-to-run training assignment
+const TRAINING_TEMPLATES = [
+  {
+    id: "tmpl-a",
+    label: "Dry Grocery — Full Run",
+    description: "Aisles 1–12 · Dry zone · 20 stops · Beginner-friendly",
+    startAisle: 1,
+    endAisle:   12,
+    doorNumber: 42,
+    goalTimeMinutes: 60,
+    totalCube: 120,
+    totalPallets: 2,
+    printerNumber: 307,
+    alphaLabelNumber: 242,
+    bravoLabelNumber: 578,
+    voiceMode: "training",
+    stops: [
+      { aisle: 1,  slot: 101, qty: 6,  checkCode: "471" },
+      { aisle: 1,  slot: 104, qty: 4,  checkCode: "829" },
+      { aisle: 2,  slot: 201, qty: 8,  checkCode: "714" },
+      { aisle: 2,  slot: 206, qty: 3,  checkCode: "382" },
+      { aisle: 3,  slot: 301, qty: 5,  checkCode: "916" },
+      { aisle: 3,  slot: 303, qty: 7,  checkCode: "247" },
+      { aisle: 4,  slot: 402, qty: 4,  checkCode: "538" },
+      { aisle: 4,  slot: 405, qty: 6,  checkCode: "671" },
+      { aisle: 5,  slot: 504, qty: 9,  checkCode: "423" },
+      { aisle: 5,  slot: 506, qty: 2,  checkCode: "857" },
+      { aisle: 6,  slot: 601, qty: 5,  checkCode: "192" },
+      { aisle: 6,  slot: 603, qty: 4,  checkCode: "364" },
+      { aisle: 7,  slot: 702, qty: 7,  checkCode: "748" },
+      { aisle: 7,  slot: 705, qty: 3,  checkCode: "523" },
+      { aisle: 8,  slot: 802, qty: 6,  checkCode: "936" },
+      { aisle: 8,  slot: 804, qty: 5,  checkCode: "281" },
+      { aisle: 9,  slot: 901, qty: 4,  checkCode: "614" },
+      { aisle: 9,  slot: 903, qty: 8,  checkCode: "473" },
+      { aisle: 10, slot: 1001, qty: 5, checkCode: "827" },
+      { aisle: 10, slot: 1006, qty: 3, checkCode: "159" },
+    ],
+  },
+  {
+    id: "tmpl-b",
+    label: "Dairy & Frozen Sprint",
+    description: "Aisles 18–22 · Dairy + Frozen · 15 stops · Intermediate",
+    startAisle: 18,
+    endAisle:   22,
+    doorNumber: 7,
+    goalTimeMinutes: 45,
+    totalCube: 90,
+    totalPallets: 1,
+    printerNumber: 307,
+    alphaLabelNumber: 242,
+    bravoLabelNumber: 578,
+    voiceMode: "training",
+    stops: [
+      { aisle: 18, slot: 1801, qty: 6, checkCode: "356" },
+      { aisle: 18, slot: 1804, qty: 4, checkCode: "719" },
+      { aisle: 18, slot: 1802, qty: 5, checkCode: "483" },
+      { aisle: 19, slot: 1901, qty: 3, checkCode: "627" },
+      { aisle: 19, slot: 1903, qty: 7, checkCode: "841" },
+      { aisle: 20, slot: 2001, qty: 8, checkCode: "714" },
+      { aisle: 20, slot: 2003, qty: 4, checkCode: "329" },
+      { aisle: 21, slot: 2102, qty: 6, checkCode: "851" },
+      { aisle: 21, slot: 2104, qty: 3, checkCode: "467" },
+      { aisle: 22, slot: 2201, qty: 5, checkCode: "213" },
+      { aisle: 22, slot: 2203, qty: 7, checkCode: "548" },
+      { aisle: 22, slot: 2205, qty: 4, checkCode: "762" },
+      { aisle: 22, slot: 2207, qty: 6, checkCode: "391" },
+      { aisle: 22, slot: 2209, qty: 2, checkCode: "685" },
+      { aisle: 22, slot: 2211, qty: 8, checkCode: "174" },
+    ],
+  },
+  {
+    id: "tmpl-c",
+    label: "Full Warehouse — Production Test",
+    description: "Aisles 1–22 · All zones · 30 stops · Advanced",
+    startAisle: 1,
+    endAisle:   22,
+    doorNumber: 15,
+    goalTimeMinutes: 90,
+    totalCube: 240,
+    totalPallets: 4,
+    printerNumber: 307,
+    alphaLabelNumber: 242,
+    bravoLabelNumber: 578,
+    voiceMode: "production",
+    stops: [
+      { aisle: 1,  slot: 101,  qty: 4, checkCode: "471" },
+      { aisle: 2,  slot: 201,  qty: 6, checkCode: "714" },
+      { aisle: 3,  slot: 303,  qty: 3, checkCode: "247" },
+      { aisle: 4,  slot: 402,  qty: 5, checkCode: "538" },
+      { aisle: 5,  slot: 504,  qty: 7, checkCode: "423" },
+      { aisle: 6,  slot: 601,  qty: 4, checkCode: "192" },
+      { aisle: 7,  slot: 702,  qty: 6, checkCode: "748" },
+      { aisle: 8,  slot: 804,  qty: 3, checkCode: "281" },
+      { aisle: 9,  slot: 903,  qty: 8, checkCode: "473" },
+      { aisle: 10, slot: 1001, qty: 5, checkCode: "827" },
+      { aisle: 11, slot: 1102, qty: 4, checkCode: "342" },
+      { aisle: 11, slot: 1104, qty: 6, checkCode: "716" },
+      { aisle: 12, slot: 1203, qty: 3, checkCode: "581" },
+      { aisle: 12, slot: 1205, qty: 7, checkCode: "924" },
+      { aisle: 18, slot: 1801, qty: 5, checkCode: "356" },
+      { aisle: 18, slot: 1804, qty: 4, checkCode: "719" },
+      { aisle: 19, slot: 1901, qty: 6, checkCode: "627" },
+      { aisle: 19, slot: 1903, qty: 3, checkCode: "841" },
+      { aisle: 20, slot: 2001, qty: 7, checkCode: "714" },
+      { aisle: 20, slot: 2003, qty: 4, checkCode: "329" },
+      { aisle: 21, slot: 2102, qty: 5, checkCode: "851" },
+      { aisle: 21, slot: 2104, qty: 6, checkCode: "467" },
+      { aisle: 22, slot: 2201, qty: 3, checkCode: "213" },
+      { aisle: 22, slot: 2203, qty: 8, checkCode: "548" },
+      { aisle: 22, slot: 2205, qty: 4, checkCode: "762" },
+      { aisle: 1,  slot: 103,  qty: 5, checkCode: "563" },
+      { aisle: 3,  slot: 301,  qty: 7, checkCode: "916" },
+      { aisle: 6,  slot: 603,  qty: 4, checkCode: "364" },
+      { aisle: 9,  slot: 901,  qty: 6, checkCode: "614" },
+      { aisle: 10, slot: 1006, qty: 3, checkCode: "159" },
+    ],
+  },
+];
+
+interface TraineeUser { id: string; username: string; fullName: string; accountNumber: string; role: string; }
+
+function TestAssignmentsSection() {
+  const { jwtToken, currentUser } = useAuthStore();
+  const [trainees,       setTrainees]       = useState<TraineeUser[]>([]);
+  const [loadingUsers,   setLoadingUsers]   = useState(false);
+  const [creating,       setCreating]       = useState<string | null>(null);
+  const [success,        setSuccess]        = useState<Record<string, string>>({});
+  const [error,          setError]          = useState<Record<string, string>>({});
+  const [selectedUser,   setSelectedUser]   = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!jwtToken) return;
+    setLoadingUsers(true);
+    fetch("/api/users/selectors", { headers: { Authorization: `Bearer ${jwtToken}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then(setTrainees)
+      .catch(() => {})
+      .finally(() => setLoadingUsers(false));
+  }, [jwtToken]);
+
+  const handleCreateAndAssign = async (tmpl: typeof TRAINING_TEMPLATES[0]) => {
+    const traineeId = selectedUser[tmpl.id];
+    const trainee = trainees.find(t => t.id === traineeId);
+    setCreating(tmpl.id);
+    setSuccess(prev => ({ ...prev, [tmpl.id]: "" }));
+    setError(prev => ({ ...prev, [tmpl.id]: "" }));
+
+    try {
+      const assignmentNumber = Math.floor(100000 + Math.random() * 900000);
+      const totalCases = tmpl.stops.reduce((s, st) => s + st.qty, 0);
+
+      const res = await fetch("/api/assignments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwtToken}` },
+        body: JSON.stringify({
+          assignmentNumber,
+          title:            `${tmpl.label} — #${assignmentNumber}`,
+          selectorUserId:   traineeId || null,
+          trainerUserId:    currentUser?.id ?? null,
+          startAisle:       tmpl.startAisle,
+          endAisle:         tmpl.endAisle,
+          totalCases,
+          totalCube:        tmpl.totalCube,
+          totalPallets:     tmpl.totalPallets,
+          doorNumber:       tmpl.doorNumber,
+          goalTimeMinutes:  tmpl.goalTimeMinutes,
+          goalTimeSeconds:  0,
+          printerNumber:    tmpl.printerNumber,
+          alphaLabelNumber: tmpl.alphaLabelNumber,
+          bravoLabelNumber: tmpl.bravoLabelNumber,
+          voiceMode:        tmpl.voiceMode,
+          status:           "active",
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to create assignment");
+      const created = await res.json();
+
+      // Bulk-create stops
+      const stopsRes = await fetch(`/api/assignments/${created.id}/stops/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwtToken}` },
+        body: JSON.stringify({ stops: tmpl.stops.map((s, i) => ({ ...s, stopOrder: i })) }),
+      });
+      if (!stopsRes.ok) throw new Error("Failed to create stops");
+
+      setSuccess(prev => ({
+        ...prev,
+        [tmpl.id]: trainee
+          ? `Assignment #${assignmentNumber} created and assigned to ${trainee.fullName || trainee.username}!`
+          : `Assignment #${assignmentNumber} created (unassigned — assign from Assignment Control)`,
+      }));
+    } catch (e: any) {
+      setError(prev => ({ ...prev, [tmpl.id]: e.message ?? "Something went wrong" }));
+    } finally {
+      setCreating(null);
+    }
+  };
+
+  const modeColor = (mode: string) =>
+    mode === "production" ? "bg-red-500/10 text-red-300 border-red-500/20"
+    : mode === "ultra_fast" ? "bg-purple-500/10 text-purple-300 border-purple-500/20"
+    : "bg-blue-500/10 text-blue-300 border-blue-500/20";
+
+  return (
+    <div className="space-y-8 py-4">
+      {/* Header */}
+      <div className="rounded-3xl bg-yellow-400/5 border border-yellow-400/20 p-6">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-2xl bg-yellow-400 flex items-center justify-center shrink-0">
+            <Zap className="h-5 w-5 text-slate-950" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-white">NOVA Test Assignments</h2>
+            <p className="text-slate-400 text-sm">Pre-loaded picking assignments ready to deploy the moment a company asks to run a test.</p>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-400">
+          <span className="bg-slate-800 rounded-full px-3 py-1">✓ Real aisle &amp; slot data</span>
+          <span className="bg-slate-800 rounded-full px-3 py-1">✓ Full check-code stops</span>
+          <span className="bg-slate-800 rounded-full px-3 py-1">✓ One-click assign to any trainee</span>
+          <span className="bg-slate-800 rounded-full px-3 py-1">✓ Immediately active after creation</span>
+        </div>
+      </div>
+
+      {/* Template cards */}
+      <div className="grid gap-6">
+        {TRAINING_TEMPLATES.map((tmpl) => {
+          const totalCases = tmpl.stops.reduce((s, st) => s + st.qty, 0);
+          const ok = success[tmpl.id];
+          const err = error[tmpl.id];
+          const isCreating = creating === tmpl.id;
+
+          return (
+            <div key={tmpl.id} className="rounded-3xl border border-slate-800 bg-slate-900 overflow-hidden">
+              {/* Card header */}
+              <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4 justify-between border-b border-slate-800">
+                <div>
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="font-black text-white text-lg">{tmpl.label}</span>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${modeColor(tmpl.voiceMode)}`}>
+                      {tmpl.voiceMode.replace("_", " ").toUpperCase()}
+                    </span>
+                  </div>
+                  <p className="text-slate-400 text-sm">{tmpl.description}</p>
+                  <div className="flex flex-wrap gap-3 mt-2 text-xs text-slate-500">
+                    <span>{tmpl.stops.length} stops</span>
+                    <span>·</span>
+                    <span>{totalCases} total cases</span>
+                    <span>·</span>
+                    <span>Door {tmpl.doorNumber}</span>
+                    <span>·</span>
+                    <span>Goal {tmpl.goalTimeMinutes} min</span>
+                    <span>·</span>
+                    <span>Printer {tmpl.printerNumber}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stops preview */}
+              <div className="overflow-x-auto border-b border-slate-800">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-950/60">
+                      <th className="px-4 py-2 text-left text-slate-500 font-bold uppercase tracking-widest">#</th>
+                      <th className="px-4 py-2 text-left text-slate-500 font-bold uppercase tracking-widest">Aisle</th>
+                      <th className="px-4 py-2 text-left text-slate-500 font-bold uppercase tracking-widest">Slot</th>
+                      <th className="px-4 py-2 text-left text-slate-500 font-bold uppercase tracking-widest">Cases</th>
+                      <th className="px-4 py-2 text-left text-slate-500 font-bold uppercase tracking-widest">Check Code</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tmpl.stops.slice(0, 6).map((s, i) => (
+                      <tr key={i} className="border-t border-slate-800/60">
+                        <td className="px-4 py-2 text-slate-600">{i + 1}</td>
+                        <td className="px-4 py-2 font-bold text-yellow-400">{s.aisle}</td>
+                        <td className="px-4 py-2 text-slate-300">{s.slot}</td>
+                        <td className="px-4 py-2 text-white font-bold">{s.qty}</td>
+                        <td className="px-4 py-2 font-mono text-green-400">{s.checkCode}</td>
+                      </tr>
+                    ))}
+                    {tmpl.stops.length > 6 && (
+                      <tr className="border-t border-slate-800/60">
+                        <td colSpan={5} className="px-4 py-2 text-slate-600 text-center italic">
+                          + {tmpl.stops.length - 6} more stops
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Assign panel */}
+              <div className="p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div className="flex-1">
+                  {loadingUsers ? (
+                    <div className="h-10 w-64 rounded-xl bg-slate-800 animate-pulse" />
+                  ) : trainees.length === 0 ? (
+                    <p className="text-slate-500 text-sm">No trainees registered yet — invite them first.</p>
+                  ) : (
+                    <select
+                      value={selectedUser[tmpl.id] ?? ""}
+                      onChange={e => setSelectedUser(prev => ({ ...prev, [tmpl.id]: e.target.value }))}
+                      className="bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-sm w-full sm:w-72 focus:outline-none focus:ring-2 focus:ring-yellow-400/40"
+                    >
+                      <option value="">— Assign to trainee (optional) —</option>
+                      {trainees.map(t => (
+                        <option key={t.id} value={t.id}>
+                          {t.fullName || t.username} · #{t.accountNumber}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => handleCreateAndAssign(tmpl)}
+                  disabled={isCreating}
+                  className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-yellow-400 text-slate-950 font-black text-sm hover:bg-yellow-300 active:scale-95 transition disabled:opacity-50 shrink-0"
+                >
+                  {isCreating ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Creating…</>
+                  ) : (
+                    <><Zap className="h-4 w-4" /> Deploy Assignment</>
+                  )}
+                </button>
+              </div>
+
+              {/* Feedback */}
+              {ok && (
+                <div className="mx-5 mb-4 rounded-2xl bg-green-500/10 border border-green-500/20 px-4 py-3 flex items-start gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-green-400 mt-0.5 shrink-0" />
+                  <p className="text-green-300 text-sm">{ok}</p>
+                </div>
+              )}
+              {err && (
+                <div className="mx-5 mb-4 rounded-2xl bg-red-500/10 border border-red-500/20 px-4 py-3 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+                  <p className="text-red-300 text-sm">{err}</p>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="text-slate-600 text-xs text-center">
+        After deploying, the trainee will see their assignment immediately on their Load Pick page.
+        You can also re-assign or archive from <Link href="/nova/control" className="text-yellow-400/70 hover:text-yellow-400 underline">Assignment Control</Link>.
+      </p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TABS = ["Dashboard", "Control Panel", "Test Assignments", "Contracts", "Revenue", "CRM", "Chat Logs", "NOVA Metrics", "Links", "Handbook", "Users & Access", "Subscriptions", "Talk Requests", "Lesson Videos", "Post Moderation", "Weekly Reports"] as const;
 type Tab = typeof TABS[number];
 
 export default function OwnerPage() {
@@ -4514,6 +4874,7 @@ export default function OwnerPage() {
     if (tab === "Talk Requests")  return "💬 Talk Requests";
     if (tab === "Lesson Videos")  return "🎬 Lesson Videos";
     if (tab === "NOVA Metrics")      return "📈 NOVA Metrics";
+    if (tab === "Test Assignments")  return "⚡ Test Assignments";
     if (tab === "Post Moderation")   return "📋 Post Moderation";
     if (tab === "Weekly Reports")    return "🏆 Weekly Reports";
     return "🏢 Subscriptions";
@@ -4581,6 +4942,7 @@ export default function OwnerPage() {
         )}
 
         {activeTab === "Control Panel" && <OwnerControlPanel />}
+        {activeTab === "Test Assignments" && <TestAssignmentsSection />}
         {activeTab === "Contracts" && <ContractsTab />}
         {activeTab === "Revenue" && <RevenueTab />}
         {activeTab === "CRM" && <CRMSection />}
