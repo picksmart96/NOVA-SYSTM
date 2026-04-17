@@ -315,7 +315,6 @@ export default function VoiceSessionPage() {
       let gotResult = false;
 
       rec.onstart = () => {
-        signOnRetryCountRef.current = 0;  // successful open resets count
         setIsListeningSignOn(true);
       };
       rec.onerror = (e: any) => {
@@ -361,8 +360,6 @@ export default function VoiceSessionPage() {
     let gotResult = false;
 
     rec.onstart = () => {
-      qtyRetryCountRef.current = 0;   // successful open — reset
-      qtyRetryDelayRef.current = 500;
       setIsListeningQty(true);
     };
     rec.onerror = (e: any) => {

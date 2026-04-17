@@ -168,16 +168,12 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
 
       rec.onstart  = () => {
         wakeActiveRef.current = true;
-        wakeRetryCount.current = 0;   // successful open — reset backoff
-        wakeRetryDelay.current = 500;
       };
       rec.onend    = () => {
         wakeActiveRef.current = false;
         if (dismissedRef.current || processingRef.current) return;
-        wakeRetryCount.current++;
-        const delay = Math.min(wakeRetryDelay.current, 5000);
-        wakeRetryDelay.current = Math.min(delay * 1.5, 5000);
-        setTimeout(() => startWakeRef.current(), delay);
+        // Natural close (no speech) is normal — restart quickly, don't count as failure
+        setTimeout(() => startWakeRef.current(), 300);
       };
       rec.onerror  = (e: any) => {
         wakeActiveRef.current = false;
@@ -236,7 +232,6 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
       let finalText = "";
 
       rec.onstart = () => {
-        mainRetryCount.current = 0;  // successful open — reset counter
         setUiState("listening");
         setTranscript("");
         finalText = "";
