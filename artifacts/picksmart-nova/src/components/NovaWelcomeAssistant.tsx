@@ -90,7 +90,9 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
     wakeRecRef.current = null;
   };
 
-  // ── TTS ──────────────────────────────────────────────────────────────────
+  // ── TTS (with iOS safety timeout) ────────────────────────────────────────
+  // If TTS silently fails on iOS (no onEnd ever fires), advance automatically
+  // after ~65ms/char + 3s buffer so the flow never freezes in "speaking" state.
 
   const speak = useCallback((text: string, onEnd: () => void) => {
     setUiState("speaking");
@@ -98,7 +100,16 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
     setChatLog(prev => [...prev, { who: "nova", text }]);
     killRec();
     killWake();
-    novaSpeak(text, lang, onEnd, { rate: 0.92, pitch: 1 });
+
+    let done = false;
+    const safetyMs = Math.max(4000, Math.ceil(text.length * 70) + 3000);
+    const safetyTimer = setTimeout(() => {
+      if (!done) { done = true; onEnd(); }
+    }, safetyMs);
+
+    novaSpeak(text, lang, () => {
+      if (!done) { done = true; clearTimeout(safetyTimer); onEnd(); }
+    }, { rate: 1.05, pitch: 1 });
   }, [lang]);
 
   // ── AI call ───────────────────────────────────────────────────────────────
@@ -135,34 +146,38 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR || wakeActiveRef.current || processingRef.current) return;
 
-    const rec = new SR();
-    rec.continuous     = false;
-    rec.interimResults = false;
-    rec.lang = novaRecogLang(lang);
+    // iOS: cancel any lingering TTS, then wait 350ms before opening mic
+    try { window.speechSynthesis.cancel(); } catch {}
 
-    rec.onstart  = () => { wakeActiveRef.current = true; };
-    rec.onend    = () => {
-      wakeActiveRef.current = false;
-      if (!processingRef.current) {
-        setTimeout(() => startWakeRef.current(), 500);
-      }
-    };
-    rec.onerror  = () => {
-      wakeActiveRef.current = false;
-      setTimeout(() => startWakeRef.current(), 800);
-    };
-    rec.onresult = (e: any) => {
-      const heard = (e.results?.[0]?.[0]?.transcript || "").toLowerCase().trim();
-      const isWake = heard.includes("hey nova") || heard.includes("hola nova") || heard === "nova";
-      if (isWake) {
-        killWake();
-        setUiState("listening");
-        setTimeout(() => startListenRef.current(), 200);
-      }
-    };
+    setTimeout(() => {
+      if (wakeActiveRef.current || processingRef.current) return; // guard double-start
+      const rec = new SR();
+      rec.continuous     = false;
+      rec.interimResults = false;
+      rec.lang = novaRecogLang(lang);
 
-    wakeRecRef.current = rec;
-    try { rec.start(); } catch {}
+      rec.onstart  = () => { wakeActiveRef.current = true; };
+      rec.onend    = () => {
+        wakeActiveRef.current = false;
+        if (!processingRef.current) setTimeout(() => startWakeRef.current(), 500);
+      };
+      rec.onerror  = () => {
+        wakeActiveRef.current = false;
+        setTimeout(() => startWakeRef.current(), 800);
+      };
+      rec.onresult = (e: any) => {
+        const heard = (e.results?.[0]?.[0]?.transcript || "").toLowerCase().trim();
+        const isWake = heard.includes("hey nova") || heard.includes("hola nova") || heard === "nova";
+        if (isWake) {
+          killWake();
+          setUiState("listening");
+          setTimeout(() => startListenRef.current(), 200);
+        }
+      };
+
+      wakeRecRef.current = rec;
+      try { rec.start(); } catch {}
+    }, 350);
   }, [lang]);
 
   // ── Full speech recognition → handleSpeech ────────────────────────────────
@@ -172,58 +187,62 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
     if (!SR || processingRef.current) return;
     killWake();
 
-    const rec = new SR();
-    rec.continuous     = false;
-    rec.interimResults = true;
-    rec.lang = novaRecogLang(lang);
+    // iOS: cancel any lingering TTS, then wait 350ms for audio session handoff to mic
+    try { window.speechSynthesis.cancel(); } catch {}
 
-    let finalText = "";
+    setTimeout(() => {
+      if (processingRef.current) return;
+      const rec = new SR();
+      rec.continuous     = false;
+      rec.interimResults = true;
+      rec.lang = novaRecogLang(lang);
 
-    rec.onstart = () => {
-      setUiState("listening");
-      setTranscript("");
-      finalText = "";
-    };
-    rec.onresult = (e: any) => {
-      let fin = "", interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) fin += t;
-        else interim += t;
-      }
-      if (fin) finalText = fin;
-      setTranscript(fin || interim);
-    };
-    rec.onend = () => {
-      mainRecRef.current = null;
-      if (finalText.trim()) {
-        // Check if user said wake word mid-session (ignore it, just re-listen)
-        const lower = finalText.toLowerCase();
-        if (lower === "hey nova" || lower === "hola nova" || lower === "nova") {
-          setUiState("listening");
-          setTimeout(() => startListenRef.current(), 200);
-          return;
+      let finalText = "";
+
+      rec.onstart = () => {
+        setUiState("listening");
+        setTranscript("");
+        finalText = "";
+      };
+      rec.onresult = (e: any) => {
+        let fin = "", interim = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) fin += t;
+          else interim += t;
         }
-        handleSpeechRef.current(finalText.trim());
-      } else {
-        // Nothing heard → go to wake mode
-        setUiState("wake");
-        setTimeout(() => startWakeRef.current(), 300);
-      }
-    };
-    rec.onerror = (e: any) => {
-      mainRecRef.current = null;
-      if (e.error === "no-speech") {
-        setUiState("wake");
-        setTimeout(() => startWakeRef.current(), 300);
-      } else if (e.error !== "aborted") {
-        setUiState("wake");
-        setTimeout(() => startWakeRef.current(), 500);
-      }
-    };
+        if (fin) finalText = fin;
+        setTranscript(fin || interim);
+      };
+      rec.onend = () => {
+        mainRecRef.current = null;
+        if (finalText.trim()) {
+          const lower = finalText.toLowerCase();
+          if (lower === "hey nova" || lower === "hola nova" || lower === "nova") {
+            setUiState("listening");
+            setTimeout(() => startListenRef.current(), 200);
+            return;
+          }
+          handleSpeechRef.current(finalText.trim());
+        } else {
+          setUiState("wake");
+          setTimeout(() => startWakeRef.current(), 300);
+        }
+      };
+      rec.onerror = (e: any) => {
+        mainRecRef.current = null;
+        if (e.error === "no-speech") {
+          setUiState("wake");
+          setTimeout(() => startWakeRef.current(), 300);
+        } else if (e.error !== "aborted") {
+          setUiState("wake");
+          setTimeout(() => startWakeRef.current(), 500);
+        }
+      };
 
-    mainRecRef.current = rec;
-    try { rec.start(); } catch {}
+      mainRecRef.current = rec;
+      try { rec.start(); } catch {}
+    }, 350);
   }, [lang]);
 
   // Sync refs
@@ -294,22 +313,6 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
 
   // ── Start conversation ────────────────────────────────────────────────────
 
-  const startConversation = useCallback(async (micOk: boolean) => {
-    // Clear any stuck speech queue, then wait a tick before calling the AI
-    // (speaking a silent utterance then immediately cancelling can corrupt the
-    //  TTS engine state on Chrome/iOS — a plain cancel + short pause is safer)
-    try { window.speechSynthesis.cancel(); } catch {}
-
-    await new Promise(r => setTimeout(r, 80));
-
-    const { text, phase } = await callNova([], "greeting");
-    const assistantMsg: Message = { role: "assistant", content: text };
-    messagesRef.current = [assistantMsg];
-    setAiPhase(phase);
-
-    speak(text, () => afterSpeak(micOk));
-  }, [callNova, speak, afterSpeak]);
-
   // ── Tap-gate: wait for user gesture before starting TTS ──────────────────
   // (browsers block auto-play TTS without a user gesture)
 
@@ -321,14 +324,50 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
     didStartRef.current = true;
     const micOk = !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition;
     setCanMic(micOk);
-    // Do NOT auto-start — wait for the tap gate below
   }, []); // eslint-disable-line
 
   const handleTapStart = useCallback(() => {
     setTtsGated(false);
     const micOk = !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition;
-    startConversation(micOk);
-  }, [startConversation]);
+    setCanMic(micOk);
+
+    // ── iOS audio context fix ─────────────────────────────────────────────
+    // iOS closes the user-gesture audio window after ~500ms.
+    // The AI call takes 1-2 seconds, so TTS would be blocked by the time the
+    // response arrives.  Fix: speak a LOCAL "starting up" line IMMEDIATELY
+    // within the gesture, while the AI call runs in parallel.  When the
+    // warm-up ends AND the AI has responded, speak the real greeting.
+
+    try { window.speechSynthesis.cancel(); } catch {}
+
+    const isES     = lang.startsWith("es");
+    const warmLine = isES
+      ? `Hola ${userName}! Un momento…`
+      : `Hey ${userName}! Just a moment…`;
+
+    // Start AI call in parallel — store the promise so we can await it below
+    const aiPromise = callNova([], "greeting");
+
+    // Speak the warm-up line IMMEDIATELY (within user-gesture window)
+    speak(warmLine, async () => {
+      // Warm-up done — now wait for AI (usually already resolved by now)
+      try {
+        const { text, phase } = await aiPromise;
+        const assistantMsg: Message = { role: "assistant", content: text };
+        messagesRef.current = [assistantMsg];
+        setAiPhase(phase);
+        speak(text, () => afterSpeak(micOk));
+      } catch {
+        const fallback = isES
+          ? `¡Hola ${userName}! Soy NOVA. ¿Cómo estás hoy?`
+          : `Hey ${userName}! I'm NOVA. How are you doing today?`;
+        const assistantMsg: Message = { role: "assistant", content: fallback };
+        messagesRef.current = [assistantMsg];
+        setAiPhase("chat");
+        speak(fallback, () => afterSpeak(micOk));
+      }
+    });
+  }, [callNova, speak, afterSpeak, lang, userName]);
 
   // ── Manual mic toggle ─────────────────────────────────────────────────────
 
