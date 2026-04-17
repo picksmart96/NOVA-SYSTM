@@ -49,6 +49,9 @@ type SessionState =
 // ── PALLET CHECK INTERVAL ─────────────────────────────────────────────────────
 const PALLET_CHECK_EVERY = 50; // every 50 cases
 
+// ── Sign-on phase list (module-level so it's stable for mic guards) ──────────
+const SIGN_ON_STATES = ['say_load_pick','equip_enter','equip_confirm','pallet_enter','pallet_confirm','mhe_safety'] as const;
+
 // ── Pallet check text ─────────────────────────────────────────────────────────
 const PALLET_CHECK_TEXT = "Pause real quick. Check your pallet right now. Look for any crushed corners. Make sure it is not leaning or unstable. If it needs it, wrap it now to keep product from falling. Safety first. When you're ready, tap continue.";
 
@@ -130,9 +133,10 @@ export default function VoiceSessionPage() {
   const [palletCount,   setPalletCount]   = useState(0);
   const [mheSafetyIdx,  setMheSafetyIdx]  = useState(0);
   const [isListeningSignOn, setIsListeningSignOn] = useState(false);
-  const equipIdRef     = useRef("");
-  const mheSafetyRef   = useRef(0);
-  const signOnRecRef   = useRef<any>(null);
+  const equipIdRef          = useRef("");
+  const mheSafetyRef        = useRef(0);
+  const signOnRecRef        = useRef<any>(null);
+  const signOnRetryCountRef = useRef(0);
 
   // ── Qty confirmation voice ─────────────────────────────────────────────────
   const [qtyInput, setQtyInput]             = useState<string>("");
@@ -219,6 +223,13 @@ export default function VoiceSessionPage() {
     logEvent(type, { expectedValue: expected, actualValue: actual });
   }, [lang, jwtToken, currentUser, id, logEvent]);
 
+  // ── Keep sessionStateRef in sync (critical for mic guards) ───────────────
+  useEffect(() => {
+    sessionStateRef.current = sessionState;
+    // Reset sign-on retry counter on every state change so fresh retries are allowed
+    signOnRetryCountRef.current = 0;
+  }, [sessionState]);
+
   // ── Timer ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (sessionState !== 'completed' && sessionState !== 'intro' && sessionState !== 'submitting' && assignment?.status === 'active') {
@@ -268,9 +279,6 @@ export default function VoiceSessionPage() {
     setIsListeningSignOn(false);
     try { signOnRecRef.current?.stop(); } catch {}
   }, []);
-
-  const signOnRetryCountRef = useRef(0);
-  const SIGN_ON_STATES: SessionState[] = ['say_load_pick','equip_enter','equip_confirm','pallet_enter','pallet_confirm','mhe_safety'];
 
   const startSignOnListening = useCallback((hint: string, onHeard: (text: string) => void) => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
