@@ -102,11 +102,13 @@ export default function SelectorPortalPage() {
   const [isSpeaking,     setIsSpeaking]     = useState(false);
   const [novaStatus,     setNovaStatus]     = useState<string>("");
   const [ttsReady,       setTtsReady]       = useState(false);
-  const mutedRef    = useRef(false);
-  const ttsReadyRef = useRef(false);
-  const recLoopRef  = useRef<any>(null);
+  const mutedRef      = useRef(false);
+  const ttsReadyRef   = useRef(false);
+  const recLoopRef    = useRef<any>(null);
   const loopActiveRef = useRef(false);
   const loopRestartRef = useRef<(() => void) | null>(null);
+  // Mirrors isSpeaking state so startLoop can check without stale closure
+  const isSpeakingRef = useRef(false);
   // Tracks whether the NOVA Welcome Assistant currently owns the audio session.
   // When true the portal pauses its own speech-recognition loop so the two
   // recognizers don't fight each other (Chrome only permits one at a time).
@@ -121,8 +123,22 @@ export default function SelectorPortalPage() {
 
   const speak = useCallback((text: string, onDone?: () => void) => {
     if (mutedRef.current || !canSpeak) { onDone?.(); return; }
+    // iOS Safari cannot run SpeechRecognition and SpeechSynthesis at the same
+    // time — they fight over the single audio session and freeze the page.
+    // Stop recognition immediately (synchronously) before starting TTS.
+    isSpeakingRef.current = true;
+    stopLoopRef.current?.();
     setIsSpeaking(true);
-    novaSpeak(text, lang, () => { setIsSpeaking(false); onDone?.(); });
+    novaSpeak(text, lang, () => {
+      isSpeakingRef.current = false;
+      setIsSpeaking(false);
+      onDone?.();
+      // Restart the recognition loop after TTS ends, unless NWA owns the mic
+      // or the user has muted voice commands.
+      if (!mutedRef.current && !novaActiveRef.current) {
+        setTimeout(() => startLoopRef.current?.(), 400);
+      }
+    });
   }, [canSpeak, lang]);
 
   const speakTodayFocus = useCallback(() => {
@@ -197,6 +213,9 @@ export default function SelectorPortalPage() {
 
   const startLoop = useCallback(() => {
     if (!canListen) return;
+    // Never start recognition while TTS is playing — on iOS the audio session
+    // cannot handle both simultaneously and the page freezes.
+    if (isSpeakingRef.current) return;
     // Don't restart while the NOVA Welcome Assistant owns the audio session —
     // Chrome only allows one SpeechRecognition at a time.
     if (novaActiveRef.current) return;
@@ -252,6 +271,7 @@ export default function SelectorPortalPage() {
   useEffect(() => { loopRestartRef.current = startLoop; }, [startLoop]);
   useEffect(() => { stopLoopRef.current  = stopLoop;  }, [stopLoop]);
   useEffect(() => { startLoopRef.current = startLoop; }, [startLoop]);
+  useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
 
   // ── Coordinate with NOVA Welcome Assistant ────────────────────────────────
   // The NWA runs its own SpeechRecognition session.  Chrome allows only one
