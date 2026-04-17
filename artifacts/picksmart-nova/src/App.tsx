@@ -31,7 +31,6 @@ import SelectorBreakingNewsPage from "@/pages/app/SelectorBreakingNewsPage";
 import MyAssignmentsPage from "@/pages/nova/my-assignments";
 import AssignmentDetailPage from "@/pages/nova/assignment-detail";
 import VoiceSessionPage from "@/pages/nova/voice-session";
-import NovaLoadPickPage from "@/pages/nova/load-pick";
 import AssignmentControlPage from "@/pages/nova/assignment-control";
 import WarehouseReferencePage from "@/pages/nova/warehouse";
 import SlotMasterPage from "@/pages/nova/slot-master";
@@ -328,9 +327,6 @@ function Router() {
       </Route>
       <Route path="/nova/assignments/:id">
         <Layout><GatedRoute><AssignmentDetailPage /></GatedRoute></Layout>
-      </Route>
-      <Route path="/nova/load-pick">
-        <GatedRoute><NovaLoadPickPage /></GatedRoute>
       </Route>
       <Route path="/nova/voice/:id">
         <GatedRoute><VoiceSessionPage /></GatedRoute>

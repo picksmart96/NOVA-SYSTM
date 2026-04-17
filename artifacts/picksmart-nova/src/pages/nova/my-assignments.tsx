@@ -121,10 +121,10 @@ export default function MyAssignmentsPage() {
                   <p className="text-xs font-black uppercase tracking-widest text-yellow-400">My Picks</p>
                 </div>
 
-                {/* Quick Load Pick — goes through NOVA safety gate first */}
+                {/* Quick Start — taps into voice session with built-in sign-on */}
                 {activePick && (
                   <div
-                    onClick={() => navigate("/nova/load-pick")}
+                    onClick={() => navigate(`/nova/voice/${activePick.id}`)}
                     className="rounded-3xl border border-yellow-400 bg-yellow-400/10 p-6 flex items-center justify-between cursor-pointer hover:bg-yellow-400/15 transition group shadow-[0_0_30px_rgba(250,204,21,0.1)]"
                   >
                     <div className="flex items-center gap-4">
@@ -132,7 +132,7 @@ export default function MyAssignmentsPage() {
                         <Zap className="h-6 w-6 text-slate-950" />
                       </div>
                       <div>
-                        <p className="font-black text-yellow-300 text-lg">Load Pick</p>
+                        <p className="font-black text-yellow-300 text-lg">Start Picking</p>
                         <p className="text-slate-400 text-sm">{activePick.title}</p>
                         <p className="text-slate-500 text-xs">
                           {activePick.totalCases} cases · Aisles {activePick.startAisle}–{activePick.endAisle} · Door {activePick.doorNumber}

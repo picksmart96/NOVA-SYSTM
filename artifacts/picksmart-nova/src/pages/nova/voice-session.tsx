@@ -26,6 +26,15 @@ import { novaSpeak } from "@/lib/novaSpeech";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type SessionState =
+  // ── Sign-on (ES3 Load Pick) ──────────────────────────────────────────────
+  | 'say_load_pick'
+  | 'equip_enter'
+  | 'equip_confirm'
+  | 'pallet_enter'
+  | 'pallet_confirm'
+  | 'mhe_safety'
+  | 'mhe_fail'
+  // ── Picking session ───────────────────────────────────────────────────────
   | 'intro'
   | 'pallet_alpha'
   | 'pallet_bravo'
@@ -42,6 +51,50 @@ const PALLET_CHECK_EVERY = 50; // every 50 cases
 
 // ── Pallet check text ─────────────────────────────────────────────────────────
 const PALLET_CHECK_TEXT = "Pause real quick. Check your pallet right now. Look for any crushed corners. Make sure it is not leaning or unstable. If it needs it, wrap it now to keep product from falling. Safety first. When you're ready, tap continue.";
+
+// ── Sign-on: MHE pre-trip safety items ────────────────────────────────────────
+const MHE_SAFETY_EN = [
+  "Brakes okay?","Battery guard okay?","Horn okay?","Wheels okay?",
+  "Hydraulics okay?","Controls okay?","Steering okay?","Welds okay?","Electric wiring okay?",
+];
+const MHE_SAFETY_ES = [
+  "¿Frenos bien?","¿Protector de batería bien?","¿Bocina bien?","¿Llantas bien?",
+  "¿Hidráulicos bien?","¿Controles bien?","¿Dirección bien?","¿Soldaduras bien?","¿Cableado eléctrico bien?",
+];
+
+// ── Sign-on helpers ───────────────────────────────────────────────────────────
+function spellId(id: string) { return id.split("").join(". "); }
+function displayId(id: string) { return id.split("").join("-"); }
+
+const NUM_MAP: Record<string,number> = {
+  one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,
+  eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,
+  sixteen:16,seventeen:17,eighteen:18,nineteen:19,twenty:20,
+  to:2,too:2,tu:2,won:1,tree:3,fore:4,"for":4,ate:8,
+  uno:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,
+  once:11,doce:12,trece:13,catorce:14,quince:15,veinte:20,
+};
+function wordToNumber(raw: string): number | null {
+  const s = raw.toLowerCase().trim();
+  if (NUM_MAP[s] !== undefined) return NUM_MAP[s];
+  const digits = s.replace(/[^0-9]/g,"");
+  if (!digits) return null;
+  const n = parseInt(digits, 10);
+  return isNaN(n) ? null : n;
+}
+
+const DIGIT_WORDS: Record<string,string> = {
+  zero:"0",oh:"0",one:"1",two:"2",three:"3",four:"4",five:"5",
+  six:"6",seven:"7",eight:"8",nine:"9",to:"2",too:"2",tree:"3",fore:"4",
+  cero:"0",uno:"1",dos:"2",tres:"3",cuatro:"4",cinco:"5",
+  seis:"6",siete:"7",ocho:"8",nueve:"9",
+};
+function spokenToId(text: string): string {
+  const wordConverted = text.toLowerCase().trim()
+    .split(/\s+/).map(w => DIGIT_WORDS[w] ?? w.replace(/[^a-z0-9]/gi,"")).join("").toUpperCase();
+  const direct = text.replace(/\s+/g,"").replace(/[^a-z0-9]/gi,"").toUpperCase();
+  return wordConverted || direct;
+}
 
 export default function VoiceSessionPage() {
   const [, params] = useRoute("/nova/voice/:id");
@@ -69,6 +122,17 @@ export default function VoiceSessionPage() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [transcript, setTranscript]         = useState("");
   const [ttsUnlocked, setTtsUnlocked]       = useState(false);
+
+  // ── Sign-on state ──────────────────────────────────────────────────────────
+  const [equipInput,    setEquipInput]    = useState("");
+  const [equipId,       setEquipId]       = useState("");
+  const [palletInput,   setPalletInput]   = useState("");
+  const [palletCount,   setPalletCount]   = useState(0);
+  const [mheSafetyIdx,  setMheSafetyIdx]  = useState(0);
+  const [isListeningSignOn, setIsListeningSignOn] = useState(false);
+  const equipIdRef     = useRef("");
+  const mheSafetyRef   = useRef(0);
+  const signOnRecRef   = useRef<any>(null);
 
   // ── Qty confirmation voice ─────────────────────────────────────────────────
   const [qtyInput, setQtyInput]             = useState<string>("");
@@ -189,11 +253,54 @@ export default function VoiceSessionPage() {
     lastSpeechRef.current = text;
     setTranscript(text);
     setIsSpeaking(true);
+    let finished = false;
+    const safetyMs = Math.max(3000, Math.ceil(text.length * 65) + 2000);
+    const safetyTimer = setTimeout(() => {
+      if (!finished) { finished = true; setIsSpeaking(false); onEnd?.(); }
+    }, safetyMs);
     novaSpeak(text, lang, () => {
-      setIsSpeaking(false);
-      onEnd?.();
+      if (!finished) { finished = true; clearTimeout(safetyTimer); setIsSpeaking(false); onEnd?.(); }
     }, { rate: speechRateRef.current, pitch: 1 });
   }, [lang]);
+
+  // ── Sign-on mic helper (with 350ms iOS audio-session gap) ──────────────────
+  const stopSignOnListening = useCallback(() => {
+    setIsListeningSignOn(false);
+    try { signOnRecRef.current?.stop(); } catch {}
+  }, []);
+
+  const startSignOnListening = useCallback((hint: string, onHeard: (text: string) => void) => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    stopSignOnListening();
+    setTimeout(() => {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+      setTimeout(() => {
+        const rec = new SR();
+        signOnRecRef.current = rec;
+        rec.continuous = false;
+        rec.interimResults = false;
+        rec.lang = lang === "es" ? "es-US" : "en-US";
+        let gotResult = false;
+        rec.onstart = () => setIsListeningSignOn(true);
+        rec.onerror = (e: any) => {
+          setIsListeningSignOn(false);
+          if (!gotResult && e.error !== "not-allowed") {
+            setTimeout(() => startSignOnListening(hint, onHeard), 800);
+          }
+        };
+        rec.onend = () => setIsListeningSignOn(false);
+        rec.onresult = (e: any) => {
+          gotResult = true;
+          const heard = (e.results?.[0]?.[0]?.transcript?.trim() || "").toLowerCase();
+          if (heard) onHeard(heard);
+        };
+        try { rec.start(); } catch {}
+      }, 350);
+    }, 80);
+  }, [lang, stopSignOnListening]);
 
   // ── Qty voice recognition ──────────────────────────────────────────────────
   const startQtyListening = useCallback((expectedQty: number, stopId: string) => {
@@ -273,6 +380,134 @@ export default function VoiceSessionPage() {
     setIsListeningQty(true);
     try { rec.start(); } catch {}
   }, [lang]); // eslint-disable-line
+
+  // ── Sign-on step functions ─────────────────────────────────────────────────
+  const isYes = (t: string) => /\byes\b|yeah|yep|sí|si\b|correct|okay|ok|pass|good/i.test(t);
+  const isDenied = (t: string) => /\bno\b|nope|fail|bad|broken|not\s+ok/i.test(t);
+
+  const doEquipEnter = useCallback(() => {
+    setSessionState("equip_enter");
+    speak(lang === "es" ? "Ingresa el número de equipo." : "Enter equipment I D.", () => {
+      startSignOnListening("Speak equipment ID", heard => {
+        const id = spokenToId(heard);
+        if (id.length >= 2) {
+          submitEquip(id);
+        } else {
+          doEquipEnter();
+        }
+      });
+    });
+  }, [lang, speak, startSignOnListening]); // eslint-disable-line
+
+  const submitEquip = useCallback((id: string) => {
+    equipIdRef.current = id;
+    setEquipId(id);
+    setEquipInput(id);
+    setSessionState("equip_confirm");
+    speak(
+      lang === "es" ? `Confirma equipo. ${spellId(id)}.` : `Confirm equipment. ${spellId(id)}.`,
+      () => {
+        startSignOnListening("Say yes or no", heard => {
+          if (isYes(heard)) {
+            doPalletEnter(id);
+          } else {
+            setEquipInput(""); setEquipId(""); equipIdRef.current = "";
+            doEquipEnter();
+          }
+        });
+      }
+    );
+  }, [lang, speak, startSignOnListening]); // eslint-disable-line
+
+  const doPalletEnter = useCallback((eId: string) => {
+    setSessionState("pallet_enter");
+    speak(
+      lang === "es"
+        ? `Ingresa el conteo máximo de tarimas para el equipo ${spellId(eId)}.`
+        : `Enter maximum pallet count for jack ${spellId(eId)}.`,
+      () => {
+        startSignOnListening("Speak number of pallets", heard => {
+          const n = wordToNumber(heard);
+          if (n !== null && n > 0) submitPallet(n, eId);
+          else doPalletEnter(eId);
+        });
+      }
+    );
+  }, [lang, speak, startSignOnListening]); // eslint-disable-line
+
+  const submitPallet = useCallback((n: number, eId: string) => {
+    setPalletCount(n);
+    setPalletInput(String(n));
+    setSessionState("pallet_confirm");
+    speak(
+      lang === "es" ? `Confirma conteo de tarimas. ${n}.` : `Confirm maximum pallet count. ${n}.`,
+      () => {
+        startSignOnListening("Say yes or no", heard => {
+          if (isYes(heard)) {
+            doMheSafety(0);
+          } else {
+            setPalletInput(""); setPalletCount(0);
+            doPalletEnter(eId);
+          }
+        });
+      }
+    );
+  }, [lang, speak, startSignOnListening]); // eslint-disable-line
+
+  const advanceMheSafety = useCallback((idx: number) => {
+    const items = lang === "es" ? MHE_SAFETY_ES : MHE_SAFETY_EN;
+    if (idx + 1 < items.length) {
+      doMheSafety(idx + 1);
+    } else {
+      setSessionState("intro");
+    }
+  }, [lang]); // eslint-disable-line
+
+  const doMheSafety = useCallback((idx: number) => {
+    mheSafetyRef.current = idx;
+    setMheSafetyIdx(idx);
+    setSessionState("mhe_safety");
+    const items = lang === "es" ? MHE_SAFETY_ES : MHE_SAFETY_EN;
+    speak(items[idx], () => {
+      startSignOnListening("Say yes or no", heard => {
+        if (isYes(heard)) {
+          advanceMheSafety(idx);
+        } else if (isDenied(heard)) {
+          setSessionState("mhe_fail");
+          speak(
+            lang === "es"
+              ? "Inspección fallida. Notifica a tu supervisor. No uses este equipo."
+              : "Inspection failed. Notify your supervisor. Do not operate this equipment."
+          );
+        } else {
+          doMheSafety(idx);
+        }
+      });
+    });
+  }, [lang, speak, startSignOnListening, advanceMheSafety]); // eslint-disable-line
+
+  // ── Sign-on keypad handlers ────────────────────────────────────────────────
+  const handleEquipKey = (k: string) => {
+    if (k === "⌫") { setEquipInput(v => v.slice(0, -1)); return; }
+    if (k === "✓") {
+      const val = equipInput.trim();
+      if (val.length >= 2) { stopSignOnListening(); submitEquip(val); }
+      else speak(lang === "es" ? "Ingresa el número de equipo." : "Enter equipment I D.");
+      return;
+    }
+    setEquipInput(v => v + k);
+  };
+
+  const handlePalletKey = (k: string) => {
+    if (k === "⌫") { setPalletInput(v => v.slice(0, -1)); return; }
+    if (k === "✓") {
+      const n = parseInt(palletInput, 10);
+      if (!isNaN(n) && n > 0) { stopSignOnListening(); submitPallet(n, equipIdRef.current); }
+      else speak(lang === "es" ? "Ingresa el conteo de tarimas." : "Enter pallet count.");
+      return;
+    }
+    setPalletInput(v => v + k);
+  };
 
   // ── Background "picking" command listener ──────────────────────────────────
   // Runs during 'picking' state so "Repeat"/"Faster"/"Slower" work while typing
@@ -400,7 +635,9 @@ export default function VoiceSessionPage() {
   useEffect(() => {
     if (!assignment || !stops || !ttsUnlocked) return;
 
-    if (sessionState === 'intro') {
+    if (sessionState === 'say_load_pick') {
+      speak(lang === "es" ? "Carga de tarimas." : "Load picks.", () => doEquipEnter());
+    } else if (sessionState === 'intro') {
       speak(`Start aisle ${assignment.startAisle}. End aisle ${assignment.endAisle}. Total case count ${assignment.totalCases}. Total pallets ${assignment.totalPallets}. Goal time ${assignment.goalTimeMinutes} minutes. To continue, say ready.`);
     } else if (sessionState === 'pallet_alpha') {
       speak("Position Alpha pallet. Get CHEP.");
@@ -772,11 +1009,14 @@ export default function VoiceSessionPage() {
               warmup.volume = 0.01;
               window.speechSynthesis.speak(warmup);
             } catch {}
+            if (sessionState === 'intro') {
+              setSessionState('say_load_pick');
+            }
             setTtsUnlocked(true);
           }}
           className="px-10 py-5 bg-yellow-400 text-slate-950 font-black text-xl rounded-2xl hover:bg-yellow-300 active:scale-95 transition shadow-xl shadow-yellow-400/30"
         >
-          Start Picking
+          Start Session
         </button>
         <Link href={`/nova/assignments/${id}`}>
           <button className="text-slate-500 text-sm hover:text-slate-300 transition">← Back</button>
@@ -821,18 +1061,29 @@ export default function VoiceSessionPage() {
           {isListeningQty && (
             <div className="absolute w-44 h-44 bg-green-400/15 rounded-full animate-ping" style={{ animationDuration: '1.8s' }} />
           )}
+          {isListeningSignOn && (
+            <div className="absolute w-44 h-44 bg-blue-400/15 rounded-full animate-ping" style={{ animationDuration: '1.8s' }} />
+          )}
           <div className={`relative z-10 w-24 h-24 rounded-full flex items-center justify-center transition-all duration-300 ${
-            sessionState === 'pallet_check'
+            sessionState === 'mhe_fail'
+              ? 'bg-red-500 shadow-[0_0_50px_rgba(239,68,68,0.5)] scale-110'
+              : sessionState === 'mhe_safety'
+              ? 'bg-blue-600 shadow-[0_0_50px_rgba(37,99,235,0.5)] scale-105'
+              : sessionState === 'pallet_check'
               ? 'bg-orange-500 shadow-[0_0_50px_rgba(249,115,22,0.5)] scale-110'
               : isSpeaking
               ? 'bg-primary shadow-[0_0_50px_rgba(250,204,21,0.5)] scale-110'
-              : isListeningQty
+              : isListeningQty || isListeningSignOn
               ? 'bg-green-500/30 border-2 border-green-400 scale-105'
               : 'bg-secondary border-2 border-primary/50'
           }`}>
-            {sessionState === 'pallet_check'
+            {sessionState === 'mhe_fail'
+              ? <AlertTriangle className="h-10 w-10 text-white" />
+              : sessionState === 'mhe_safety'
               ? <ShieldCheck className="h-10 w-10 text-white" />
-              : isListeningQty
+              : sessionState === 'pallet_check'
+              ? <ShieldCheck className="h-10 w-10 text-white" />
+              : (isListeningQty || isListeningSignOn)
               ? <Mic className="h-10 w-10 text-green-400" />
               : <Headphones className={`h-10 w-10 ${isSpeaking ? 'text-black' : 'text-primary'}`} />
             }
@@ -871,6 +1122,145 @@ export default function VoiceSessionPage() {
 
         {/* Action area */}
         <div className="w-full max-w-md mx-auto">
+
+          {/* ── SIGN-ON: Say Load Pick ────────────────────────────────── */}
+          {sessionState === 'say_load_pick' && (
+            <div className="rounded-3xl border border-yellow-400/30 bg-yellow-400/5 p-6 text-center space-y-3">
+              <div className="w-14 h-14 rounded-full bg-yellow-400 flex items-center justify-center mx-auto">
+                <Zap className="h-7 w-7 text-slate-950" />
+              </div>
+              <p className="font-black text-yellow-300 text-2xl">{lang === "es" ? "Carga de Tarimas" : "Load Picks"}</p>
+              <p className="text-slate-400 text-sm">{lang === "es" ? "NOVA te guiará paso a paso." : "NOVA will guide you through sign-on."}</p>
+            </div>
+          )}
+
+          {/* ── SIGN-ON: Equipment ID entry ───────────────────────────── */}
+          {(sessionState === 'equip_enter' || sessionState === 'equip_confirm') && (
+            <div className="space-y-4">
+              <div className="rounded-3xl border border-yellow-400/20 bg-slate-900 p-5 text-center">
+                <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1">{lang === "es" ? "Número de Equipo" : "Equipment ID"}</p>
+                <p className="text-4xl font-black text-yellow-300 tracking-widest min-h-[52px]">
+                  {equipInput ? displayId(equipInput) : <span className="text-slate-600">_ _ _ _</span>}
+                </p>
+                {sessionState === 'equip_confirm' && (
+                  <p className="text-green-400 text-sm font-bold mt-1">{lang === "es" ? "¿Correcto? Di sí o no." : "Correct? Say yes or no."}</p>
+                )}
+              </div>
+              {sessionState === 'equip_enter' && (
+                <div className="grid grid-cols-3 gap-2">
+                  {["1","2","3","4","5","6","7","8","9","⌫","0","✓"].map(k => (
+                    <button key={k} onClick={() => handleEquipKey(k)}
+                      className={`h-14 rounded-2xl text-xl font-black transition active:scale-95 ${k === "✓" ? "bg-yellow-400 text-slate-950 hover:bg-yellow-300" : k === "⌫" ? "bg-slate-700 text-white hover:bg-slate-600" : "bg-slate-800 text-white hover:bg-slate-700"}`}>
+                      {k}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {sessionState === 'equip_confirm' && (
+                <div className="flex gap-3">
+                  <button onClick={() => { stopSignOnListening(); submitEquip(equipInput); }}
+                    className="flex-1 h-14 rounded-2xl bg-green-600 text-white font-black text-lg hover:bg-green-500 active:scale-95 transition">
+                    {lang === "es" ? "Sí" : "Yes"}
+                  </button>
+                  <button onClick={() => { setEquipInput(""); setEquipId(""); equipIdRef.current = ""; stopSignOnListening(); doEquipEnter(); }}
+                    className="flex-1 h-14 rounded-2xl bg-red-600/80 text-white font-black text-lg hover:bg-red-600 active:scale-95 transition">
+                    {lang === "es" ? "No" : "No"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── SIGN-ON: Pallet count entry ───────────────────────────── */}
+          {(sessionState === 'pallet_enter' || sessionState === 'pallet_confirm') && (
+            <div className="space-y-4">
+              <div className="rounded-3xl border border-yellow-400/20 bg-slate-900 p-5 text-center">
+                <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1">{lang === "es" ? "Conteo de Tarimas" : "Max Pallet Count"}</p>
+                <p className="text-5xl font-black text-yellow-300 min-h-[60px]">
+                  {palletInput || <span className="text-slate-600">—</span>}
+                </p>
+                {sessionState === 'pallet_confirm' && (
+                  <p className="text-green-400 text-sm font-bold mt-1">{lang === "es" ? "¿Correcto? Di sí o no." : "Correct? Say yes or no."}</p>
+                )}
+              </div>
+              {sessionState === 'pallet_enter' && (
+                <div className="grid grid-cols-3 gap-2">
+                  {["1","2","3","4","5","6","7","8","9","⌫","0","✓"].map(k => (
+                    <button key={k} onClick={() => handlePalletKey(k)}
+                      className={`h-14 rounded-2xl text-xl font-black transition active:scale-95 ${k === "✓" ? "bg-yellow-400 text-slate-950 hover:bg-yellow-300" : k === "⌫" ? "bg-slate-700 text-white hover:bg-slate-600" : "bg-slate-800 text-white hover:bg-slate-700"}`}>
+                      {k}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {sessionState === 'pallet_confirm' && (
+                <div className="flex gap-3">
+                  <button onClick={() => { stopSignOnListening(); doMheSafety(0); }}
+                    className="flex-1 h-14 rounded-2xl bg-green-600 text-white font-black text-lg hover:bg-green-500 active:scale-95 transition">
+                    {lang === "es" ? "Sí" : "Yes"}
+                  </button>
+                  <button onClick={() => { setPalletInput(""); setPalletCount(0); stopSignOnListening(); doPalletEnter(equipIdRef.current); }}
+                    className="flex-1 h-14 rounded-2xl bg-red-600/80 text-white font-black text-lg hover:bg-red-600 active:scale-95 transition">
+                    {lang === "es" ? "No" : "No"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── SIGN-ON: MHE Safety inspection ───────────────────────── */}
+          {sessionState === 'mhe_safety' && (
+            <div className="space-y-4">
+              <div className="rounded-3xl border border-blue-500/30 bg-blue-500/10 p-5 text-center space-y-2">
+                <ShieldCheck className="h-10 w-10 text-blue-400 mx-auto" />
+                <p className="text-xs text-slate-500 uppercase tracking-widest font-bold">
+                  {lang === "es" ? "Inspección Pre-Operación" : "Pre-Trip Inspection"} · {mheSafetyIdx + 1} / {MHE_SAFETY_EN.length}
+                </p>
+                <p className="text-xl font-black text-white">
+                  {(lang === "es" ? MHE_SAFETY_ES : MHE_SAFETY_EN)[mheSafetyIdx]}
+                </p>
+                {isListeningSignOn && (
+                  <p className="text-green-400 text-xs flex items-center justify-center gap-1">
+                    <Mic className="h-3 w-3" /> {lang === "es" ? "Escuchando…" : "Listening…"}
+                  </p>
+                )}
+              </div>
+              <div className="w-full bg-slate-800 rounded-full h-1.5">
+                <div className="bg-blue-500 h-1.5 rounded-full transition-all" style={{ width: `${((mheSafetyIdx + 1) / MHE_SAFETY_EN.length) * 100}%` }} />
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => { stopSignOnListening(); advanceMheSafety(mheSafetyIdx); }}
+                  disabled={isSpeaking}
+                  className="flex-1 h-14 rounded-2xl bg-green-600 text-white font-black text-lg hover:bg-green-500 active:scale-95 transition disabled:opacity-40">
+                  {lang === "es" ? "Sí, OK" : "Yes, OK"}
+                </button>
+                <button onClick={() => { stopSignOnListening(); setSessionState("mhe_fail"); speak(lang === "es" ? "Inspección fallida. Notifica a tu supervisor. No uses este equipo." : "Inspection failed. Notify your supervisor. Do not operate this equipment."); }}
+                  disabled={isSpeaking}
+                  className="flex-1 h-14 rounded-2xl bg-red-600/80 text-white font-black text-lg hover:bg-red-600 active:scale-95 transition disabled:opacity-40">
+                  {lang === "es" ? "No, Falla" : "Fail"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── SIGN-ON: MHE Safety FAIL ──────────────────────────────── */}
+          {sessionState === 'mhe_fail' && (
+            <div className="space-y-4">
+              <div className="rounded-3xl border border-red-500/40 bg-red-500/10 p-6 text-center space-y-3">
+                <AlertTriangle className="h-14 w-14 text-red-400 mx-auto" />
+                <p className="font-black text-red-300 text-2xl">{lang === "es" ? "¡Inspección Fallida!" : "Inspection Failed!"}</p>
+                <p className="text-slate-300 text-base">
+                  {lang === "es"
+                    ? "Notifica a tu supervisor inmediatamente. No operes este equipo hasta que sea reparado."
+                    : "Notify your supervisor immediately. Do not operate this equipment until repaired."}
+                </p>
+              </div>
+              <button onClick={() => { setMheSafetyIdx(0); doMheSafety(0); }}
+                className="w-full h-14 rounded-2xl bg-yellow-400 text-slate-950 font-black text-lg hover:bg-yellow-300 active:scale-95 transition">
+                {lang === "es" ? "Reiniciar Inspección" : "Restart Inspection"}
+              </button>
+            </div>
+          )}
 
           {/* PALLET CHECK interrupt */}
           {sessionState === 'pallet_check' && (
