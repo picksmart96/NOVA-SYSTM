@@ -550,6 +550,18 @@ export default function NovaTrainerPage() {
 
   const startSession = useCallback(() => {
     if (!assignment) return;
+
+    // Prime audio within the user gesture context, then cancel immediately so
+    // speechSynthesis.speaking is false when novaSpeak runs.
+    // iOS/Chrome require speak() to originate from a top-level gesture handler.
+    try {
+      window.speechSynthesis.cancel();
+      const warmup = new SpeechSynthesisUtterance("\u200B");
+      warmup.volume = 0;
+      window.speechSynthesis.speak(warmup);
+      window.speechSynthesis.cancel();
+    } catch {}
+
     setPhase("SIGN_ON");
     setEquipmentId("");
     setMaxPallets("2");

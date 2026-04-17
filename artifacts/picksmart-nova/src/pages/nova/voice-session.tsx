@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/lib/authStore";
 import { logMistake, getCoachingLine, isStruggling, type MistakeType } from "@/lib/mistakeLog";
 import { useTranslation } from "react-i18next";
+import { novaSpeak } from "@/lib/novaSpeech";
 
 type SessionState = 
   | 'intro'
@@ -55,6 +56,7 @@ export default function VoiceSessionPage() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [transcript, setTranscript] = useState("");
+  const [ttsUnlocked, setTtsUnlocked] = useState(false);
 
   // ── Mistake tracking ─────────────────────────────────────────────────────
   const [mistakeCount, setMistakeCount]     = useState(0);
@@ -120,19 +122,15 @@ export default function VoiceSessionPage() {
     };
   }, [sessionState, assignment?.status]);
 
-  // Simulate speaking
+  // Real TTS — always tied to a prior user gesture (ttsUnlocked gate above)
   const speak = (text: string) => {
     setTranscript(text);
     setIsSpeaking(true);
-    // Simulate speaking duration based on length
-    const duration = Math.max(1500, text.length * 60);
-    setTimeout(() => {
-      setIsSpeaking(false);
-    }, duration);
+    novaSpeak(text, lang, () => setIsSpeaking(false), { rate: 0.95, pitch: 1 });
   };
 
   useEffect(() => {
-    if (!assignment || !stops) return;
+    if (!assignment || !stops || !ttsUnlocked) return;
 
     if (sessionState === 'intro') {
       speak(`Start aisle ${assignment.startAisle}. End aisle ${assignment.endAisle}. Total case count ${assignment.totalCases}. Total pallets ${assignment.totalPallets}. Goal time ${assignment.goalTimeMinutes} minutes. To continue, say ready.`);
@@ -149,7 +147,7 @@ export default function VoiceSessionPage() {
     } else if (sessionState === 'outro') {
       speak(`Last case complete. Proceed to printer ${assignment.printerNumber}. Apply label ${assignment.alphaLabelNumber} to pallet Alpha. Deliver Alpha pallet to door ${assignment.doorNumber}. Assignment complete.`);
     }
-  }, [sessionState, currentStopIndex, assignment, stops]);
+  }, [sessionState, currentStopIndex, assignment, stops, ttsUnlocked]);
 
   const handleNext = () => {
     if (isSpeaking) return;
@@ -354,6 +352,41 @@ export default function VoiceSessionPage() {
           <Button size="lg" className="bg-yellow-400 text-slate-950 font-black hover:bg-yellow-300">
             Return to Assignments
           </Button>
+        </Link>
+      </div>
+    );
+  }
+
+  /* ── Voice unlock overlay ─────────────────────────────────────────────── */
+  if (!ttsUnlocked) {
+    return (
+      <div className="min-h-[100dvh] bg-[#0f141a] flex flex-col items-center justify-center gap-8 px-6 text-center">
+        <div className="w-24 h-24 rounded-full bg-yellow-400 flex items-center justify-center shadow-[0_0_60px_rgba(250,204,21,0.35)]">
+          <Headphones className="h-12 w-12 text-slate-950" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-black text-white mb-2">NOVA Voice Session</h2>
+          <p className="text-slate-400 text-base max-w-xs mx-auto">
+            Tap the button below to enable NOVA's voice. She'll guide you through every pick out loud.
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            try {
+              const warmup = new SpeechSynthesisUtterance(" ");
+              warmup.volume = 0.01;
+              window.speechSynthesis.speak(warmup);
+            } catch {}
+            setTtsUnlocked(true);
+          }}
+          className="px-10 py-5 bg-yellow-400 text-slate-950 font-black text-xl rounded-2xl hover:bg-yellow-300 active:scale-95 transition shadow-xl shadow-yellow-400/30"
+        >
+          Enable NOVA Voice
+        </button>
+        <Link href={`/nova/assignments/${id}`}>
+          <button className="text-slate-500 text-sm hover:text-slate-300 transition">
+            ← Back to assignments
+          </button>
         </Link>
       </div>
     );
