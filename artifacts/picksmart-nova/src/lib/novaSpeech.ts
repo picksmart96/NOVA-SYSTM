@@ -52,7 +52,7 @@ export function novaSpeak(
 
     const u = new SpeechSynthesisUtterance(text);
     u.lang  = lang.startsWith("es") ? "es-US" : "en-US";
-    u.rate  = opts?.rate  ?? 0.95;
+    u.rate  = opts?.rate  ?? 1.25;
     u.pitch = opts?.pitch ?? 1;
 
     const applyVoice = () => {

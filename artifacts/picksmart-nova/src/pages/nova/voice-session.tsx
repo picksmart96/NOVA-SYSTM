@@ -93,6 +93,14 @@ export default function VoiceSessionPage() {
   const lastPalletCheckCountRef = useRef(0);
   const savedStateRef           = useRef<SessionState>('picking');
 
+  // ── Voice command state ────────────────────────────────────────────────────
+  const lastSpeechRef    = useRef<string>("");
+  const speechRateRef    = useRef<number>(1.25);
+  const sessionStateRef  = useRef<SessionState>('intro');
+  const cmdRecRef        = useRef<any>(null);
+  const cmdLoopRef       = useRef<(() => void) | null>(null);
+  const cmdActiveRef     = useRef(false);
+
   // ── Final report ──────────────────────────────────────────────────────────
   const [report, setReport] = useState<{
     novaFeedback: string;
@@ -178,12 +186,13 @@ export default function VoiceSessionPage() {
 
   // ── Speak helper ───────────────────────────────────────────────────────────
   const speak = useCallback((text: string, onEnd?: () => void) => {
+    lastSpeechRef.current = text;
     setTranscript(text);
     setIsSpeaking(true);
     novaSpeak(text, lang, () => {
       setIsSpeaking(false);
       onEnd?.();
-    }, { rate: 0.95, pitch: 1 });
+    }, { rate: speechRateRef.current, pitch: 1 });
   }, [lang]);
 
   // ── Qty voice recognition ──────────────────────────────────────────────────
@@ -197,25 +206,139 @@ export default function VoiceSessionPage() {
     rec.continuous = false;
     rec.interimResults = false;
     rec.lang = lang === "es" ? "es-US" : "en-US";
+    let gotResult = false;
+
     rec.onstart  = () => setIsListeningQty(true);
-    rec.onend    = () => setIsListeningQty(false);
-    rec.onerror  = () => setIsListeningQty(false);
-    rec.onresult = (e: any) => {
+    rec.onerror  = (e: any) => {
       setIsListeningQty(false);
-      const heard = e.results?.[0]?.[0]?.transcript?.trim() || "";
+      if (!gotResult && e.error !== "not-allowed") {
+        // Auto-retry on mic drop
+        setTimeout(() => startQtyListening(expectedQty, stopId), 700);
+      }
+    };
+    rec.onend = () => {
+      setIsListeningQty(false);
+      if (!gotResult) {
+        // Auto-retry if nothing heard
+        setTimeout(() => startQtyListening(expectedQty, stopId), 500);
+      }
+    };
+    rec.onresult = (e: any) => {
+      gotResult = true;
+      const heard = (e.results?.[0]?.[0]?.transcript?.trim() || "").toLowerCase();
       if (!heard) return;
-      // Extract number from speech
-      const match = heard.match(/\d+/);
-      if (match) {
-        const said = parseInt(match[0], 10);
+
+      // ── ES3 voice commands ─────────────────────────────────────────────────
+      if (/\brepeat\b|repita|repetir/i.test(heard)) {
+        gotResult = false;
+        if (lastSpeechRef.current) speak(lastSpeechRef.current, () => startQtyListening(expectedQty, stopId));
+        return;
+      }
+      if (/\bfaster\b|más.?rápido|mas.?rapido/i.test(heard)) {
+        speechRateRef.current = Math.min(1.9, speechRateRef.current + 0.15);
+        gotResult = false;
+        speak(lang === "es" ? "Más rápido." : "Faster.", () => startQtyListening(expectedQty, stopId));
+        return;
+      }
+      if (/\bslower\b|más.?lento|mas.?lento/i.test(heard)) {
+        speechRateRef.current = Math.max(0.7, speechRateRef.current - 0.15);
+        gotResult = false;
+        speak(lang === "es" ? "Más lento." : "Slower.", () => startQtyListening(expectedQty, stopId));
+        return;
+      }
+      // ──────────────────────────────────────────────────────────────────────
+
+      // Extract number from speech (handles "two" → 2, word numbers, and digits)
+      const NUM_WORDS: Record<string,number> = {
+        one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,
+        eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,
+        to:2,too:2,tu:2,won:1,
+        uno:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,
+      };
+      const lower = heard.trim().toLowerCase();
+      const fromWord = NUM_WORDS[lower];
+      const fromDigit = (() => { const m = heard.match(/\d+/); return m ? parseInt(m[0], 10) : NaN; })();
+      const said = fromWord !== undefined ? fromWord : (!isNaN(fromDigit) ? fromDigit : NaN);
+
+      if (!isNaN(said) && said > 0) {
         setQtyInput(String(said));
         handleQtySubmit(said, expectedQty, stopId);
+      } else {
+        // Nothing recognized as number — retry
+        gotResult = false;
+        setTimeout(() => startQtyListening(expectedQty, stopId), 400);
       }
     };
     qtyRecognitionRef.current = rec;
     setIsListeningQty(true);
     try { rec.start(); } catch {}
   }, [lang]); // eslint-disable-line
+
+  // ── Background "picking" command listener ──────────────────────────────────
+  // Runs during 'picking' state so "Repeat"/"Faster"/"Slower" work while typing
+  useEffect(() => { sessionStateRef.current = sessionState; }, [sessionState]);
+
+  const stopCmdLoop = useCallback(() => {
+    cmdActiveRef.current = false;
+    try { cmdRecRef.current?.abort(); } catch {}
+    cmdRecRef.current = null;
+  }, []);
+
+  const startCmdLoop = useCallback(() => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR || cmdActiveRef.current) return;
+    try { cmdRecRef.current?.abort(); } catch {}
+
+    const rec = new SR();
+    rec.continuous     = true;
+    rec.interimResults = false;
+    rec.lang           = lang === "es" ? "es-US" : "en-US";
+    rec.maxAlternatives = 1;
+
+    rec.onstart = () => { cmdActiveRef.current = true; };
+    rec.onend   = () => {
+      cmdActiveRef.current = false;
+      cmdRecRef.current    = null;
+      if (sessionStateRef.current === "picking") {
+        setTimeout(() => cmdLoopRef.current?.(), 700);
+      }
+    };
+    rec.onerror = (e: any) => {
+      cmdActiveRef.current = false;
+      cmdRecRef.current    = null;
+      if (e.error === "not-allowed") return;
+      if (sessionStateRef.current === "picking") {
+        setTimeout(() => cmdLoopRef.current?.(), 1000);
+      }
+    };
+    rec.onresult = (e: any) => {
+      const text = (e.results?.[e.results.length - 1]?.[0]?.transcript || "").toLowerCase().trim();
+      if (/\brepeat\b|repita|repetir/i.test(text)) {
+        if (lastSpeechRef.current) speak(lastSpeechRef.current);
+      } else if (/\bfaster\b|más.?rápido|mas.?rapido/i.test(text)) {
+        speechRateRef.current = Math.min(1.9, speechRateRef.current + 0.15);
+        speak(lang === "es" ? "Más rápido." : "Faster.");
+      } else if (/\bslower\b|más.?lento|mas.?lento/i.test(text)) {
+        speechRateRef.current = Math.max(0.7, speechRateRef.current - 0.15);
+        speak(lang === "es" ? "Más lento." : "Slower.");
+      }
+    };
+
+    cmdRecRef.current = rec;
+    try { rec.start(); } catch {}
+  }, [lang, speak]); // eslint-disable-line
+
+  useEffect(() => { cmdLoopRef.current = startCmdLoop; }, [startCmdLoop]);
+
+  useEffect(() => {
+    if (!ttsUnlocked) return;
+    if (sessionState === "picking" && !isSpeaking) {
+      const t = setTimeout(() => startCmdLoop(), 400);
+      return () => { clearTimeout(t); stopCmdLoop(); };
+    } else {
+      stopCmdLoop();
+    }
+  }, [sessionState, isSpeaking, ttsUnlocked]); // eslint-disable-line
 
   // ── Handle qty submission ──────────────────────────────────────────────────
   const handleQtySubmit = useCallback((actual: number, expected: number, stopId: string) => {
@@ -717,10 +840,33 @@ export default function VoiceSessionPage() {
         </div>
 
         {/* NOVA Transcript */}
-        <div className="text-center max-w-2xl px-4 mb-10 min-h-[80px] flex items-center justify-center">
+        <div className="text-center max-w-2xl px-4 mb-4 min-h-[80px] flex items-center justify-center">
           <p className={`text-2xl md:text-3xl font-medium leading-relaxed ${isSpeaking ? 'text-white' : 'text-white/50'}`}>
             "{transcript}"
           </p>
+        </div>
+
+        {/* Repeat / Speed controls — always visible tap fallback */}
+        <div className="flex items-center justify-center gap-2 mb-6">
+          <button
+            onClick={() => { if (lastSpeechRef.current) speak(lastSpeechRef.current); }}
+            disabled={!transcript || isSpeaking}
+            className="flex items-center gap-1.5 rounded-xl bg-slate-800 border border-slate-700 hover:border-yellow-400/50 hover:bg-slate-750 disabled:opacity-30 transition px-4 py-2 text-sm font-bold text-slate-300"
+            title="Repeat last NOVA message"
+          >
+            <Volume2 className="h-4 w-4 text-yellow-400" />
+            {lang === "es" ? "Repita" : "Repeat"}
+          </button>
+          <button
+            onClick={() => { speechRateRef.current = Math.min(1.9, speechRateRef.current + 0.15); }}
+            className="rounded-xl bg-slate-800 border border-slate-700 hover:border-slate-500 transition px-3 py-2 text-xs font-bold text-slate-400"
+            title="Faster"
+          >▶▶</button>
+          <button
+            onClick={() => { speechRateRef.current = Math.max(0.7, speechRateRef.current - 0.15); }}
+            className="rounded-xl bg-slate-800 border border-slate-700 hover:border-slate-500 transition px-3 py-2 text-xs font-bold text-slate-400"
+            title="Slower"
+          >◀◀</button>
         </div>
 
         {/* Action area */}

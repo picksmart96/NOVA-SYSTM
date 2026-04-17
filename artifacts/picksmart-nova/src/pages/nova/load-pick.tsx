@@ -137,11 +137,13 @@ export default function NovaLoadPickPage() {
   const [isListening, setIsListening] = useState(false);
   const [micLabel,    setMicLabel]    = useState("");   // hint shown under mic indicator
 
-  const phaseRef    = useRef<Phase>("gate");
-  const asgnRef     = useRef<Asgn | null>(null);
-  const equipIdRef  = useRef("");
-  const safetyRef   = useRef(0);
-  const recRef      = useRef<any>(null);
+  const phaseRef       = useRef<Phase>("gate");
+  const asgnRef        = useRef<Asgn | null>(null);
+  const equipIdRef     = useRef("");
+  const safetyRef      = useRef(0);
+  const recRef         = useRef<any>(null);
+  const lastSpeechRef  = useRef<string>("");
+  const speechRateRef  = useRef<number>(1.25);
   // Always-on gate wake listener
   const [gateListening, setGateListening] = useState(false);
   const gateRecRef  = useRef<any>(null);
@@ -154,13 +156,14 @@ export default function NovaLoadPickPage() {
 
   // ── TTS ────────────────────────────────────────────────────────────────────
   const speak = useCallback((text: string, onEnd?: () => void) => {
+    lastSpeechRef.current = text;
     setIsSpeaking(true);
     setPrompt(text);
     stopListening();
     novaSpeak(text, lang, () => {
       setIsSpeaking(false);
       onEnd?.();
-    }, { rate: 0.9, pitch: 1 });
+    }, { rate: speechRateRef.current, pitch: 1 });
   }, [lang]); // eslint-disable-line
 
   // ── Mic ────────────────────────────────────────────────────────────────────
@@ -205,6 +208,26 @@ export default function NovaLoadPickPage() {
     rec.onresult = (e: any) => {
       gotResult = true;
       const heard = (e.results?.[0]?.[0]?.transcript || "").toLowerCase().trim();
+
+      // ── ES3 voice commands: Repeat / Faster / Slower ─────────────────────
+      if (/\brepeat\b|repita|repetir/i.test(heard)) {
+        gotResult = false; // allow restart
+        if (lastSpeechRef.current) speak(lastSpeechRef.current, () => startListening(hint, onResult));
+        return;
+      }
+      if (/\bfaster\b|más.?rápido|mas.?rapido/i.test(heard)) {
+        speechRateRef.current = Math.min(1.9, speechRateRef.current + 0.15);
+        gotResult = false;
+        speak(lang === "es" ? "Más rápido." : "Faster.", () => startListening(hint, onResult));
+        return;
+      }
+      if (/\bslower\b|más.?lento|mas.?lento/i.test(heard)) {
+        speechRateRef.current = Math.max(0.7, speechRateRef.current - 0.15);
+        gotResult = false;
+        speak(lang === "es" ? "Más lento." : "Slower.", () => startListening(hint, onResult));
+        return;
+      }
+      // ─────────────────────────────────────────────────────────────────────
       onResult(heard);
     };
     recRef.current = rec;
