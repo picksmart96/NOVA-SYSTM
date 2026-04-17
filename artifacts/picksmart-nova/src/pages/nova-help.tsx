@@ -1626,61 +1626,62 @@ export default function NovaHelpPage() {
           </button>
         )}
 
-        {/* Start / text input */}
-        {!sessionActive ? (
-          <div className="w-full space-y-3">
-            {/* Personalized greeting card for logged-in users */}
-            {isRealUser && firstName && (
-              <div className="rounded-2xl border border-violet-500/30 bg-violet-950/40 p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 rounded-full bg-violet-600 flex items-center justify-center text-xs font-bold">N</div>
-                  <span className="text-violet-300 text-xs font-bold uppercase tracking-wider">NOVA</span>
-                </div>
-                <p className="text-white text-sm leading-relaxed mb-1">
-                  <span className="font-bold text-yellow-300">Hey {firstName}!</span> Welcome back.
-                  {yestLog
-                    ? <> Yesterday you hit <span className="font-bold text-green-400">{yestLog.pickRate}%</span> in {yestLog.hours}h.{" "}
-                        {userGoal
-                          ? yestLog.pickRate >= userGoal.targetRate
-                            ? <span className="text-green-400">Above your goal — amazing!</span>
-                            : <span className="text-yellow-400">Your goal is {userGoal.targetRate}% — let's close that gap today.</span>
-                          : null}
-                      </>
-                    : userGoal
-                      ? <> Your goal this week is <span className="font-bold text-yellow-400">{userGoal.targetRate}%</span>. Let's go after it.</>
-                      : <> Log your performance on the Leaderboard so I can track it with you.</>}
-                </p>
-                <p className="text-slate-400 text-xs mt-2">Tap the button below — NOVA will greet you by voice and ask how you're feeling today.</p>
+        {/* Start / text input — text input always visible */}
+        <div className="w-full space-y-3">
+
+          {/* Personalized greeting card for logged-in users (pre-session) */}
+          {!sessionActive && isRealUser && firstName && (
+            <div className="rounded-2xl border border-violet-500/30 bg-violet-950/40 p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-7 h-7 rounded-full bg-violet-600 flex items-center justify-center text-xs font-bold">N</div>
+                <span className="text-violet-300 text-xs font-bold uppercase tracking-wider">NOVA</span>
               </div>
-            )}
-            <LockedAction onAllowedClick={startSession} className="w-full">
-              <button className="w-full py-5 rounded-xl bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-bold text-lg tracking-wide transition-all duration-200 shadow-[0_0_30px_rgba(139,92,246,0.35)] flex items-center justify-center gap-3">
-                <Mic className="h-5 w-5" />
-                {isRealUser && firstName
-                  ? (isSpanish ? `¡Hola ${firstName}! Toca para activar NOVA` : `Tap to Hear NOVA Greet You`)
-                  : (isSpanish ? "Iniciar Sesión" : "Start Session")}
-              </button>
-            </LockedAction>
-          </div>
-        ) : (
-          <form onSubmit={handleTextSubmit} className="w-full flex gap-3">
+              <p className="text-white text-sm leading-relaxed mb-1">
+                <span className="font-bold text-yellow-300">Hey {firstName}!</span> Welcome back.
+                {yestLog
+                  ? <> Yesterday you hit <span className="font-bold text-green-400">{yestLog.pickRate}%</span> in {yestLog.hours}h.{" "}
+                      {userGoal
+                        ? yestLog.pickRate >= userGoal.targetRate
+                          ? <span className="text-green-400">Above your goal — amazing!</span>
+                          : <span className="text-yellow-400">Your goal is {userGoal.targetRate}% — let's close that gap today.</span>
+                        : null}
+                    </>
+                  : userGoal
+                    ? <> Your goal this week is <span className="font-bold text-yellow-400">{userGoal.targetRate}%</span>. Let's go after it.</>
+                    : <> Log your performance on the Leaderboard so I can track it with you.</>}
+              </p>
+            </div>
+          )}
+
+          {/* ── Always-visible text input ── */}
+          <form onSubmit={handleTextSubmit} className="w-full flex gap-2">
             <input
               type="text"
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
               disabled={phase === "thinking"}
-              placeholder={isSpanish ? "O escribe tu pregunta…" : "Or type your question…"}
+              placeholder={isSpanish ? "Escribe tu pregunta aquí…" : "Type your question here…"}
               className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition disabled:opacity-40"
             />
             <button
               type="submit"
               disabled={!textInput.trim() || phase === "thinking"}
-              className="rounded-xl bg-violet-600 hover:bg-violet-500 px-5 py-3 font-bold text-white transition disabled:opacity-40 disabled:cursor-not-allowed"
+              className="rounded-xl bg-violet-600 hover:bg-violet-500 px-5 py-3 font-bold text-white transition disabled:opacity-40 disabled:cursor-not-allowed text-lg"
             >
               →
             </button>
           </form>
-        )}
+
+          {/* ── Optional voice button (collapses after session starts) ── */}
+          {!sessionActive && (
+            <LockedAction onAllowedClick={startSession} className="w-full">
+              <button className="w-full py-3 rounded-xl border border-violet-500/40 bg-violet-900/20 hover:bg-violet-800/30 text-violet-300 font-semibold text-sm tracking-wide transition-all duration-200 flex items-center justify-center gap-2">
+                <Mic className="h-4 w-4" />
+                {isSpanish ? "O toca para usar voz" : "Or tap to use voice"}
+              </button>
+            </LockedAction>
+          )}
+        </div>
 
         {/* Session log */}
         {log.length > 0 && (
