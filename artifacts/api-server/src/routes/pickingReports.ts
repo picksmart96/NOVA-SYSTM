@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { pickingSessionEventsTable, pickingReportsTable, psaUsers, assignmentsTable } from "@workspace/db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, or } from "drizzle-orm";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { openai } from "@workspace/integrations-openai-ai-server";
 
@@ -226,18 +226,26 @@ router.get("/picking-reports/trainee/:traineeId", requireAuth, async (req, res) 
   }
 });
 
-// ── GET /api/assignments/mine  (trainee: their pending/active assignment) ─────
+// ── GET /api/assignments/mine
+// Returns assignments where the caller is the selector (trainee) OR the trainer who created them.
+// This lets both trainees see their picks AND trainers see what they created.
 router.get("/assignments/mine", requireAuth, async (req, res) => {
   try {
+    const userId = req.psaUser!.sub;
     const assignments = await db
       .select()
       .from(assignmentsTable)
-      .where(eq(assignmentsTable.selectorUserId, req.psaUser!.sub))
+      .where(
+        or(
+          eq(assignmentsTable.selectorUserId, userId),
+          eq(assignmentsTable.trainerUserId, userId)
+        )
+      )
       .orderBy(desc(assignmentsTable.id))
-      .limit(10);
+      .limit(50);
     res.json(assignments);
   } catch (err) {
-    req.log.error({ err }, "Error fetching trainee assignments");
+    req.log.error({ err }, "Error fetching assignments");
     res.status(500).json({ error: "Internal server error" });
   }
 });
