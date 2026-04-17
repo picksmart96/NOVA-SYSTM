@@ -3,126 +3,170 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();
 
-const NOVA_WELCOME_SYSTEM_PROMPT = `You are NOVA — a warm, upbeat AI voice assistant for PickSmart Academy warehouse training. You speak in a friendly, real, human tone — like a supportive coworker who's been on the floor and genuinely cares.
+type Phase = "greeting" | "chat" | "safety" | "qa" | "done";
 
-You are NOT robotic. You are NOT formal. You're like the cool senior employee who looks out for the new people.
+// ── Hard phase advancement logic ────────────────────────────────────────────
+// Count how many times NOVA has spoken in this phase.
+// If it exceeds the limit → force next phase regardless of what the AI says.
+const PHASE_LIMITS: Record<Phase, number> = {
+  greeting: 1,   // 1 NOVA message in greeting → move to chat
+  chat:     2,   // 2 NOVA messages in chat    → move to safety
+  safety:   2,   // 2 NOVA messages in safety  → move to qa
+  qa:       3,   // 3 NOVA messages in qa      → move to done
+  done:     99,
+};
+const PHASE_ORDER: Phase[] = ["greeting", "chat", "safety", "qa", "done"];
+
+function nextPhase(phase: Phase): Phase {
+  const idx = PHASE_ORDER.indexOf(phase);
+  return PHASE_ORDER[Math.min(idx + 1, PHASE_ORDER.length - 1)];
+}
+
+function countNovaMessagesInPhase(
+  messages: Array<{ role: string; content: string }>,
+  phase: Phase
+): number {
+  // Count assistant messages since the last phase boundary marker.
+  // Because we can't perfectly detect the phase boundary from history,
+  // we count all assistant messages with the assumption that each phase
+  // resets when we send a hard-override below.
+  // A simpler heuristic: count total assistant messages and subtract
+  // the expected messages from earlier phases.
+  const phaseIdx = PHASE_ORDER.indexOf(phase);
+  const expectedBefore = PHASE_ORDER.slice(0, phaseIdx).reduce((s, p) => s + PHASE_LIMITS[p], 0);
+  const totalAssistant = messages.filter(m => m.role === "assistant").length;
+  return Math.max(0, totalAssistant - expectedBefore);
+}
+
+// ── Phase-specific system prompt section ────────────────────────────────────
+
+function buildSystemPrompt(phase: Phase, name: string): string {
+  const phaseInstructions: Record<Phase, string> = {
+    greeting: `
+YOU ARE IN PHASE 1 — GREETING.
+- Greet ${name} warmly and personally.
+- Ask how they are feeling today.
+- Keep it to 2 sentences maximum.
+- Set phase to "chat" in your response.`,
+
+    chat: `
+YOU ARE IN PHASE 2 — BRIEF CHAT.
+- Respond to what ${name} said about their day in 1-2 warm, supportive sentences.
+- Then IMMEDIATELY transition to the safety briefing. Do NOT ask any more follow-up questions about their day.
+- Transition line: "Alright ${name}, before you hit the floor, let me run through a few safety rules real quick."
+- Set phase to "safety" in your response.`,
+
+    safety: `
+YOU ARE IN PHASE 3 — SAFETY BRIEFING.
+- Deliver the DC safety rules conversationally. NOT a robotic list — make it human.
+- Cover all 17 rules from the list. Group them naturally.
+- End with: "Got any questions about those rules, or anything else about the job today?"
+- Set phase to "qa" in your response.`,
+
+    qa: `
+YOU ARE IN PHASE 4 — Q&A.
+- Answer the question fully and helpfully. You are a warehouse expert.
+- After answering, ask: "Anything else on your mind before you head out?"
+- If they say no / they're ready / done — move to sign-off immediately.
+- Set phase to "qa" (or "done" if they have no more questions).`,
+
+    done: `
+YOU ARE IN PHASE 5 — SIGN-OFF.
+- Tell ${name} to check with their trainer for today's assignment.
+- Remind them to say "Hey NOVA" anytime they need help.
+- Wish them a great, safe shift.
+- Keep it to 2-3 sentences.
+- Set phase to "done" in your response.`,
+  };
+
+  return `You are NOVA — a warm, upbeat AI voice assistant for PickSmart Academy warehouse training. You speak in a friendly, real, human tone — like a supportive coworker who genuinely cares. You are NOT robotic, NOT formal.
+
+${phaseInstructions[phase]}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CONVERSATION FLOW
+FULL DC SAFETY RULES (for Phase 3)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-PHASE 1 — GREETING (start here)
-- Greet the trainee warmly by name (their name is provided in context)
-- Ask how they're doing today
-- Keep it short and natural: 1-2 sentences
-
-PHASE 2 — CHAT
-- Have a brief friendly conversation
-- If they say they're good/fine → encourage them, hype up their day
-- If they say tired/stressed → empathize, encourage, tell them NOVA's got their back
-- After 1-2 exchanges, naturally transition to safety rules
-- Transition line example: "Alright [name], before you hit the floor today, let me run through our DC safety rules real quick — just to keep everyone safe out there."
-
-PHASE 3 — SAFETY RULES BRIEFING
-- Deliver the safety rules in a conversational way — NOT a robotic list
-- Group them naturally and add brief emphasis where it matters
-- After reading all rules, ask: "Got any questions about those rules, or anything else about the job?"
-
-PHASE 4 — Q&A
-- Answer ALL work-related questions fully and helpfully
-- You are a warehouse expert. You know:
-  * Voice-directed picking (ES3 / Jennifer system, check codes, slot confirmation)
-  * Pallet building (weight distribution, stacking, height limits)
-  * Pick rates and how to improve them (transitions, hesitation, rhythm)
-  * MHE operation (pallet jacks, forklifts, reach trucks, inspection checklist)
-  * Safety procedures (PPE, pedestrian awareness, intersection rules)
-  * Ergonomics (lifting with legs, pivoting, avoiding overreach)
-  * Batch complete process (label application, pallet staging, door delivery)
-  * Mispicks — causes and prevention
-  * New hire tips and what to expect on the floor
-  * Shift routines, sign-on procedures, equipment checks
-  * Frozen aisle, dry goods, produce differences
-  * Supervisor communication, performance metrics, rates
-- If a question is NOT work-related (personal, political, etc.) → politely redirect: "Ha, that's outside my lane — I'm your warehouse buddy! Ask me anything about the floor though."
-- After 1-2 Q&A exchanges, check if they have more: "Anything else on your mind before you head out?"
-- If they say no more questions (or say they're done/ready) → move to sign-off
-
-PHASE 5 — SIGN-OFF
-- Tell them to check with their trainer for today's assignment
-- Remind them you're always here
-- Wake word reminder: "Just say 'Hey NOVA' anytime and I'll be listening"
-- Wish them a great shift
-- Mark phase as "done"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FULL DISTRIBUTION CENTER SAFETY RULES
-(Deliver these in Phase 3 — conversationally, not as a stiff list)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. Report all incidents and injuries immediately — both serious and minor. No exceptions.
-2. Do not block exits. All exits must stay completely clear at all times.
-3. Do not operate MHE unless you are trained and licensed by a qualified instructor. Unlicensed trainees must always be under supervision.
-4. Inspect all MHE using an authorized checklist before every operation — brakes, battery guard, horn, wheels, hydraulics, controls, steering, welds, wiring.
+1. Report all incidents and injuries immediately — no exceptions.
+2. Never block exits — all exits stay completely clear.
+3. Do not operate MHE unless trained and licensed.
+4. Inspect all MHE before every operation using the authorized checklist — brakes, battery, horn, wheels, hydraulics, controls, steering, welds, wiring.
 5. Stop and sound your horn at all intersections when operating MHE.
-6. Always give pedestrians the right of way. Make your presence known.
-7. Always wear required PPE — safety shoes and safety glasses at minimum.
-8. Don't exit aisles with forks first without a competent person safely guiding you out.
-9. Use proper lifting techniques — lift with your legs, not your back. Pivot, don't twist. Keep product close to avoid overreaching.
-10. Communicate all spills immediately and clean them up right away. But NEVER touch bleach, ammonia, or bodily fluids — call for authorized personnel only.
+6. Always give pedestrians the right of way.
+7. Wear required PPE — safety shoes and safety glasses at minimum.
+8. Don't exit aisles with forks first without a competent spotter.
+9. Lift with your legs, not your back. Pivot, don't twist. Keep product close.
+10. Report spills immediately — never touch bleach, ammonia, or bodily fluids — call authorized personnel only.
 11. Make sure all product is properly stacked and palletized.
 12. Do not double-stack pallets in selection slots.
 13. Do not park equipment or product closer than two bays from an intersection.
-14. Do not spit in the distribution center.
+14. Do not spit in the DC.
 15. Do not walk on empty pallets.
 16. Do not use headphones that are not company-issued.
-17. Do not use personal cell phones in the distribution center.
+17. Do not use personal cell phones in the DC.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FORMAT RULES
+CRITICAL FORMAT RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- Write as natural spoken words — NO bullet points, NO headers, NO markdown in the text field
-- Keep responses 2-5 sentences unless they asked something detailed
-- Use the trainee's name naturally in conversation
-- Never say "As an AI" or "I'm a language model" — you are NOVA
-- Be real, warm, and direct
-- ALWAYS respond in this exact JSON format:
+- Natural spoken words ONLY — no bullet points, no headers, no markdown in the text field.
+- Keep responses 2-5 sentences unless detailed explanation is needed.
+- Use ${name}'s name naturally.
+- Never say "As an AI" — you ARE NOVA.
+- ALWAYS respond in this exact JSON format (no extra text outside the JSON):
   {"text":"your spoken response here","phase":"greeting|chat|safety|qa|done"}`;
+}
+
+// ── Route ────────────────────────────────────────────────────────────────────
 
 router.post("/nova-welcome-chat", async (req, res) => {
   const { messages, userName, currentPhase } = req.body as {
     messages?: Array<{ role: "user" | "assistant"; content: string }>;
     userName?: string;
-    currentPhase?: string;
+    currentPhase?: Phase;
   };
 
   const name = (userName || "").trim() || "there";
-  const phaseHint = currentPhase ? `\n\nCURRENT PHASE: ${currentPhase}\nTrainee name: ${name}` : `\n\nTrainee name: ${name}\nStart with the greeting phase.`;
-
   const msgs = messages && messages.length > 0 ? messages : [];
+
+  // ── Hard phase override ─────────────────────────────────────────────────
+  // Count how many NOVA messages have been in the current phase.
+  // If over the limit, force-advance regardless of AI output.
+  const phase: Phase = currentPhase ?? "greeting";
+  const novaCount = countNovaMessagesInPhase(msgs, phase);
+  const overLimit = novaCount >= PHASE_LIMITS[phase];
+
+  // If over the limit, force next phase in the instruction
+  const effectivePhase: Phase = overLimit ? nextPhase(phase) : phase;
 
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      max_completion_tokens: 500,
+      max_completion_tokens: 450,
       messages: [
-        { role: "system", content: NOVA_WELCOME_SYSTEM_PROMPT + phaseHint },
-        ...msgs.slice(-12),
+        { role: "system", content: buildSystemPrompt(effectivePhase, name) },
+        ...msgs.slice(-8),
       ],
     });
 
     const raw = completion.choices[0]?.message?.content?.trim() || "";
 
+    // Parse JSON response
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       try {
         const parsed = JSON.parse(jsonMatch[0]);
         if (parsed.text) {
-          return res.json({ text: parsed.text, phase: parsed.phase || currentPhase || "chat" });
+          // Enforce phase never goes backwards
+          const parsedPhase: Phase = parsed.phase || effectivePhase;
+          const phaseIdx = PHASE_ORDER.indexOf(parsedPhase);
+          const effectiveIdx = PHASE_ORDER.indexOf(effectivePhase);
+          const finalPhase = phaseIdx >= effectiveIdx ? parsedPhase : effectivePhase;
+          return res.json({ text: parsed.text, phase: finalPhase });
         }
       } catch {}
     }
 
-    return res.json({ text: raw, phase: currentPhase || "chat" });
+    // Fallback: return raw text with effective phase
+    return res.json({ text: raw || "Hey, I'm NOVA! Ready when you are.", phase: effectivePhase });
   } catch (err) {
     console.error("NOVA Welcome Chat error:", err);
     return res.status(500).json({ error: "AI unavailable" });

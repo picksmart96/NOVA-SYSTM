@@ -46,6 +46,7 @@ export default function AssignmentControlPage() {
     goalTimeMinutes: 60,
     printerNumber:  307,
     alphaLabelNumber: 242,
+    bravoLabelNumber: 578,
   });
 
   // Fetch real trainees from DB
@@ -82,6 +83,7 @@ export default function AssignmentControlPage() {
         goalTimeSeconds:   0,
         printerNumber:     Number(formData.printerNumber),
         alphaLabelNumber:  Number(formData.alphaLabelNumber),
+        bravoLabelNumber:  Number(formData.bravoLabelNumber),
         voiceMode:         formData.voiceMode,
       }
     }, {
@@ -239,15 +241,21 @@ export default function AssignmentControlPage() {
                   </div>
                 </div>
 
-                {/* Printer + Label */}
+                {/* Printer */}
+                <div className="space-y-2">
+                  <Label>Printer Number</Label>
+                  <Input type="number" value={formData.printerNumber} onChange={e => setFormData({ ...formData, printerNumber: Number(e.target.value) })} className="bg-background border-border" />
+                </div>
+
+                {/* Label Numbers */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Printer Number</Label>
-                    <Input type="number" value={formData.printerNumber} onChange={e => setFormData({ ...formData, printerNumber: Number(e.target.value) })} className="bg-background border-border" />
+                    <Label>Alpha Label #</Label>
+                    <Input type="number" value={formData.alphaLabelNumber} onChange={e => setFormData({ ...formData, alphaLabelNumber: Number(e.target.value) })} className="bg-background border-border" placeholder="e.g. 242" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Alpha Label #</Label>
-                    <Input type="number" value={formData.alphaLabelNumber} onChange={e => setFormData({ ...formData, alphaLabelNumber: Number(e.target.value) })} className="bg-background border-border" />
+                    <Label>Bravo Label #</Label>
+                    <Input type="number" value={formData.bravoLabelNumber} onChange={e => setFormData({ ...formData, bravoLabelNumber: Number(e.target.value) })} className="bg-background border-border" placeholder="e.g. 578" />
                   </div>
                 </div>
 
