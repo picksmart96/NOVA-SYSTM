@@ -160,9 +160,22 @@ export default function NovaLoadPickPage() {
     setIsSpeaking(true);
     setPrompt(text);
     stopListening();
+
+    // Safety timeout: if TTS hangs (common on iOS after page load), advance anyway.
+    // ~65ms per char at 1.25× rate + 2s buffer, minimum 3s.
+    let finished = false;
+    const safetyMs = Math.max(3000, Math.ceil(text.length * 65) + 2000);
+    const safetyTimer = setTimeout(() => {
+      if (!finished) { finished = true; setIsSpeaking(false); onEnd?.(); }
+    }, safetyMs);
+
     novaSpeak(text, lang, () => {
-      setIsSpeaking(false);
-      onEnd?.();
+      if (!finished) {
+        finished = true;
+        clearTimeout(safetyTimer);
+        setIsSpeaking(false);
+        onEnd?.();
+      }
     }, { rate: speechRateRef.current, pitch: 1 });
   }, [lang]); // eslint-disable-line
 
@@ -360,9 +373,14 @@ export default function NovaLoadPickPage() {
   const loadAssignment = useCallback(async () => {
     setPhase("loading");
     try {
-      const res = await fetch("/api/assignments/mine", {
+      // 6-second timeout so the loading screen never freezes permanently
+      const ctrl = new AbortController();
+      const tid  = setTimeout(() => ctrl.abort(), 6000);
+      const res  = await fetch("/api/assignments/mine", {
         headers: { Authorization: `Bearer ${jwtToken}` },
+        signal: ctrl.signal,
       });
+      clearTimeout(tid);
       const data: Asgn[] = res.ok ? await res.json() : [];
       const mine = data.find(
         a => a.selectorUserId === currentUser?.id &&
@@ -379,7 +397,7 @@ export default function NovaLoadPickPage() {
         doSayLoadPick(PRACTICE);
       }
     } catch {
-      // Fallback to practice mode on error
+      // Fallback to practice mode on any error / timeout / abort
       setAsgn(PRACTICE);
       asgnRef.current = PRACTICE;
       doSayLoadPick(PRACTICE);
@@ -453,16 +471,13 @@ export default function NovaLoadPickPage() {
     if (phase !== "gate") stopGateListen();
   }, [phase, stopGateListen]);
 
-  // ── Gate tap — unlocks audio ──────────────────────────────────────────────
+  // ── Gate tap — clears any stuck speech queue then starts the flow ──────────
   const handleTapStart = () => {
     stopGateListen();
-    try {
-      const u = new SpeechSynthesisUtterance("\u200B");
-      u.volume = 0;
-      window.speechSynthesis.speak(u);
-      window.speechSynthesis.cancel();
-    } catch {}
-    loadAssignment();
+    // Clear any stuck speech-synthesis queue, then wait one tick before starting
+    // (speaking then immediately cancelling can leave the TTS engine in a bad state)
+    try { window.speechSynthesis.cancel(); } catch {}
+    setTimeout(() => loadAssignment(), 80);
   };
 
   useEffect(() => { handleTapStartRef.current = handleTapStart; }, [handleTapStart]);
