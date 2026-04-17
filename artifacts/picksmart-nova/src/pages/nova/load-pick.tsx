@@ -44,6 +44,45 @@ function spellId(id: string) { return id.split("").join(". "); }
 // Display on screen:               "0001" → "0-0-0-1"
 function displayId(id: string) { return id.split("").join("-"); }
 
+// ── Word → number ─────────────────────────────────────────────────────────────
+// Handles: "two"→2, "dos"→2, "to"→2, "#"→null, "2"→2
+const NUM_MAP: Record<string,number> = {
+  one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,
+  eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,
+  sixteen:16,seventeen:17,eighteen:18,nineteen:19,twenty:20,
+  // homophones / mishears
+  to:2,too:2,tu:2,won:1,tree:3,fore:4,"for":4,ate:8,
+  // Spanish
+  uno:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,
+  once:11,doce:12,trece:13,catorce:14,quince:15,veinte:20,
+};
+function wordToNumber(raw: string): number | null {
+  const s = raw.toLowerCase().trim();
+  if (NUM_MAP[s] !== undefined) return NUM_MAP[s];
+  const digits = s.replace(/[^0-9]/g, "");
+  if (!digits) return null;
+  const n = parseInt(digits, 10);
+  return isNaN(n) ? null : n;
+}
+
+// ── Spoken equip ID: "zero zero zero one" → "0001" ───────────────────────────
+const DIGIT_WORDS: Record<string,string> = {
+  zero:"0",oh:"0",one:"1",two:"2",three:"3",four:"4",five:"5",
+  six:"6",seven:"7",eight:"8",nine:"9",
+  to:"2",too:"2",tree:"3",fore:"4",
+  cero:"0",uno:"1",dos:"2",tres:"3",cuatro:"4",cinco:"5",
+  seis:"6",siete:"7",ocho:"8",nueve:"9",
+};
+function spokenToId(text: string): string {
+  const wordConverted = text.toLowerCase().trim()
+    .split(/\s+/)
+    .map(w => DIGIT_WORDS[w] ?? w.replace(/[^a-z0-9]/gi, ""))
+    .join("")
+    .toUpperCase();
+  const direct = text.replace(/\s+/g,"").replace(/[^a-z0-9]/gi,"").toUpperCase();
+  return wordConverted || direct;
+}
+
 // ── Phase ─────────────────────────────────────────────────────────────────────
 type Phase =
   | "gate"
@@ -139,10 +178,32 @@ export default function NovaLoadPickPage() {
     rec.continuous     = false;
     rec.interimResults = false;
     rec.lang           = novaRecogLang(lang);
+    let gotResult      = false;
+
     rec.onstart  = () => { setIsListening(true); setMicLabel(hint); };
-    rec.onend    = () => { setIsListening(false); recRef.current = null; };
-    rec.onerror  = () => { setIsListening(false); recRef.current = null; };
+    rec.onerror  = (e: any) => {
+      setIsListening(false);
+      recRef.current = null;
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") return;
+      // Auto-retry on network/no-speech errors
+      if (!gotResult) {
+        const p = phaseRef.current;
+        const needsMic = ["equip_enter","equip_confirm","pallet_enter","pallet_confirm","safety","say_load_pick"].includes(p);
+        if (needsMic) setTimeout(() => startListening(hint, onResult), 800);
+      }
+    };
+    rec.onend = () => {
+      setIsListening(false);
+      recRef.current = null;
+      // If mic dropped before user spoke, restart
+      if (!gotResult) {
+        const p = phaseRef.current;
+        const needsMic = ["equip_enter","equip_confirm","pallet_enter","pallet_confirm","safety"].includes(p);
+        if (needsMic) setTimeout(() => startListening(hint, onResult), 600);
+      }
+    };
     rec.onresult = (e: any) => {
+      gotResult = true;
       const heard = (e.results?.[0]?.[0]?.transcript || "").toLowerCase().trim();
       onResult(heard);
     };
@@ -157,11 +218,9 @@ export default function NovaLoadPickPage() {
 
   const doSayLoadPick = useCallback((a: Asgn) => {
     setPhase("say_load_pick");
+    // Just say it, then auto-advance — no echo requirement
     speak(lang === "es" ? "Cargar turno." : "Load Pick.", () => {
-      startListening(lang === "es" ? `Di "Cargar Turno"` : `Say "Load Pick"`, heard => {
-        if (/load.?pick|cargar|turno/i.test(heard)) doEquipEnter();
-        else doSayLoadPick(a);
-      });
+      setTimeout(() => doEquipEnter(), 700);
     });
   }, [lang]); // eslint-disable-line
 
@@ -169,8 +228,13 @@ export default function NovaLoadPickPage() {
     setPhase("equip_enter");
     speak(lang === "es" ? "Ingresa el número de equipo." : "Enter equipment ID.", () => {
       startListening(lang === "es" ? "Di el número de equipo" : "Speak equipment ID", heard => {
-        const n = heard.replace(/\s+/g, "").replace(/[^a-z0-9]/gi, "").toUpperCase();
-        if (n) setEquipInput(n);
+        const id = spokenToId(heard);
+        if (id) {
+          setEquipInput(id);
+          submitEquip(id);          // ← auto-submit immediately
+        } else {
+          doEquipEnter();            // nothing heard — retry
+        }
       });
     });
   }, [lang]); // eslint-disable-line
@@ -197,8 +261,14 @@ export default function NovaLoadPickPage() {
         ? `Ingresa el conteo máximo de tarimas para el equipo ${spellId(eId)}.`
         : `Enter maximum pallet count for jack ${spellId(eId)}.`,
       () => startListening(lang === "es" ? "Di el número de tarimas" : "Speak number of pallets", heard => {
-        const num = parseInt(heard.replace(/[^0-9]/g, ""), 10);
-        if (!isNaN(num) && num > 0) setPalletInput(String(num));
+        // wordToNumber handles "two"→2, "#"→null, "dos"→2, "2"→2
+        const num = wordToNumber(heard);
+        if (num !== null && num > 0) {
+          setPalletInput(String(num));
+          submitPallet(String(num));  // ← auto-submit immediately
+        } else {
+          doPalletEnter(eId);         // nothing recognized — retry
+        }
       })
     );
   }, [lang]); // eslint-disable-line
@@ -423,7 +493,7 @@ export default function NovaLoadPickPage() {
         </div>
         <div>
           <p className="font-black text-white">Load Pick</p>
-          <p className="text-slate-500 text-xs">ES3 Sign-On · Tap buttons to advance</p>
+          <p className="text-slate-500 text-xs">ES3 Sign-On · Voice-guided · tap buttons to advance</p>
         </div>
       </div>
 
