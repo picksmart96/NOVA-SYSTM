@@ -327,13 +327,16 @@ export default function SelectorPortalPage() {
             )}
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
-            {/* Talk to NOVA AI button */}
+            {/* Talk to NOVA AI — safety briefing button (always visible) */}
             <button
               onClick={() => setShowWelcome(true)}
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl border border-yellow-400/40 bg-yellow-400/5 hover:bg-yellow-400/10 transition text-yellow-300 font-bold text-sm"
+              className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-yellow-400 hover:bg-yellow-300 active:scale-95 transition shadow-lg shadow-yellow-400/20 text-slate-950"
             >
-              <Headphones className="h-4 w-4 text-yellow-400" />
-              Talk to NOVA
+              <Headphones className="h-5 w-5 shrink-0" />
+              <div className="text-left leading-tight">
+                <p className="font-black text-sm">NOVA Safety Briefing</p>
+                <p className="text-xs font-medium opacity-70">Tap to talk with NOVA</p>
+              </div>
             </button>
             {/* Account Number card — always shown */}
             {currentUser?.accountNumber && (

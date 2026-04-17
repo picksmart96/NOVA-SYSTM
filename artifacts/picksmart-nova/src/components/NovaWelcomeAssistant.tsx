@@ -295,13 +295,12 @@ export default function NovaWelcomeAssistant({ userName, lang = "en", onDismiss 
   // ── Start conversation ────────────────────────────────────────────────────
 
   const startConversation = useCallback(async (micOk: boolean) => {
-    // Prime TTS (iOS needs a user-gesture audio context)
-    try {
-      const u = new SpeechSynthesisUtterance("\u200B");
-      u.volume = 0;
-      window.speechSynthesis.speak(u);
-      window.speechSynthesis.cancel();
-    } catch {}
+    // Clear any stuck speech queue, then wait a tick before calling the AI
+    // (speaking a silent utterance then immediately cancelling can corrupt the
+    //  TTS engine state on Chrome/iOS — a plain cancel + short pause is safer)
+    try { window.speechSynthesis.cancel(); } catch {}
+
+    await new Promise(r => setTimeout(r, 80));
 
     const { text, phase } = await callNova([], "greeting");
     const assistantMsg: Message = { role: "assistant", content: text };
