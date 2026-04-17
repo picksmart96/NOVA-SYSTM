@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { assignmentsTable, assignmentStopsTable } from "@workspace/db";
-import { eq, count, avg, sum, sql } from "drizzle-orm";
+import { eq, or, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { requireAuth } from "../middleware/requireAuth.js";
 
 const router = Router();
 
@@ -21,6 +22,28 @@ router.get("/assignments/summary", async (req, res) => {
     res.json({ total, active, pending, completed, avgPerformance, totalCasesToday });
   } catch (err) {
     req.log.error({ err }, "Error getting summary");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /api/assignments/mine ─────────────────────────────────────────────────
+// Returns assignments assigned TO this user (as selector) PLUS assignments this
+// user created as a trainer — so both sides of the relationship are visible.
+router.get("/assignments/mine", requireAuth, async (req, res) => {
+  try {
+    const userId = req.psaUser!.sub;
+    const assignments = await db
+      .select()
+      .from(assignmentsTable)
+      .where(
+        or(
+          eq(assignmentsTable.selectorUserId, userId),
+          eq(assignmentsTable.trainerUserId,  userId),
+        )
+      );
+    res.json(assignments);
+  } catch (err) {
+    req.log.error({ err }, "Error fetching mine assignments");
     res.status(500).json({ error: "Internal server error" });
   }
 });
