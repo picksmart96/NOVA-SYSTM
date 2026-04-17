@@ -6,6 +6,7 @@ import { useTrainerStore } from "@/lib/trainerStore";
 import { useSupervisorPostStore } from "@/lib/supervisorPostStore";
 import { usePerformanceStore } from "@/lib/performanceStore";
 import { novaSpeak, novaRecogLang, NOVA_TEXT, matchNovaCommand } from "@/lib/novaSpeech";
+import NovaWelcomeAssistant, { hasSeenWelcomeToday, markWelcomeSeen } from "@/components/NovaWelcomeAssistant";
 import {
   Headphones, BookOpen, HelpCircle, TrendingUp, Star, AlertTriangle, KeyRound,
   DoorOpen, Mic, MicOff, Volume2, VolumeX, Megaphone, ShieldCheck, Zap,
@@ -88,6 +89,12 @@ export default function SelectorPortalPage() {
   const { messages: coachMsgs, markRead: markCoachRead } = useMyCoaching(8000);
   const [visibleCoachId, setVisibleCoachId] = useState<string | null>(null);
   const spokenCoachIds = useRef<Set<string>>(new Set());
+
+  // ── NOVA Welcome AI overlay ─────────────────────────────────────────────────
+  const [showWelcome, setShowWelcome] = useState(() => {
+    const uname = currentUser?.username ?? "";
+    return uname ? !hasSeenWelcomeToday(uname) : false;
+  });
 
   // ── Voice / Speech state ───────────────────────────────────────────────────
   const [muted, setMuted] = useState(false);
@@ -241,6 +248,19 @@ export default function SelectorPortalPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white px-3 py-5 sm:px-6 sm:py-8">
+
+      {/* NOVA AI Welcome overlay */}
+      {showWelcome && (
+        <NovaWelcomeAssistant
+          userName={currentUser?.fullName?.split(" ")[0] || currentUser?.username || "there"}
+          lang={lang}
+          onDismiss={() => {
+            markWelcomeSeen(currentUser?.username ?? "");
+            setShowWelcome(false);
+          }}
+        />
+      )}
+
       <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8">
 
         {/* Header */}
@@ -260,6 +280,14 @@ export default function SelectorPortalPage() {
             )}
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
+            {/* Talk to NOVA AI button */}
+            <button
+              onClick={() => setShowWelcome(true)}
+              className="flex items-center gap-2 px-5 py-3 rounded-2xl border border-yellow-400/40 bg-yellow-400/5 hover:bg-yellow-400/10 transition text-yellow-300 font-bold text-sm"
+            >
+              <Headphones className="h-4 w-4 text-yellow-400" />
+              Talk to NOVA
+            </button>
             {/* Account Number card — always shown */}
             {currentUser?.accountNumber && (
               <div className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-3 flex items-center gap-3">
