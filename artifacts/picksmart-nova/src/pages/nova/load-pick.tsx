@@ -620,21 +620,40 @@ export default function NovaLoadPickPage() {
         {/* ── EQUIPMENT ENTER ── */}
         {phase === "equip_enter" && (
           <div className="w-full space-y-3">
+            {/* Listening badge */}
+            <div className={`flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold uppercase tracking-widest ${
+              isListening ? "text-green-400" : isSpeaking ? "text-yellow-400" : "text-slate-500"
+            }`}>
+              {isListening && <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />}
+              {isSpeaking  && <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />}
+              {isListening ? "NOVA is listening — say your equipment ID"
+               : isSpeaking ? "NOVA is speaking…"
+               : "Say or type your equipment ID"}
+            </div>
             <label className="block text-xs text-slate-500 font-bold uppercase tracking-widest text-center">Equipment ID</label>
             <div className="rounded-2xl border border-slate-700 bg-slate-900 p-1">
               <input
                 type="text"
                 value={equipInput}
                 onChange={e => setEquipInput(e.target.value.replace(/\s/g, "").toUpperCase())}
-                onKeyDown={e => e.key === "Enter" && equipInput.trim() && submitEquip(equipInput)}
+                onKeyDown={e => { if (e.key === "Enter") { if (equipInput.trim()) submitEquip(equipInput); } }}
                 placeholder="e.g. 0001"
-                autoFocus
                 className="w-full bg-transparent px-4 py-3 text-white text-3xl font-black tracking-[0.3em] text-center placeholder:text-slate-700 outline-none"
               />
             </div>
-            <button onClick={() => submitEquip(equipInput)} disabled={!equipInput.trim()}
-              className="w-full py-5 rounded-3xl bg-yellow-400 text-slate-950 font-black text-xl hover:bg-yellow-300 active:scale-95 transition disabled:opacity-40">
-              Confirm Equipment ID
+            {/* Always-enabled: when empty, re-prompt; when filled, submit */}
+            <button
+              onClick={() => {
+                if (equipInput.trim()) {
+                  submitEquip(equipInput);
+                } else {
+                  // Re-prompt NOVA and restart listening
+                  stopListening();
+                  doEquipEnter();
+                }
+              }}
+              className="w-full py-5 rounded-3xl bg-yellow-400 text-slate-950 font-black text-xl hover:bg-yellow-300 active:scale-95 transition shadow-lg shadow-yellow-400/20">
+              {equipInput.trim() ? "Confirm Equipment ID" : "Tap to Repeat Prompt"}
             </button>
           </div>
         )}
@@ -661,6 +680,16 @@ export default function NovaLoadPickPage() {
         {/* ── PALLET ENTER ── */}
         {phase === "pallet_enter" && (
           <div className="w-full space-y-3">
+            {/* Listening badge */}
+            <div className={`flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold uppercase tracking-widest ${
+              isListening ? "text-green-400" : isSpeaking ? "text-yellow-400" : "text-slate-500"
+            }`}>
+              {isListening && <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />}
+              {isSpeaking  && <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />}
+              {isListening ? "NOVA is listening — say the pallet count"
+               : isSpeaking ? "NOVA is speaking…"
+               : "Say or type the pallet count"}
+            </div>
             <label className="block text-xs text-slate-500 font-bold uppercase tracking-widest text-center">
               Max Pallets — Jack {equipId}
             </label>
@@ -669,16 +698,26 @@ export default function NovaLoadPickPage() {
                 type="number" min="1" max="20"
                 value={palletInput}
                 onChange={e => setPalletInput(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && palletInput.trim() && submitPallet(palletInput)}
+                onKeyDown={e => { if (e.key === "Enter") { if (palletInput.trim()) submitPallet(palletInput); } }}
                 placeholder="e.g. 2"
-                autoFocus
                 className="w-full bg-transparent px-4 py-3 text-white text-3xl font-black tracking-[0.3em] text-center placeholder:text-slate-700 outline-none"
               />
             </div>
-            <button onClick={() => submitPallet(palletInput)}
-              disabled={!palletInput.trim() || isNaN(parseInt(palletInput))}
-              className="w-full py-5 rounded-3xl bg-yellow-400 text-slate-950 font-black text-xl hover:bg-yellow-300 active:scale-95 transition disabled:opacity-40">
-              Confirm Pallet Count
+            {/* Always-enabled: when empty/invalid, re-prompt; when valid, submit */}
+            <button
+              onClick={() => {
+                const n = parseInt(palletInput, 10);
+                if (palletInput.trim() && !isNaN(n) && n > 0) {
+                  submitPallet(palletInput);
+                } else {
+                  stopListening();
+                  doPalletEnter(equipId);
+                }
+              }}
+              className="w-full py-5 rounded-3xl bg-yellow-400 text-slate-950 font-black text-xl hover:bg-yellow-300 active:scale-95 transition shadow-lg shadow-yellow-400/20">
+              {palletInput.trim() && !isNaN(parseInt(palletInput)) && parseInt(palletInput) > 0
+                ? "Confirm Pallet Count"
+                : "Tap to Repeat Prompt"}
             </button>
           </div>
         )}
