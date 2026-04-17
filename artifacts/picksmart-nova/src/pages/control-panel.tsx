@@ -1,12 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
-import { useAuthStore } from "@/lib/authStore";
+import { useAuthStore, AuthAccount } from "@/lib/authStore";
 import { usePerformanceStore } from "@/lib/performanceStore";
 import { useLocation } from "wouter";
 import {
   Users, Activity, TrendingUp, TrendingDown, Copy, Check,
   ShieldCheck, Briefcase, BarChart3, Zap, LogOut,
   UserPlus, Link as LinkIcon, Eye, EyeOff, Star,
-  CheckCircle2, AlertCircle, Clock, Target
+  CheckCircle2, AlertCircle, Clock, Target, X
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
@@ -45,6 +45,7 @@ export default function ControlPanelPage() {
   const [copiedMgr, setCopiedMgr] = useState(false);
   const [showSupLink, setShowSupLink] = useState(false);
   const [showMgrLink, setShowMgrLink] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<AuthAccount | null>(null);
 
   const isOwner = currentUser?.role === "owner";
   const isDirector = currentUser?.role === "director" || isOwner;
@@ -232,15 +233,20 @@ export default function ControlPanelPage() {
                     };
                     const colorCls = roleColors[acc.role] ?? "bg-slate-500/20 text-slate-300";
                     const hasLoggedToday = (userLogs[acc.username] ?? []).some((l) => l.date === todayStr);
+                    const sessionCount = (userLogs[acc.username] ?? []).length;
                     return (
-                      <div key={acc.id} className="px-6 py-3.5 flex items-center justify-between">
+                      <div
+                        key={acc.id}
+                        onClick={() => setSelectedUser(acc)}
+                        className="px-6 py-3.5 flex items-center justify-between cursor-pointer hover:bg-slate-800/50 transition"
+                      >
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-white">
                             {acc.fullName.charAt(0).toUpperCase()}
                           </div>
                           <div>
                             <p className="text-white text-sm font-semibold">{acc.fullName}</p>
-                            <p className="text-slate-500 text-xs">@{acc.username}</p>
+                            <p className="text-slate-500 text-xs">@{acc.username} · {sessionCount} session{sessionCount !== 1 ? "s" : ""}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -466,6 +472,113 @@ export default function ControlPanelPage() {
           </div>
         )}
       </div>
+
+      {/* ── User Detail Modal ── */}
+      {selectedUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/80 backdrop-blur-sm px-4 pb-4 sm:pb-0"
+          onClick={() => setSelectedUser(null)}
+        >
+          <div
+            className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-yellow-400/20 flex items-center justify-center font-black text-yellow-400 text-sm">
+                  {selectedUser.fullName[0]?.toUpperCase()}
+                </div>
+                <div>
+                  <p className="font-black text-white">{selectedUser.fullName}</p>
+                  <p className="text-xs text-slate-500">@{selectedUser.username}</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedUser(null)} className="text-slate-500 hover:text-white transition">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Details */}
+            <div className="px-6 py-5 space-y-4">
+              {/* Role badge */}
+              <div className="flex flex-wrap gap-2">
+                {(() => {
+                  const roleColors: Record<string, string> = {
+                    selector: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+                    trainer: "bg-green-500/20 text-green-300 border-green-500/30",
+                    supervisor: "bg-orange-500/20 text-orange-300 border-orange-500/30",
+                    manager: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+                    director: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
+                    owner: "bg-red-500/20 text-red-300 border-red-500/30",
+                  };
+                  return (
+                    <span className={`text-xs font-bold px-3 py-1 rounded-full border capitalize ${roleColors[selectedUser.role] ?? "bg-slate-700 text-slate-300 border-slate-600"}`}>
+                      {selectedUser.role}
+                    </span>
+                  );
+                })()}
+                <span className={`text-xs font-bold px-3 py-1 rounded-full border capitalize ${
+                  selectedUser.status === "active"
+                    ? "bg-green-500/10 text-green-300 border-green-500/30"
+                    : selectedUser.status === "banned"
+                    ? "bg-red-500/10 text-red-300 border-red-500/30"
+                    : "bg-slate-700 text-slate-400 border-slate-600"
+                }`}>{selectedUser.status}</span>
+                {selectedUser.subscriptionPlan && (
+                  <span className="text-xs font-bold px-3 py-1 rounded-full border capitalize bg-yellow-500/10 text-yellow-300 border-yellow-500/30">
+                    {selectedUser.subscriptionPlan}
+                  </span>
+                )}
+              </div>
+
+              {/* Stats grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-slate-800 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Account #</p>
+                  <p className="font-black text-yellow-400 text-sm">{selectedUser.accountNumber ?? "—"}</p>
+                </div>
+                <div className="rounded-xl bg-slate-800 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Total Sessions</p>
+                  <p className="font-black text-white text-sm">{(userLogs[selectedUser.username] ?? []).length}</p>
+                </div>
+                <div className="rounded-xl bg-slate-800 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Joined</p>
+                  <p className="font-black text-white text-sm">{selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : "—"}</p>
+                </div>
+                <div className="rounded-xl bg-slate-800 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Logged Today</p>
+                  <p className={`font-black text-sm ${(userLogs[selectedUser.username] ?? []).some((l) => l.date === new Date().toISOString().slice(0,10)) ? "text-green-400" : "text-slate-500"}`}>
+                    {(userLogs[selectedUser.username] ?? []).some((l) => l.date === new Date().toISOString().slice(0,10)) ? "Yes" : "No"}
+                  </p>
+                </div>
+              </div>
+
+              {selectedUser.email && (
+                <div className="rounded-xl bg-slate-800 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Email</p>
+                  <p className="text-white text-sm break-all">{selectedUser.email}</p>
+                </div>
+              )}
+              {selectedUser.companyName && (
+                <div className="rounded-xl bg-slate-800 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Company</p>
+                  <p className="text-white text-sm">{selectedUser.companyName}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 pb-6">
+              <button
+                onClick={() => setSelectedUser(null)}
+                className="w-full rounded-xl border border-slate-700 py-2.5 text-sm font-bold text-slate-300 hover:border-slate-500 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

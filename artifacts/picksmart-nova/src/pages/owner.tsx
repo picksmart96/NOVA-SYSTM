@@ -298,11 +298,14 @@ function AccountNumberLookup({ accounts }: { accounts: AuthAccount[] }) {
 
 function UserManagement() {
   const { accounts, banUser, unbanUser, changeRole, removeAccount } = useAuthStore();
+  const { userLogs } = usePerformanceStore();
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState<string>("all");
   const [filterPlan, setFilterPlan] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [changingRole, setChangingRole] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<AuthAccount | null>(null);
 
   const filtered = accounts.filter((a) => {
     const matchSearch =
@@ -371,86 +374,231 @@ function UserManagement() {
         {filtered.length === 0 && (
           <p className="text-slate-600 text-sm text-center py-6">No users match your filters.</p>
         )}
-        {filtered.map((u) => (
-          <div key={u.id} className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-              <div>
-                <p className="font-bold text-white">{u.fullName}</p>
-                <p className="text-xs text-slate-500">@{u.username}</p>
-                {u.accountNumber && (
-                  <span className="inline-block mt-1 rounded-lg border border-slate-700 bg-slate-900 px-2 py-0.5 text-xs font-black text-yellow-400 tracking-widest">
-                    {u.accountNumber}
-                  </span>
-                )}
+        {filtered.map((u) => {
+          const sessionCount = (userLogs[u.username] ?? []).length;
+          return (
+            <div
+              key={u.id}
+              onClick={() => setSelectedUser(u)}
+              className="rounded-2xl border border-slate-800 bg-slate-950 p-4 cursor-pointer hover:border-yellow-400/40 hover:bg-slate-900 transition"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <div>
+                  <p className="font-bold text-white">{u.fullName}</p>
+                  <p className="text-xs text-slate-500">@{u.username}</p>
+                  {u.accountNumber && (
+                    <span className="inline-block mt-1 rounded-lg border border-slate-700 bg-slate-900 px-2 py-0.5 text-xs font-black text-yellow-400 tracking-widest">
+                      {u.accountNumber}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <RoleBadge role={u.role} />
+                  <PlanBadge plan={u.subscriptionPlan} />
+                  <StatusBadge status={u.status} />
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <RoleBadge role={u.role} />
-                <PlanBadge plan={u.subscriptionPlan} />
-                <StatusBadge status={u.status} />
+
+              {/* Session count hint */}
+              <p className="text-xs text-slate-600 mb-2">{sessionCount} session{sessionCount !== 1 ? "s" : ""} logged · tap to view details</p>
+
+              {/* Actions */}
+              {u.id !== "master" && (
+                <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+                  {/* Change Role inline */}
+                  {changingRole === u.id ? (
+                    <div className="flex items-center gap-2">
+                      <select
+                        className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs"
+                        defaultValue={u.role}
+                        onChange={(e) => {
+                          changeRole(u.id, e.target.value as AuthRole);
+                          setChangingRole(null);
+                        }}
+                      >
+                        {(["selector","trainer","supervisor","manager"] as AuthRole[]).map((r) => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => setChangingRole(null)}
+                        className="text-xs text-slate-500 hover:text-slate-300"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setChangingRole(u.id)}
+                      className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs hover:border-yellow-400 transition"
+                    >
+                      Change Role
+                    </button>
+                  )}
+
+                  {u.status === "banned" ? (
+                    <button
+                      onClick={() => unbanUser(u.id)}
+                      className="rounded-lg border border-green-500/30 px-3 py-1.5 text-xs text-green-300 hover:bg-green-500/10 transition"
+                    >
+                      Unban
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => banUser(u.id)}
+                      className="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 transition"
+                    >
+                      Ban
+                    </button>
+                  )}
+
+                  {/* Remove — inline confirmation (no browser confirm) */}
+                  {confirmRemove === u.id ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-red-400 font-semibold">Remove account?</span>
+                      <button
+                        onClick={() => { removeAccount(u.id); setConfirmRemove(null); setSelectedUser(null); }}
+                        className="rounded-lg bg-red-600 hover:bg-red-500 px-3 py-1 text-xs font-bold text-white transition"
+                      >
+                        Yes, remove
+                      </button>
+                      <button
+                        onClick={() => setConfirmRemove(null)}
+                        className="rounded-lg border border-slate-600 px-3 py-1 text-xs font-bold text-slate-300 hover:border-slate-400 transition"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmRemove(u.id)}
+                      className="rounded-lg border border-red-500/20 px-3 py-1.5 text-xs text-red-500 hover:bg-red-500/10 transition"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── User Detail Modal ── */}
+      {selectedUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/80 backdrop-blur-sm px-4 pb-4 sm:pb-0"
+          onClick={() => setSelectedUser(null)}
+        >
+          <div
+            className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-yellow-400/20 flex items-center justify-center font-black text-yellow-400 text-sm">
+                  {selectedUser.fullName[0]?.toUpperCase()}
+                </div>
+                <div>
+                  <p className="font-black text-white">{selectedUser.fullName}</p>
+                  <p className="text-xs text-slate-500">@{selectedUser.username}</p>
+                </div>
               </div>
+              <button onClick={() => setSelectedUser(null)} className="text-slate-500 hover:text-white transition">
+                <X className="h-5 w-5" />
+              </button>
             </div>
 
-            {/* Actions */}
-            {u.id !== "master" && (
+            {/* Details */}
+            <div className="px-6 py-5 space-y-4">
+              {/* Badges */}
               <div className="flex flex-wrap gap-2">
-                {/* Change Role inline */}
-                {changingRole === u.id ? (
-                  <div className="flex items-center gap-2">
-                    <select
-                      className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs"
-                      defaultValue={u.role}
-                      onChange={(e) => {
-                        changeRole(u.id, e.target.value as AuthRole);
-                        setChangingRole(null);
-                      }}
-                    >
-                      {(["selector","trainer","supervisor","manager"] as AuthRole[]).map((r) => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
-                    </select>
+                <RoleBadge role={selectedUser.role} />
+                <PlanBadge plan={selectedUser.subscriptionPlan} />
+                <StatusBadge status={selectedUser.status} />
+              </div>
+
+              {/* Stats grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-slate-800 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Account #</p>
+                  <p className="font-black text-yellow-400 text-sm">{selectedUser.accountNumber ?? "—"}</p>
+                </div>
+                <div className="rounded-xl bg-slate-800 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Total Sessions</p>
+                  <p className="font-black text-white text-sm">{(userLogs[selectedUser.username] ?? []).length}</p>
+                </div>
+                <div className="rounded-xl bg-slate-800 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Joined</p>
+                  <p className="font-black text-white text-sm">{selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : "—"}</p>
+                </div>
+                <div className="rounded-xl bg-slate-800 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Plan</p>
+                  <p className="font-black text-white capitalize text-sm">{selectedUser.subscriptionPlan ?? "none"}</p>
+                </div>
+              </div>
+
+              {selectedUser.email && (
+                <div className="rounded-xl bg-slate-800 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Email</p>
+                  <p className="text-white text-sm break-all">{selectedUser.email}</p>
+                </div>
+              )}
+              {selectedUser.companyName && (
+                <div className="rounded-xl bg-slate-800 p-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Company</p>
+                  <p className="text-white text-sm">{selectedUser.companyName}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer actions */}
+            {selectedUser.id !== "master" && (
+              <div className="px-6 pb-6 flex flex-wrap gap-2">
+                {selectedUser.status === "banned" ? (
+                  <button
+                    onClick={() => { unbanUser(selectedUser.id); setSelectedUser({ ...selectedUser, status: "active" }); }}
+                    className="flex-1 rounded-xl border border-green-500/30 py-2.5 text-xs font-bold text-green-300 hover:bg-green-500/10 transition"
+                  >
+                    Unban
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { banUser(selectedUser.id); setSelectedUser({ ...selectedUser, status: "banned" }); }}
+                    className="flex-1 rounded-xl border border-orange-500/30 py-2.5 text-xs font-bold text-orange-300 hover:bg-orange-500/10 transition"
+                  >
+                    Ban
+                  </button>
+                )}
+                {confirmRemove === selectedUser.id ? (
+                  <div className="flex flex-1 gap-2">
                     <button
-                      onClick={() => setChangingRole(null)}
-                      className="text-xs text-slate-500 hover:text-slate-300"
+                      onClick={() => { removeAccount(selectedUser.id); setConfirmRemove(null); setSelectedUser(null); }}
+                      className="flex-1 rounded-xl bg-red-600 hover:bg-red-500 py-2.5 text-xs font-bold text-white transition"
+                    >
+                      Yes, remove
+                    </button>
+                    <button
+                      onClick={() => setConfirmRemove(null)}
+                      className="flex-1 rounded-xl border border-slate-600 py-2.5 text-xs font-bold text-slate-300 transition"
                     >
                       Cancel
                     </button>
                   </div>
                 ) : (
                   <button
-                    onClick={() => setChangingRole(u.id)}
-                    className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs hover:border-yellow-400 transition"
+                    onClick={() => setConfirmRemove(selectedUser.id)}
+                    className="flex-1 rounded-xl border border-red-500/30 py-2.5 text-xs font-bold text-red-400 hover:bg-red-500/10 transition"
                   >
-                    Change Role
+                    Remove Account
                   </button>
                 )}
-
-                {u.status === "banned" ? (
-                  <button
-                    onClick={() => unbanUser(u.id)}
-                    className="rounded-lg border border-green-500/30 px-3 py-1.5 text-xs text-green-300 hover:bg-green-500/10 transition"
-                  >
-                    Unban
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => banUser(u.id)}
-                    className="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 transition"
-                  >
-                    Ban
-                  </button>
-                )}
-
-                <button
-                  onClick={() => { if (confirm(`Remove account for ${u.fullName}?`)) removeAccount(u.id); }}
-                  className="rounded-lg border border-red-500/20 px-3 py-1.5 text-xs text-red-500 hover:bg-red-500/10 transition"
-                >
-                  Remove
-                </button>
               </div>
             )}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
