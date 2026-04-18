@@ -64,15 +64,22 @@ export const voiceSpeaking = (v: boolean): void => {
   isSpeaking = v;
 };
 
-/** Start the continuous recognition session. Guards: already running / speaking / muted. */
+/** Start the continuous recognition session. Guards: already running / speaking / muted.
+ *  If start() throws (audio session still busy after TTS), retries once after 500 ms. */
 export const startListening = (): void => {
   if (!recognition || isListening || isSpeaking || muteFlag) return;
   try {
     recognition.start();
     setListening(true);
   } catch {
-    // start() threw synchronously (audio session still busy after TTS)
-    // onend recovery or the next startListening() call will retry
+    console.debug("NOVA: start() failed, retrying in 500 ms…");
+    setTimeout(() => {
+      if (!recognition || isListening || isSpeaking || muteFlag) return;
+      try {
+        recognition.start();
+        setListening(true);
+      } catch { /* give up this cycle — onend recovery will retry */ }
+    }, 500);
   }
 };
 
