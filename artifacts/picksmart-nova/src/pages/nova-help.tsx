@@ -461,34 +461,58 @@ export default function NovaHelpPage() {
     rec: SpeechRecognition,
     mode: "wake" | "question"
   ): void => {
-    const doStart = () => {
+    // ALWAYS release the old stream and get a completely fresh one.
+    //
+    // Why: getUserMedia opened during the button tap becomes a "zombie" —
+    // iOS silently kills the HFP audio channel when TTS switches to A2DP
+    // (for audio output), but the JS MediaStreamTrack still reports
+    // readyState "live". We cannot tell the difference from JS.
+    //
+    // Calling rec.start() with a zombie HFP channel = instant `aborted`.
+    //
+    // Fix: always get a fresh getUserMedia AFTER TTS finishes, wait for the
+    // BT device to fully switch from A2DP → HFP (~800–1500 ms), THEN start.
+    // Keep the new stream alive so the HFP channel stays open for recognition.
+
+    releaseBtStream();
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      // No getUserMedia support — try recognition directly (built-in mic only)
+      setDiagMsg("🎤 starting (no gUM)…");
       if (!sessionActiveRef.current || listenModeRef.current !== mode) return;
-      // Do NOT stop btStream here — stopping tracks changes the iOS audio
-      // session state and immediately causes an `aborted` error on rec.start().
-      // Keep the stream alive so the audio session stays in PlayAndRecord mode.
-      setDiagMsg("🎤 mic open…");
       try { rec.start(); } catch (e: any) {
         setDiagMsg(`rec.start err: ${e?.message ?? String(e)}`);
       }
-    };
-
-    const hasLiveStream = btStreamRef.current?.getTracks().some((t) => t.readyState === "live");
-
-    if (hasLiveStream) {
-      doStart();
-    } else {
-      // Stream gone (tab backgrounded, or first cycle before getUserMedia resolved).
-      // Re-open it to force HFP, wait for BT profile switch, then start.
-      if (!navigator.mediaDevices?.getUserMedia) { doStart(); return; }
-      navigator.mediaDevices
-        .getUserMedia({ audio: true, video: false })
-        .then((stream) => {
-          btStreamRef.current = stream;
-          setTimeout(doStart, 800);   // wait for BT HFP switch
-        })
-        .catch(() => doStart());      // no getUserMedia — fall back to built-in mic
+      return;
     }
-  }, []);
+
+    setDiagMsg("📡 opening HFP…");
+    navigator.mediaDevices
+      .getUserMedia({ audio: true, video: false })
+      .then((stream) => {
+        btStreamRef.current = stream;   // keep alive → HFP stays engaged
+        setDiagMsg("⏳ waiting for BT switch…");
+        // 1500 ms: generous time for iOS to complete A2DP → HFP profile switch
+        setTimeout(() => {
+          if (!sessionActiveRef.current || listenModeRef.current !== mode) {
+            releaseBtStream();
+            return;
+          }
+          setDiagMsg("🎤 mic open…");
+          try { rec.start(); } catch (e: any) {
+            setDiagMsg(`rec.start err: ${e?.message ?? String(e)}`);
+          }
+        }, 1500);
+      })
+      .catch(() => {
+        // getUserMedia failed — fall back to built-in mic without HFP
+        setDiagMsg("⚠️ gUM failed — using built-in mic");
+        if (!sessionActiveRef.current || listenModeRef.current !== mode) return;
+        try { rec.start(); } catch (e: any) {
+          setDiagMsg(`rec.start err: ${e?.message ?? String(e)}`);
+        }
+      });
+  }, [releaseBtStream]);
 
   // ── Wake Lock — keeps screen on while NOVA is active ─────────────────────
   const requestWakeLock = useCallback(async () => {
