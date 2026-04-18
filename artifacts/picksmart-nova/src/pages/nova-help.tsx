@@ -1001,15 +1001,15 @@ export default function NovaHelpPage() {
   // ── Session start ─────────────────────────────────────────────────────────
   const startSession = () => {
     // CRITICAL: Stop always-on listener SYNCHRONOUSLY before anything else.
-    // The useEffect that watches sessionActive is async (fires after render),
-    // so if we don't stop it here, the recognition session will still be active
-    // when TTS tries to start — iOS audio session conflict → NOVA never speaks.
     stopAlwaysListen();
     stopRecognition();
-    try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
 
-    // Unlock TTS synchronously on this user gesture
+    // Force-reset TTS unlock so unlockTTS() re-queues a silent utterance
+    // on THIS user gesture — even if a prior "enable voice" tap already set it.
+    // Do NOT cancel() here — that would wipe the fresh unlock utterance.
+    ttsUnlockedRef.current = false;
     unlockTTS();
+
     // Keep screen on + keep audio session alive so mic survives screen lock
     requestWakeLock();
     startAudioKeepAlive();
@@ -1028,13 +1028,12 @@ export default function NovaHelpPage() {
     chatHistoryRef.current = [];
     setChatHistory([]);
 
-    // Delay 250ms so iOS has time to release the audio input session
-    // (rec.abort() is synchronous but the hardware switch is async on iOS).
-    // Without this gap, TTS starts while the mic is still "open" → no sound.
-    setTimeout(() => {
+    // Speak immediately — TTS was unlocked synchronously above on this gesture.
+    // No setTimeout needed: abort() already told iOS to release the mic.
+    // A tiny rAF tick lets the silent unlock utterance finish before we speak.
+    requestAnimationFrame(() => {
       if (!sessionActiveRef.current) return;
 
-      // Personalized greeting for logged-in users
       if (isRealUser && firstName) {
         const greeting = buildGreeting();
         addLog("NOVA", greeting);
@@ -1061,7 +1060,7 @@ export default function NovaHelpPage() {
           }
         });
       }
-    }, 250);
+    });
   };
 
   // Keep startSessionRef in sync (regular fn, not useCallback — update every render)
