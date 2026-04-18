@@ -321,15 +321,12 @@ export default function SelectorPortalPage() {
     }
   }, []); // eslint-disable-line
 
-  // ── Mount: init voice module + start listening ─────────────────────────────
+  // ── Mount: init voice module + force mic active immediately ───────────────
   useEffect(() => {
     if (!canListen) return;
     initVoice(lang, { onListeningChange: setIsListening });
-    const t = setTimeout(() => { if (!mutedRef.current) voiceStart(); }, 300);
-    return () => {
-      clearTimeout(t);
-      destroyVoice();
-    };
+    if (!mutedRef.current) voiceStart(); // 🔥 force mic active when entering page
+    return () => { destroyVoice(); };
   }, []); // eslint-disable-line
 
   // ── Lang change: rebuild recognition with new language ────────────────────
