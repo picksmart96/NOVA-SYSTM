@@ -181,11 +181,169 @@ function PublicPageLink() {
 }
 
 // ── Subcomponents ─────────────────────────────────────────────────────────────
-function StatCard({ label, value, tone = "default" }: { label: string; value: number; tone?: "danger" | "default" }) {
+function StatCard({ label, value, tone = "default", onClick }: { label: string; value: number; tone?: "danger" | "default"; onClick?: () => void }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+    <div
+      onClick={onClick}
+      className={`rounded-2xl border border-slate-800 bg-slate-900 p-5 transition-all ${onClick ? "cursor-pointer hover:border-yellow-400/50 hover:bg-slate-800 active:scale-95" : ""}`}
+    >
       <p className="text-xs text-slate-500 uppercase tracking-widest">{label}</p>
       <p className={`mt-2 text-3xl font-black ${tone === "danger" ? "text-red-400" : "text-white"}`}>{value}</p>
+      {onClick && <p className="mt-1 text-xs text-slate-600">Tap to view →</p>}
+    </div>
+  );
+}
+
+// ── Stat Drill Modal ────────────────────────────────────────────────────────
+
+type StatKey = "subscribers" | "personal" | "company" | "active" | "sessions" | "banned";
+
+function StatDrillModal({ statKey, onClose }: { statKey: StatKey; onClose: () => void }) {
+  const { accounts, unbanUser, banUser, removeAccount } = useAuthStore();
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+
+  const titles: Record<StatKey, string> = {
+    subscribers: "Total Subscribers",
+    personal:    "Personal Plan Users",
+    company:     "Company Plan Users",
+    active:      "Active Today",
+    sessions:    "All Users (Sessions)",
+    banned:      "Banned Users",
+  };
+
+  const filtered = accounts.filter((a) => {
+    if (statKey === "subscribers") return a.isSubscribed;
+    if (statKey === "personal")    return a.subscriptionPlan === "personal";
+    if (statKey === "company")     return a.subscriptionPlan === "company";
+    if (statKey === "active")      return a.status === "active";
+    if (statKey === "banned")      return a.status === "banned";
+    return true; // sessions — show all
+  });
+
+  const roleColor: Record<string, string> = {
+    owner:      "bg-yellow-500/20 text-yellow-300",
+    supervisor: "bg-purple-500/20 text-purple-300",
+    trainer:    "bg-blue-500/20 text-blue-300",
+    selector:   "bg-slate-700 text-slate-300",
+    manager:    "bg-green-500/20 text-green-300",
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Panel */}
+      <div className="relative w-full sm:max-w-lg max-h-[85vh] bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-700 flex flex-col overflow-hidden shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 shrink-0">
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-widest">
+              {statKey === "banned" ? "Manage Banned" : "Viewing"}
+            </p>
+            <h2 className="text-lg font-black text-white">{titles[statKey]}</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`rounded-full px-3 py-1 text-sm font-black ${statKey === "banned" ? "bg-red-500/20 text-red-400" : "bg-yellow-400/10 text-yellow-400"}`}>
+              {filtered.length}
+            </span>
+            <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* List */}
+        <div className="overflow-y-auto flex-1 p-4 space-y-2">
+          {filtered.length === 0 && (
+            <div className="text-center py-12 text-slate-500">
+              <p className="text-4xl mb-3">{statKey === "banned" ? "🎉" : "📭"}</p>
+              <p className="font-semibold">{statKey === "banned" ? "No banned users" : "No users found"}</p>
+            </div>
+          )}
+
+          {filtered.map((u) => (
+            <div key={u.id} className="rounded-2xl bg-slate-800 border border-slate-700 px-4 py-3 flex items-center gap-3">
+              {/* Avatar */}
+              <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-black text-sm shrink-0">
+                {u.fullName?.[0]?.toUpperCase() ?? "?"}
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-white text-sm truncate">{u.fullName}</p>
+                <p className="text-xs text-slate-400 truncate">@{u.username}</p>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${roleColor[u.role] ?? "bg-slate-700 text-slate-300"}`}>
+                    {u.role}
+                  </span>
+                  {u.subscriptionPlan && (
+                    <span className="rounded-full px-2 py-0.5 text-xs font-bold bg-slate-700 text-slate-300">
+                      {u.subscriptionPlan}
+                    </span>
+                  )}
+                  {u.accountNumber && (
+                    <span className="rounded-full px-2 py-0.5 text-xs font-mono text-yellow-400/70">
+                      {u.accountNumber}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-col gap-1.5 shrink-0">
+                {u.status === "banned" ? (
+                  <button
+                    onClick={() => unbanUser(u.id)}
+                    className="px-3 py-1.5 rounded-xl bg-green-500/20 text-green-400 hover:bg-green-500/30 text-xs font-bold transition"
+                  >
+                    Activate
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => banUser(u.id)}
+                    className="px-3 py-1.5 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 text-xs font-bold transition"
+                  >
+                    Ban
+                  </button>
+                )}
+                {u.id !== "master" && (
+                  confirmRemove === u.id ? (
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => { removeAccount(u.id); setConfirmRemove(null); }}
+                        className="px-2 py-1 rounded-lg bg-red-600 text-white text-xs font-bold"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        onClick={() => setConfirmRemove(null)}
+                        className="px-2 py-1 rounded-lg bg-slate-700 text-slate-300 text-xs font-bold"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmRemove(u.id)}
+                      className="px-3 py-1.5 rounded-xl bg-slate-700 text-slate-400 hover:bg-red-500/20 hover:text-red-400 text-xs font-bold transition"
+                    >
+                      Remove
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer note for banned */}
+        {statKey === "banned" && filtered.length > 0 && (
+          <div className="px-5 py-3 border-t border-slate-800 bg-slate-950/50 shrink-0">
+            <p className="text-xs text-slate-500 text-center">Tap <span className="text-green-400 font-bold">Activate</span> to restore access for any banned user.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -4854,6 +5012,7 @@ type Tab = typeof TABS[number];
 export default function OwnerPage() {
   const stats = ADMIN_STATS;
   const [activeTab, setActiveTab] = useState<Tab>("Users & Access");
+  const [statDrill, setStatDrill] = useState<StatKey | null>(null);
   const pendingCount = useCompanyRequestStore((s) =>
     s.requests.filter((r) => r.status === "pending_approval" || r.status === "pending_onboarding").length
   );
@@ -4920,17 +5079,20 @@ export default function OwnerPage() {
           ))}
         </div>
 
+        {/* Stat drill modal */}
+        {statDrill && <StatDrillModal statKey={statDrill} onClose={() => setStatDrill(null)} />}
+
         {/* Dashboard tab */}
         {activeTab === "Dashboard" && (
           <>
             <PublicPageLink />
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
-              <StatCard label="Total Subscribers" value={stats.totalSubscribers} />
-              <StatCard label="Personal" value={stats.personalSubscribers} />
-              <StatCard label="Company" value={stats.companySubscribers} />
-              <StatCard label="Active Today" value={stats.activeUsersToday} />
-              <StatCard label="Total Sessions" value={stats.totalSessions} />
-              <StatCard label="Banned Users" value={stats.bannedUsers} tone="danger" />
+              <StatCard label="Total Subscribers" value={stats.totalSubscribers} onClick={() => setStatDrill("subscribers")} />
+              <StatCard label="Personal" value={stats.personalSubscribers} onClick={() => setStatDrill("personal")} />
+              <StatCard label="Company" value={stats.companySubscribers} onClick={() => setStatDrill("company")} />
+              <StatCard label="Active Today" value={stats.activeUsersToday} onClick={() => setStatDrill("active")} />
+              <StatCard label="Total Sessions" value={stats.totalSessions} onClick={() => setStatDrill("sessions")} />
+              <StatCard label="Banned Users" value={stats.bannedUsers} tone="danger" onClick={() => setStatDrill("banned")} />
             </div>
             <UserManagement />
             <div className="grid xl:grid-cols-2 gap-6">
