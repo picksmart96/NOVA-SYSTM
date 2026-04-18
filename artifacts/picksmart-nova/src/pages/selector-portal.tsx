@@ -139,8 +139,9 @@ export default function SelectorPortalPage() {
     // Safety timer: if iOS TTS onend silently never fires (a known iOS WebKit
     // bug on auto-triggered speech), this guarantees isSpeakingRef resets and
     // the recognition loop restarts — otherwise voice is permanently frozen.
+    // Formula: 20ms/char + 2s buffer (≈2x realistic TTS duration at 1.25× speed).
     let done = false;
-    const safetyMs = Math.max(5000, text.length * 75 + 3000);
+    const safetyMs = Math.max(4000, text.length * 20 + 2000);
     const safetyTimer = setTimeout(() => {
       if (!done) {
         done = true;
@@ -218,17 +219,22 @@ export default function SelectorPortalPage() {
   }, [assignedAssignment, speak, lang]);
 
   // ── Auto-greeting on mount ─────────────────────────────────────────────────
+  // Only fires if the user has already unlocked TTS via a tap (satisfies
+  // browser autoplay policy on iOS/Chrome).  On first visit the "Tap once to
+  // enable NOVA's voice" button is shown instead; tapping it unlocks TTS and
+  // explicitly speaks the greeting (see unlockTTS handler below).
   useEffect(() => {
+    if (!ttsReadyRef.current) return;   // ← wait for user gesture first
     const name = currentUser?.fullName?.split(" ")[0] ?? (lang === "es" ? "amigo" : "there");
     const hour = new Date().getHours();
     const delay = setTimeout(() => {
       speak(NOVA_TEXT.greeting(name, hour, lang));
-    }, 800);
+    }, 600);
     return () => {
       clearTimeout(delay);
       if (canSpeak) window.speechSynthesis.cancel();
     };
-  }, [lang]);
+  }, [lang]); // eslint-disable-line
 
   // ── Always-on continuous voice loop ────────────────────────────────────────
   // Listens indefinitely — no tap required. After each command, auto-restarts.
@@ -327,9 +333,11 @@ export default function SelectorPortalPage() {
     }
   }, []);
 
-  // Start always-on loop on mount
+  // Start always-on loop on mount.
+  // 300 ms delay gives the browser time to hand off the audio context after
+  // page load without blocking the mic indicator appearing near-instantly.
   useEffect(() => {
-    const t = setTimeout(() => { if (!mutedRef.current) startLoop(); }, 900);
+    const t = setTimeout(() => { if (!mutedRef.current) startLoop(); }, 300);
     return () => { clearTimeout(t); stopLoop(); };
   }, []); // eslint-disable-line
 
