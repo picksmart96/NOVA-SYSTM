@@ -148,13 +148,23 @@ function speakText(text: string, lang: string, onEnd?: () => void) {
   u.pitch = 1;
 
   let done = false;
-  const safetyMs = Math.max(5000, text.length * 75 + 3000);
+  const safetyMs = Math.max(6000, text.length * 75 + 3000);
   const safetyTimer = onEnd
     ? setTimeout(() => { if (!done) { done = true; onEnd(); } }, safetyMs)
     : undefined;
 
   if (onEnd) {
-    u.onend   = () => { if (!done) { done = true; clearTimeout(safetyTimer); onEnd(); } };
+    u.onend = () => {
+      if (!done) {
+        done = true;
+        clearTimeout(safetyTimer);
+        // ← 400 ms gap: iOS needs this to flip the audio session from
+        // "playback" back to "record" mode.  Fire onEnd at zero delay and
+        // the mic starts while the speaker is still locked → silent failure.
+        setTimeout(onEnd, 400);
+      }
+    };
+    // On error fire immediately — there's no audio session to release.
     u.onerror = () => { if (!done) { done = true; clearTimeout(safetyTimer); onEnd(); } };
   }
 
