@@ -445,27 +445,43 @@ export default function NovaHelpPage() {
     }
   }, [isSpanish, releaseBtStream]);
 
-  // Starts a SpeechRecognition instance, reusing the existing BT stream.
-  // If the stream has gone away (e.g. tab backgrounded), re-opens it first.
-  const startRecWithBT = useCallback(async (
+  // Starts a SpeechRecognition instance.
+  // The BT stream is already open from startSession; just call rec.start().
+  // If the stream died (tab backgrounded), re-open it quietly then start.
+  const startRecWithBT = useCallback((
     rec: SpeechRecognition,
     mode: "wake" | "question"
-  ): Promise<boolean> => {
-    // If stream died, re-open it (profile already unlocked, just renew the track)
+  ): void => {
     const hasLiveStream = btStreamRef.current?.getTracks().some((t) => t.readyState === "live");
-    if (!hasLiveStream) {
-      const s = await openBtStream();
-      if (!s) return false;
-      // Small pause for iOS to confirm HFP is fully engaged
-      await new Promise<void>((r) => setTimeout(r, 600));
+
+    if (hasLiveStream) {
+      // HFP already engaged — start immediately
+      if (!sessionActiveRef.current || listenModeRef.current !== mode) return;
+      try { rec.start(); } catch { /* already started */ }
+    } else {
+      // Stream died (tab was backgrounded, etc.) — re-open quietly
+      if (!navigator.mediaDevices?.getUserMedia) {
+        if (!sessionActiveRef.current || listenModeRef.current !== mode) return;
+        try { rec.start(); } catch { /* ignore */ }
+        return;
+      }
+      navigator.mediaDevices
+        .getUserMedia({ audio: true, video: false })
+        .then((stream) => {
+          btStreamRef.current = stream;
+          // Give iOS 600 ms to complete the BT profile switch before starting
+          setTimeout(() => {
+            if (!sessionActiveRef.current || listenModeRef.current !== mode) return;
+            try { rec.start(); } catch { /* already started */ }
+          }, 600);
+        })
+        .catch(() => {
+          // getUserMedia failed — still try recognition on built-in mic
+          if (!sessionActiveRef.current || listenModeRef.current !== mode) return;
+          try { rec.start(); } catch { /* ignore */ }
+        });
     }
-
-    // Guard: ensure session/mode didn't change while we were async
-    if (!sessionActiveRef.current || listenModeRef.current !== mode) return false;
-
-    try { rec.start(); } catch { /* already started or aborted */ }
-    return true;
-  }, [openBtStream]);
+  }, []);
 
   // ── Wake Lock — keeps screen on while NOVA is active ─────────────────────
   const requestWakeLock = useCallback(async () => {
@@ -1078,26 +1094,54 @@ export default function NovaHelpPage() {
   };
 
   // ── Session start ─────────────────────────────────────────────────────────
-  const startSession = async () => {
-    // CRITICAL: Stop always-on listener SYNCHRONOUSLY before anything else.
+  //
+  // iOS USER-GESTURE RULES — read before changing this function:
+  //
+  //  1. This function MUST remain synchronous (no async/await).
+  //     The moment you await anything inside a click handler, iOS considers
+  //     the gesture "consumed" and will refuse TTS, mic, and wake-lock.
+  //
+  //  2. getUserMedia() is fired here (inside the gesture) but NOT awaited.
+  //     The Promise resolves in the background while TTS is speaking.
+  //     By the time NOVA finishes the greeting (≥3 s), the BT stream is open
+  //     and HFP is engaged — recognition then finds the headphone mic ready.
+  //
+  //  3. We NEVER stop btStreamRef tracks during a session. Stopping them
+  //     drops iOS back to A2DP which silences recognition until a 1-2 s
+  //     BT profile switch completes.  Tracks are only stopped in endSession.
+  //
+  const startSession = () => {
+    // ── Step 1: synchronous cleanup & TTS unlock ─────────────────────────────
     stopAlwaysListen();
     stopRecognition();
 
-    // Force-reset TTS unlock so unlockTTS() re-queues a silent utterance
-    // on THIS user gesture — even if a prior "enable voice" tap already set it.
     ttsUnlockedRef.current = false;
-    unlockTTS();
+    unlockTTS();  // queues a silent 0-volume utterance to open the TTS channel
 
-    // ── Bluetooth HFP: open the mic stream NOW, within this user-gesture ──────
-    // This forces iOS to switch from A2DP (BT output) to HFP (BT mic+output).
-    // We keep the stream alive (tracks NOT stopped) for the entire session so
-    // iOS never drops back to A2DP. No mid-session profile switches = reliable mic.
-    await openBtStream();
+    // ── Step 2: fire getUserMedia() WITHOUT awaiting ──────────────────────────
+    // Runs in the background. BT HFP profile switch starts now, finishes
+    // within ~1-2 s — well before NOVA finishes speaking the greeting.
+    releaseBtStream();
+    if (navigator.mediaDevices?.getUserMedia) {
+      navigator.mediaDevices
+        .getUserMedia({ audio: true, video: false })
+        .then((stream) => {
+          btStreamRef.current = stream;   // keep alive → HFP stays engaged
+        })
+        .catch((err) => {
+          if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
+            setErrorMsg(isSpanish
+              ? "Micrófono bloqueado. Ve a Ajustes → Safari → Micrófono."
+              : "Mic blocked. Go to Settings → Safari → Microphone.");
+          }
+        });
+    }
 
-    // Keep screen on + keep audio session alive so mic survives screen lock
+    // ── Step 3: wake-lock + audio keep-alive ─────────────────────────────────
     requestWakeLock();
     startAudioKeepAlive();
 
+    // ── Step 4: state reset ───────────────────────────────────────────────────
     sessionActiveRef.current = true;
     safetyModeRef.current = false;
     moodCheckActiveRef.current = false;
@@ -1112,9 +1156,7 @@ export default function NovaHelpPage() {
     chatHistoryRef.current = [];
     setChatHistory([]);
 
-    // Speak immediately — TTS was unlocked synchronously above on this gesture.
-    // No setTimeout needed: abort() already told iOS to release the mic.
-    // A tiny rAF tick lets the silent unlock utterance finish before we speak.
+    // ── Step 5: start speaking (rAF lets the silent unlock utterance fire first)
     requestAnimationFrame(() => {
       if (!sessionActiveRef.current) return;
 
