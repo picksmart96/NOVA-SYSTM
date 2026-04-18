@@ -5,7 +5,11 @@ import { useAuthStore } from "@/lib/authStore";
 import { useTrainerStore } from "@/lib/trainerStore";
 import { useSupervisorPostStore } from "@/lib/supervisorPostStore";
 import { usePerformanceStore } from "@/lib/performanceStore";
-import { novaSpeak, novaRecogLang, NOVA_TEXT, matchNovaCommand } from "@/lib/novaSpeech";
+import { novaSpeak, NOVA_TEXT, matchNovaCommand } from "@/lib/novaSpeech";
+import {
+  initVoice, startListening as voiceStart, stopListening as voiceStop,
+  destroyVoice, setVoiceMuted, voiceSpeaking,
+} from "@/lib/novaVoice";
 import { askNovaHelp, type ChatMessage } from "@/lib/novaHelpApi";
 import NovaWelcomeAssistant, { hasSeenWelcomeToday, markWelcomeSeen } from "@/components/NovaWelcomeAssistant";
 import {
@@ -103,27 +107,14 @@ export default function SelectorPortalPage() {
   const [isSpeaking,     setIsSpeaking]     = useState(false);
   const [novaStatus,     setNovaStatus]     = useState<string>("");
   const [ttsReady,       setTtsReady]       = useState(false);
-  const mutedRef       = useRef(false);
-  const ttsReadyRef    = useRef(false);
-  // Persistent recognition instance — continuous=true, reused across sessions
-  const recRef         = useRef<any>(null);
-  // Mirrors isSpeaking so recognizer guards never read stale closure values
-  const isSpeakingRef  = useRef(false);
+  const mutedRef      = useRef(false);
+  const ttsReadyRef   = useRef(false);
   // Tracks whether the NOVA Welcome Assistant currently owns the audio session
-  const novaActiveRef  = useRef(false);
-  // Stable function refs — used by speak() and NWA coordinator
-  const stopLoopRef    = useRef<(() => void) | null>(null);
-  const startLoopRef   = useRef<(() => void) | null>(null);
-  // Stable refs for the speak callbacks
-  const speakTodayFocusRef  = useRef<(() => void)>(() => {});
+  const novaActiveRef = useRef(false);
+  // Stable refs for the speak callbacks (updated via useEffect)
+  const speakTodayFocusRef   = useRef<(() => void)>(() => {});
   const speakLatestUpdateRef = useRef<(() => void)>(() => {});
-  const speakAssignmentRef  = useRef<(() => void)>(() => {});
-  // AudioContext for volume-based interrupt detection
-  const audioCtxRef   = useRef<any>(null);
-  const analyserRef   = useRef<any>(null);
-  const streamRef     = useRef<MediaStream | null>(null);
-  const rafIdRef      = useRef<number>(0);
-  const noiseFloorRef = useRef(0.04); // calibrated dynamically
+  const speakAssignmentRef   = useRef<(() => void)>(() => {});
 
   // ── NOVA Help Q&A embedded in portal ──────────────────────────────────────
   const [novaQuestion,   setNovaQuestion]   = useState("");
@@ -143,26 +134,23 @@ export default function SelectorPortalPage() {
   const speak = useCallback((text: string, onDone?: () => void) => {
     if (mutedRef.current || !canSpeak) { onDone?.(); return; }
 
-    // Mark speaking BEFORE stopping rec so rec.onend sees isSpeaking=true
-    // and does NOT auto-restart during the TTS utterance.
-    isSpeakingRef.current = true;
+    // Block onend restart BEFORE stopping rec so the module sees isSpeaking=true
+    voiceSpeaking(true);
     setIsSpeaking(true);
-    // Gracefully stop recognition — triggers rec.onend which won't restart
-    // because isSpeakingRef.current is already true.
-    try { recRef.current?.stop(); } catch { /* ignore */ }
+    voiceStop(); // triggers rec.onend, which won't restart because isSpeaking=true
 
     // Safety timer: if iOS TTS onend never fires (known WebKit bug),
-    // this guarantees recovery so voice is never permanently frozen.
+    // this guarantees mic recovery so voice is never permanently frozen.
     let done = false;
     const safetyMs = Math.max(4000, text.length * 20 + 2000);
     const safetyTimer = setTimeout(() => {
       if (!done) {
         done = true;
-        isSpeakingRef.current = false;
+        voiceSpeaking(false);
         setIsSpeaking(false);
         onDone?.();
         if (!mutedRef.current && !novaActiveRef.current) {
-          setTimeout(() => startLoopRef.current?.(), 200);
+          setTimeout(() => voiceStart(), 200);
         }
       }
     }, safetyMs);
@@ -171,13 +159,12 @@ export default function SelectorPortalPage() {
       if (!done) {
         done = true;
         clearTimeout(safetyTimer);
-        isSpeakingRef.current = false;
+        voiceSpeaking(false);
         setIsSpeaking(false);
         onDone?.();
-        // Short 200ms gap so iOS/Bluetooth can hand the audio session
-        // back to STT before we call rec.start() again.
+        // 200 ms gap — iOS/Bluetooth needs time to hand audio session back to STT
         if (!mutedRef.current && !novaActiveRef.current) {
-          setTimeout(() => startLoopRef.current?.(), 200);
+          setTimeout(() => voiceStart(), 200);
         }
       }
     });
@@ -249,134 +236,22 @@ export default function SelectorPortalPage() {
     };
   }, [lang]); // eslint-disable-line
 
-  // ── Always-on NOVA command loop ────────────────────────────────────────────
-  //
-  // Single-phase: listens continuously for portal commands with no wake word.
-  // After tapping "Tap to activate NOVA", NOVA greets the user then listens
-  // continuously for: "today's focus", "my assignment", "supervisor update",
-  // or "question / ayuda" (→ embedded NOVA Help Q&A).
-  //
-  // Uses continuous=true — one persistent recognition object that auto-restarts
-  // via onend.  AudioContext volume monitor (desktop only) detects when the
-  // user speaks over NOVA and interrupts TTS immediately.
-
-  // ── Audio interrupt monitor ──────────────────────────────────────────────
-  // Uses AudioContext + AnalyserNode to detect when the user starts speaking
-  // while NOVA is talking — immediately cancels TTS and reopens the mic.
-  // Falls back silently on iOS (can't run getUserMedia + SpeechRecognition
-  // simultaneously on the same audio session).
-  const stopAudioMonitor = useCallback(() => {
-    cancelAnimationFrame(rafIdRef.current);
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    try { audioCtxRef.current?.close(); } catch { /* ignore */ }
-    audioCtxRef.current = null;
-    analyserRef.current = null;
-  }, []);
-
-  const startAudioMonitor = useCallback(() => {
-    if (audioCtxRef.current) return; // already running
-    // Skip on iOS — SpeechRecognition owns the audio session there
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    if (isIOS) return;
-    navigator.mediaDevices?.getUserMedia?.({ audio: true, video: false })
-      .then((stream) => {
-        streamRef.current = stream;
-        const ctx = new AudioContext();
-        audioCtxRef.current = ctx;
-        const source = ctx.createMediaStreamSource(stream);
-        const gain = ctx.createGain();
-        gain.gain.value = 2.5; // boost quiet / accented voices
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 512;
-        analyserRef.current = analyser;
-        source.connect(gain);
-        gain.connect(analyser);
-
-        const buf = new Uint8Array(analyser.fftSize);
-        let calibFrames = 0;
-
-        const monitor = () => {
-          rafIdRef.current = requestAnimationFrame(monitor);
-          analyser.getByteTimeDomainData(buf);
-          let sum = 0;
-          for (let i = 0; i < buf.length; i++) {
-            const v = (buf[i] - 128) / 128;
-            sum += v * v;
-          }
-          const vol = Math.sqrt(sum / buf.length);
-
-          // Calibrate noise floor for the first ~1 second
-          if (calibFrames < 60) {
-            noiseFloorRef.current = Math.max(noiseFloorRef.current, vol * 0.9);
-            calibFrames++;
-          }
-
-          // Interrupt NOVA if user speaks above noise + threshold
-          if (isSpeakingRef.current && vol > Math.max(noiseFloorRef.current * 2.5, 0.06)) {
-            window.speechSynthesis?.cancel();
-            isSpeakingRef.current = false;
-            setIsSpeaking(false);
-            setTimeout(() => startLoopRef.current?.(), 200);
-          }
-        };
-        monitor();
-      })
-      .catch(() => { /* getUserMedia denied or not available — silent fail */ });
-  }, []); // eslint-disable-line
-
-  // ── Stop / start listening ────────────────────────────────────────────────
-
-  const stopAllRec = useCallback(() => {
-    setIsListening(false);
-    // Use stop() not abort() — triggers onend cleanly
-    try { recRef.current?.stop(); } catch { /* ignore */ }
-  }, []);
-
-  // ── Core recognition setup ────────────────────────────────────────────────
-  // Creates ONE persistent recognition object with continuous=true.
-  // rec.onend ALWAYS attempts to restart — isSpeakingRef / mutedRef / novaActiveRef
-  // guard against restarting during TTS or when the user has muted NOVA.
-  // Called once on mount and again whenever `lang` changes.
-  const initRec = useCallback(() => {
-    if (!canListen) return;
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
-
-    // Tear down any existing instance first
-    try { recRef.current?.abort(); } catch { /* ignore */ }
-    recRef.current = null;
-
-    const rec = new SR();
-    rec.continuous      = false;  // one phrase per session; onend auto-restarts
-    rec.interimResults  = false;
-    rec.lang            = novaRecogLang(lang);
-    rec.maxAlternatives = 3;     // scan top 3 alternatives for accent tolerance
-
-    rec.onstart = () => {
-      setIsListening(true);
-      setNovaStatus(lang === "es" ? "NOVA escuchando…" : "NOVA listening…");
+  // ── window bridge — command routing ───────────────────────────────────────
+  // novaVoice.ts fires window.handleNovaCommand(text) after wake word.
+  // novaVoice.ts fires window.handleNovaWake() on "hey nova" detection.
+  useEffect(() => {
+    (window as any).handleNovaWake = () => {
+      speak(lang === "es" ? "Sí" : "Yes");
+      setNovaStatus(lang === "es" ? "NOVA activa. ¿Qué necesitas?" : "NOVA active. What do you need?");
     };
 
-    rec.onresult = (e: any) => {
-      // Scan all alternatives across all hypotheses for the best command match
-      const heard = Array.from(e.results as any[])
-        .flatMap((r: any) => Array.from(r as any[]).map((alt: any) => alt.transcript?.toLowerCase() ?? ""))
-        .join(" ")
-        .trim();
-      const topConfidence = (e.results?.[0]?.[0]?.confidence ?? 1) as number;
+    (window as any).handleNovaCommand = (text: string) => {
+      setNovaStatus(`${NOVA_TEXT.heardCommand(lang)}"${text}"`);
 
-      if (!heard) return;
-      setNovaStatus(`${NOVA_TEXT.heardCommand(lang)}"${heard}"`);
-
-      // Drop very low-confidence noise — onend will restart
-      if (topConfidence < 0.35) return;
-
-      // NOVA Help trigger
       const isHelpTrigger =
-        heard.includes("question") || heard.includes("help") ||
-        heard.includes("ayuda")    || heard.includes("ask nova") ||
-        heard.includes("pregunta") || heard.includes("preguntarle");
+        text.includes("question") || text.includes("help") ||
+        text.includes("ayuda")    || text.includes("ask nova") ||
+        text.includes("pregunta") || text.includes("preguntarle");
 
       if (isHelpTrigger) {
         setShowNovaHelp(true);
@@ -386,59 +261,24 @@ export default function SelectorPortalPage() {
         return;
       }
 
-      // Voice question capture — this utterance IS the question
       if (voiceQuestionModeRef.current) {
         voiceQuestionModeRef.current = false;
         setVoiceQuestionMode(false);
-        handleNovaQuestion(heard);
+        handleNovaQuestion(text);
         return;
       }
 
-      // Standard portal commands
-      const cmd = matchNovaCommand(heard, lang);
+      const cmd = matchNovaCommand(text, lang);
       if      (cmd === "focus")      speakTodayFocusRef.current();
       else if (cmd === "update")     speakLatestUpdateRef.current();
       else if (cmd === "assignment") speakAssignmentRef.current();
-      // Unrecognised command — onend fires after this and restarts automatically
     };
 
-    // ⭐ THE KEY — matches your pattern exactly:
-    //    onend fires after every phrase (continuous=false), after stop(), after errors.
-    //    If NOVA is not speaking and mic is not muted → always restart.
-    rec.onend = () => {
-      setIsListening(false);
-      if (!isSpeakingRef.current && !mutedRef.current && !novaActiveRef.current) {
-        setTimeout(() => startLoopRef.current?.(), 300);
-      }
+    return () => {
+      (window as any).handleNovaCommand = null;
+      (window as any).handleNovaWake    = null;
     };
-
-    rec.onerror = (e: any) => {
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-        setIsListening(false);
-        return; // permanent — don't retry
-      }
-      // aborted / no-speech / network → onend fires right after and restarts
-    };
-
-    recRef.current = rec;
-  }, [canListen, lang]); // eslint-disable-line
-
-  // startListening: start one recognition session on the persistent instance
-  const startListening = useCallback(() => {
-    if (mutedRef.current || isSpeakingRef.current || novaActiveRef.current || !canListen) return;
-    if (!recRef.current) initRec();
-    try {
-      recRef.current?.start();
-    } catch {
-      // start() threw synchronously (audio session not yet free after TTS).
-      // Retry once after a short gap.
-      setTimeout(() => {
-        if (!mutedRef.current && !isSpeakingRef.current && !novaActiveRef.current) {
-          try { recRef.current?.start(); } catch { /* ignore — onend will retry */ }
-        }
-      }, 300);
-    }
-  }, [canListen, initRec]);
+  }, [lang, speak]); // eslint-disable-line
 
   // ── NOVA Help Q&A handler ─────────────────────────────────────────────────
   const handleNovaQuestion = useCallback(async (question: string) => {
@@ -465,9 +305,6 @@ export default function SelectorPortalPage() {
     }
   }, [lang]); // eslint-disable-line
 
-  useEffect(() => { stopLoopRef.current  = stopAllRec;     }, [stopAllRec]);
-  useEffect(() => { startLoopRef.current = startListening; }, [startListening]);
-  useEffect(() => { isSpeakingRef.current = isSpeaking;   }, [isSpeaking]);
   useEffect(() => { speakTodayFocusRef.current   = speakTodayFocus;   }, [speakTodayFocus]);
   useEffect(() => { speakLatestUpdateRef.current = speakLatestUpdate; }, [speakLatestUpdate]);
   useEffect(() => { speakAssignmentRef.current   = speakAssignment;   }, [speakAssignment]);
@@ -476,35 +313,31 @@ export default function SelectorPortalPage() {
   const handleNovaActiveChange = useCallback((active: boolean) => {
     novaActiveRef.current = active;
     if (active) {
-      stopAllRec();
+      voiceStop();
     } else {
       if (!mutedRef.current) {
-        setTimeout(() => {
-          if (!novaActiveRef.current) startLoopRef.current?.();
-        }, 500);
+        setTimeout(() => { if (!novaActiveRef.current) voiceStart(); }, 500);
       }
     }
-  }, [stopAllRec]); // eslint-disable-line
+  }, []); // eslint-disable-line
 
-  // ── Mount: init recognition + start listening ──────────────────────────────
+  // ── Mount: init voice module + start listening ─────────────────────────────
   useEffect(() => {
-    initRec();
-    const t = setTimeout(() => { if (!mutedRef.current) startLoopRef.current?.(); }, 300);
+    if (!canListen) return;
+    initVoice(lang, { onListeningChange: setIsListening });
+    const t = setTimeout(() => { if (!mutedRef.current) voiceStart(); }, 300);
     return () => {
       clearTimeout(t);
-      stopAudioMonitor();
-      try { recRef.current?.abort(); } catch { /* ignore */ }
-      recRef.current = null;
+      destroyVoice();
     };
   }, []); // eslint-disable-line
 
   // ── Lang change: rebuild recognition with new language ────────────────────
   useEffect(() => {
-    stopAllRec();
-    initRec();
-    const t = setTimeout(() => {
-      if (!mutedRef.current) startLoopRef.current?.();
-    }, 400);
+    if (!canListen) return;
+    voiceStop();
+    initVoice(lang, { onListeningChange: setIsListening });
+    const t = setTimeout(() => { if (!mutedRef.current) voiceStart(); }, 400);
     return () => clearTimeout(t);
   }, [lang]); // eslint-disable-line
 
@@ -515,12 +348,8 @@ export default function SelectorPortalPage() {
     setMuted(next);
     if (next) {
       if (canSpeak) { window.speechSynthesis.cancel(); setIsSpeaking(false); }
-      stopAllRec();
-      stopAudioMonitor();
-    } else {
-      startAudioMonitor();
-      startListening();
     }
+    setVoiceMuted(next);
   };
 
   // ── Speak incoming coaching messages ───────────────────────────────────────
@@ -546,8 +375,6 @@ export default function SelectorPortalPage() {
     } catch { /* ignore */ }
     ttsReadyRef.current = true;
     setTtsReady(true);
-    // Start volume-based interrupt detection now that user has interacted
-    startAudioMonitor();
   };
 
   return (
