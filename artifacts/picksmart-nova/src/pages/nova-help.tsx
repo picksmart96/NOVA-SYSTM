@@ -350,6 +350,9 @@ export default function NovaHelpPage() {
   // Always-on wake detection
   const [alwaysListening, setAlwaysListening] = useState(false);
   const [ttsReady,        setTtsReady]        = useState(false);
+  // Auto-restart countdown after session ends
+  const [autoRestartCount, setAutoRestartCount] = useState(0);
+  const autoRestartTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const sessionActiveRef   = useRef(false);
@@ -1067,7 +1070,7 @@ export default function NovaHelpPage() {
   useEffect(() => { startSessionRef.current = startSession; });
 
   // ── Session end ───────────────────────────────────────────────────────────
-  const endSession = () => {
+  const endSession = (autoRestart = true) => {
     sessionActiveRef.current = false;
     safetyModeRef.current = false;
     setSafetyMode(false);
@@ -1082,9 +1085,34 @@ export default function NovaHelpPage() {
     setLastHeard("");
     setLastQuestion("");
     setErrorMsg("");
-    ttsUnlockedRef.current = false;
+    // Do NOT reset ttsUnlockedRef — iOS page-level TTS unlock persists
     // Resume always-on wake listener after session ends
     setTimeout(() => startAlwaysListenRef.current?.(), 1000);
+
+    // Auto-restart session after 5-second countdown
+    if (autoRestart && ttsReadyRef.current) {
+      if (autoRestartTimerRef.current) clearInterval(autoRestartTimerRef.current);
+      setAutoRestartCount(5);
+      let remaining = 5;
+      autoRestartTimerRef.current = setInterval(() => {
+        remaining -= 1;
+        setAutoRestartCount(remaining);
+        if (remaining <= 0) {
+          clearInterval(autoRestartTimerRef.current!);
+          autoRestartTimerRef.current = null;
+          setAutoRestartCount(0);
+          startSessionRef.current?.();
+        }
+      }, 1000);
+    }
+  };
+
+  const cancelAutoRestart = () => {
+    if (autoRestartTimerRef.current) {
+      clearInterval(autoRestartTimerRef.current);
+      autoRestartTimerRef.current = null;
+    }
+    setAutoRestartCount(0);
   };
 
   // ── Stop NOVA speaking ─────────────────────────────────────────────────────
@@ -1174,6 +1202,7 @@ export default function NovaHelpPage() {
       sessionActiveRef.current = false;
       stopRecognition();
       try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+      if (autoRestartTimerRef.current) clearInterval(autoRestartTimerRef.current);
     };
   }, [stopRecognition]);
 
@@ -1192,7 +1221,7 @@ export default function NovaHelpPage() {
           <div className="flex items-center gap-3">
             <NovaVoiceStatus state={voiceStateKey} />
             <button
-              onClick={endSession}
+              onClick={() => endSession(false)}
               className="text-xs text-slate-500 hover:text-red-400 transition px-3 py-1.5 rounded-lg border border-white/5 hover:border-red-500/30"
             >
               {isSpanish ? "Terminar ✕" : "End Session ✕"}
@@ -1789,8 +1818,31 @@ export default function NovaHelpPage() {
         {/* ── Always-on wake indicator + start controls ── */}
         <div className="w-full space-y-3">
 
-          {/* Always-listening badge — shows when mic is running in background */}
-          {!sessionActive && alwaysListening && (
+          {/* Auto-restart countdown banner */}
+          {!sessionActive && autoRestartCount > 0 && (
+            <div className="flex items-center justify-between rounded-2xl border border-violet-500/30 bg-violet-900/20 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-violet-500" />
+                </span>
+                <span className="text-violet-300 text-sm font-semibold">
+                  {isSpanish
+                    ? `NOVA reiniciando en ${autoRestartCount}s…`
+                    : `NOVA restarting in ${autoRestartCount}s…`}
+                </span>
+              </div>
+              <button
+                onClick={cancelAutoRestart}
+                className="text-xs text-slate-500 hover:text-red-400 transition"
+              >
+                {isSpanish ? "Cancelar" : "Cancel"}
+              </button>
+            </div>
+          )}
+
+          {/* Always-listening badge — shows when mic is running in background (no countdown) */}
+          {!sessionActive && autoRestartCount === 0 && alwaysListening && (
             <div className="flex items-center justify-center gap-2 rounded-2xl border border-violet-500/30 bg-violet-900/20 px-4 py-3">
               <span className="relative flex h-2.5 w-2.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
@@ -1802,33 +1854,20 @@ export default function NovaHelpPage() {
             </div>
           )}
 
-          {/* One-time TTS unlock — tap to enable voice output, then stay hands-free forever */}
-          {!sessionActive && !ttsReady && (
+          {/* Single "Start NOVA" button — unlocks TTS + starts session in one tap */}
+          {!sessionActive && autoRestartCount === 0 && (
             <LockedAction
               onAllowedClick={() => {
-                unlockTTS();
+                cancelAutoRestart();
                 ttsReadyRef.current = true;
                 setTtsReady(true);
-                // If mic already detected wake word and session should have started, start now
-                startAlwaysListenRef.current?.();
+                startSession();
               }}
               className="w-full"
             >
               <button className="w-full py-4 rounded-2xl bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-bold text-base tracking-wide transition-all duration-200 shadow-[0_0_24px_rgba(139,92,246,0.4)] flex items-center justify-center gap-3">
                 <Mic className="h-5 w-5" />
-                {isSpanish
-                  ? "Toca una vez para activar la voz de NOVA"
-                  : "Tap once to enable NOVA's voice"}
-              </button>
-            </LockedAction>
-          )}
-
-          {/* After TTS enabled — smaller voice hint, can also start session explicitly */}
-          {!sessionActive && ttsReady && (
-            <LockedAction onAllowedClick={startSession} className="w-full">
-              <button className="w-full py-3 rounded-xl border border-violet-500/40 bg-violet-900/20 hover:bg-violet-800/30 text-violet-300 font-semibold text-sm tracking-wide transition-all duration-200 flex items-center justify-center gap-2">
-                <Mic className="h-4 w-4 animate-pulse" />
-                {isSpanish ? "O toca para iniciar sesión de voz ahora" : "Or tap to start voice session now"}
+                {isSpanish ? "Iniciar NOVA" : "Start NOVA"}
               </button>
             </LockedAction>
           )}
