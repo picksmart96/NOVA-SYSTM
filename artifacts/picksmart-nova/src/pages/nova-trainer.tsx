@@ -7,8 +7,9 @@ import { voiceCommands } from "@/data/voiceCommands";
 import { useTrainerStore } from "@/lib/trainerStore";
 import { useAuthStore } from "@/lib/authStore";
 import {
-  normalizeSpeech, isConfirm, isDeny, isLoadPicks, isReady, extractNumber,
+  normalizeSpeech, extractNumber,
 } from "@/lib/parser";
+import { matchCommand } from "@/lib/novaCommandMatcher";
 import {
   Headphones, Mic, MicOff, Volume2, RotateCcw, Shield,
   CheckCircle2, AlertTriangle, Package, DoorOpen,
@@ -264,8 +265,9 @@ export default function NovaTrainerPage() {
       if (topConfidence < 0.60) {
         for (let i = 1; i < results.length; i++) {
           const alt = normalizeSpeech(results[i]?.transcript || "");
+          const mc = matchCommand(alt);
           const matchesCommand =
-            isReady(alt) || isConfirm(alt) || isDeny(alt) || isLoadPicks(alt) || !!extractNumber(alt);
+            mc === "ready" || mc === "confirm" || mc === "deny" || mc === "load_picks" || !!extractNumber(alt);
           if (matchesCommand) { transcript = alt; break; }
         }
       }
@@ -415,12 +417,12 @@ export default function NovaTrainerPage() {
     }
 
     if (phase === "SIGN_ON_CONFIRM") {
-      if (isConfirm(input)) {
+      if (matchCommand(input) === "confirm") {
         setPhase("PALLET_COUNT");
         setPromptAndSpeak(`Enter maximum pallet count for jack ${equipmentIdRef.current}.`);
         return;
       }
-      if (isDeny(input)) {
+      if (matchCommand(input) === "deny") {
         setEquipmentId("");
         equipmentIdRef.current = "";
         setPhase("SIGN_ON");
@@ -442,14 +444,14 @@ export default function NovaTrainerPage() {
     }
 
     if (phase === "PALLET_COUNT_CONFIRM") {
-      if (isConfirm(input)) {
+      if (matchCommand(input) === "confirm") {
         setPhase("SAFETY");
         setSafetyIndex(0);
         safetyIndexRef.current = 0;
         setPromptAndSpeak(SAFETY_ITEMS[0]);
         return;
       }
-      if (isDeny(input)) {
+      if (matchCommand(input) === "deny") {
         setPhase("PALLET_COUNT");
         setPromptAndSpeak(`Enter maximum pallet count for jack ${equipmentIdRef.current}.`);
         return;
@@ -462,7 +464,7 @@ export default function NovaTrainerPage() {
     if (phase === "SAFETY") {
       const idx = safetyIndexRef.current;
       const item = SAFETY_ITEMS[idx];
-      if (isConfirm(input)) {
+      if (matchCommand(input) === "confirm") {
         if (idx < SAFETY_ITEMS.length - 1) {
           const next = idx + 1;
           setSafetyIndex(next);
@@ -474,7 +476,7 @@ export default function NovaTrainerPage() {
         }
         return;
       }
-      if (isDeny(input)) {
+      if (matchCommand(input) === "deny") {
         setFailedSafetyItem(item);
         setPhase("SAFETY_FAILED");
         setPromptAndSpeak(`Safety check failed. ${item} Session stopped. Contact your supervisor.`);
@@ -487,7 +489,7 @@ export default function NovaTrainerPage() {
 
     // ── Load picks wait ──
     if (phase === "LOAD_PICKS_WAIT") {
-      if (isLoadPicks(input)) {
+      if (matchCommand(input) === "load_picks") {
         startAssignedBatch(assignment, stops);
         return;
       }
@@ -497,7 +499,7 @@ export default function NovaTrainerPage() {
 
     // ── Load picks summary ──
     if (phase === "LOAD_PICKS_SUMMARY") {
-      if (isReady(input)) {
+      if (matchCommand(input) === "ready") {
         setPhase("ALPHA_SETUP");
         setPromptAndSpeak("Position alpha pallet. Get chep.");
         return;
@@ -508,7 +510,7 @@ export default function NovaTrainerPage() {
 
     // ── Pallet setup ──
     if (phase === "ALPHA_SETUP") {
-      if (isReady(input) || isConfirm(input)) {
+      if (matchCommand(input) === "ready" || matchCommand(input) === "confirm") {
         setPhase("BRAVO_SETUP");
         setPromptAndSpeak("Position bravo pallet. Get chep.");
         return;
@@ -518,7 +520,7 @@ export default function NovaTrainerPage() {
     }
 
     if (phase === "BRAVO_SETUP") {
-      if (isReady(input) || isConfirm(input)) {
+      if (matchCommand(input) === "ready" || matchCommand(input) === "confirm") {
         beginStop(0, stops);
         return;
       }
@@ -590,7 +592,7 @@ export default function NovaTrainerPage() {
     if (step === 0) {
       // Confirm door code
       const digits = extractNumber(input);
-      if (digits === asgn.doorCode || isConfirm(input)) {
+      if (digits === asgn.doorCode || matchCommand(input) === "confirm") {
         advance(1, `Apply labels to pallet alpha. Label number ${asgn.alphaLabelNumber}.`);
       } else {
         setPromptAndSpeak(`Deliver pallet bravo to door ${asgn.doorNumber}. Confirm door code.`);
@@ -599,7 +601,7 @@ export default function NovaTrainerPage() {
     }
 
     if (step === 1) {
-      if (isConfirm(input) || normalizeSpeech(input) === "alpha" || extractNumber(input) === String(asgn.alphaLabelNumber)) {
+      if (matchCommand(input) === "confirm" || normalizeSpeech(input) === "alpha" || extractNumber(input) === String(asgn.alphaLabelNumber)) {
         advance(2, `Apply labels to pallet bravo. Label number ${asgn.bravoLabelNumber}.`);
       } else {
         setPromptAndSpeak(`Apply labels to pallet alpha. Label number ${asgn.alphaLabelNumber}.`);
@@ -608,7 +610,7 @@ export default function NovaTrainerPage() {
     }
 
     if (step === 2) {
-      if (isConfirm(input) || normalizeSpeech(input) === "bravo" || extractNumber(input) === String(asgn.bravoLabelNumber)) {
+      if (matchCommand(input) === "confirm" || normalizeSpeech(input) === "bravo" || extractNumber(input) === String(asgn.bravoLabelNumber)) {
         advance(3, `Deliver bravo pallet to door ${asgn.doorNumber}. Confirm staging code.`);
       } else {
         setPromptAndSpeak(`Apply labels to pallet bravo. Label number ${asgn.bravoLabelNumber}.`);
@@ -617,7 +619,7 @@ export default function NovaTrainerPage() {
     }
 
     if (step === 3) {
-      if (isConfirm(input) || extractNumber(input) === asgn.doorCode) {
+      if (matchCommand(input) === "confirm" || extractNumber(input) === asgn.doorCode) {
         advance(4, `Deliver alpha pallet to door ${asgn.doorNumber}. Confirm staging code.`);
       } else {
         setPromptAndSpeak(`Deliver bravo pallet to door ${asgn.doorNumber}. Confirm staging code.`);
@@ -626,7 +628,7 @@ export default function NovaTrainerPage() {
     }
 
     if (step === 4) {
-      if (isConfirm(input) || extractNumber(input) === asgn.doorCode) {
+      if (matchCommand(input) === "confirm" || extractNumber(input) === asgn.doorCode) {
         setBatchStep(5);
         batchStepRef.current = 5;
         setPhase("DONE");
@@ -638,7 +640,7 @@ export default function NovaTrainerPage() {
     }
 
     if (step === 5) {
-      if (isLoadPicks(input)) {
+      if (matchCommand(input) === "load_picks") {
         startAssignedBatch(asgn, stops);
       } else {
         setPromptAndSpeak("Say load picks for next batch.");

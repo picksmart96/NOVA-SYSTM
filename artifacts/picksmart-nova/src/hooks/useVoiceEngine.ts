@@ -49,28 +49,53 @@ function getRecognitionClass(): (new () => AnyRecognition) | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
+/**
+ * getBestVoice fallback: walk multiple preference tiers before giving up.
+ * On platforms where the preferred named voices aren't installed, we step
+ * through progressively looser criteria (Google TTS → any matching lang →
+ * any non-novelty → any voice) so NOVA always has something to speak with.
+ */
 function pickPreferredVoice(lang: string): SpeechSynthesisVoice | null {
   if (!("speechSynthesis" in window)) return null;
+
+  // Voices may not be loaded yet; retry via voiceschanged event is handled
+  // by callers — here we work with whatever is available right now.
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return null;
+
   const langRoot = lang.split("-")[0]; // "en" or "es"
   const isSpanish = langRoot === "es";
 
   if (isSpanish) {
-    // Prefer clear Spanish US voices (Paulina=macOS, Monica=iOS, Google Español)
     return (
+      // Tier 1 — premium named Spanish voices (macOS Paulina, iOS Monica, etc.)
       voices.find((v) => /paulina|monica|diego|juan|jorge|ximena/i.test(v.name) && v.lang.startsWith("es")) ||
-      voices.find((v) => /google español|google es|es-us|es-mx/i.test(v.name + v.lang)) ||
+      // Tier 2 — Google Español / regional variants
+      voices.find((v) => /google español|google es/i.test(v.name)) ||
+      voices.find((v) => /es-us|es-mx|es-419/i.test(v.lang)) ||
+      // Tier 3 — any default Spanish voice
       voices.find((v) => v.lang.startsWith("es") && v.default) ||
+      // Tier 4 — any Spanish voice
       voices.find((v) => v.lang.startsWith("es")) ||
+      // Tier 5 — system default as last resort
       voices[0]
     );
   }
 
   return (
+    // Tier 1 — premium named English voices (macOS Samantha/Ava, Windows Zira, etc.)
     voices.find((v) => /samantha|aria|ava|zira|karen/i.test(v.name) && v.lang.startsWith(langRoot)) ||
+    // Tier 2 — same names in any locale (e.g. Samantha en-AU)
     voices.find((v) => /samantha|aria|ava|zira|karen/i.test(v.name)) ||
+    // Tier 3 — Google English TTS
+    voices.find((v) => /google (us english|uk english|english)/i.test(v.name)) ||
+    // Tier 4 — any matching lang that is the system default
     voices.find((v) => v.lang.startsWith(langRoot) && v.default) ||
+    // Tier 5 — any matching lang voice (non-novelty preferred)
+    voices.find((v) => v.lang.startsWith(langRoot) && !/novelty|whisper|bad|deranged/i.test(v.name)) ||
+    // Tier 6 — any matching lang
+    voices.find((v) => v.lang.startsWith(langRoot)) ||
+    // Tier 7 — system default as last resort
     voices[0]
   );
 }
@@ -117,6 +142,7 @@ export function useVoiceEngine({
   // an "aborted" error. This flag lets onerror ignore that expected event so it
   // doesn't count toward the VAD fallback retry threshold.
   const intentionalStopRef   = useRef(false);
+  const startupSpokenRef     = useRef(false);
 
   // ── VAD refs ──────────────────────────────────────────────────────────────
   const vadModeRef       = useRef(false);  // permanently switched to VAD
@@ -149,6 +175,32 @@ export function useVoiceEngine({
 
   useEffect(() => { onHeardRef.current = onHeard; });
   useEffect(() => { langRef.current = lang; }, [lang]);
+
+  // ── Startup TTS test — fires once when the engine first initializes ────────
+  // Speaks "NOVA audio ready" so the operator can verify TTS is working before
+  // starting a session. The startupSpokenRef prevents re-firing on hot-reloads.
+  useEffect(() => {
+    if (!initialized || startupSpokenRef.current) return;
+    if (!("speechSynthesis" in window)) return;
+    startupSpokenRef.current = true;
+    // Defer slightly so the browser's voice list is populated
+    const timerId = setTimeout(() => {
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance("NOVA audio ready");
+        utterance.lang = langRef.current;
+        utterance.rate = 1.1;
+        utterance.pitch = 1;
+        const voice = pickPreferredVoice(langRef.current);
+        if (voice) utterance.voice = voice;
+        window.speechSynthesis.speak(utterance);
+        console.log("[NOVA voice] startup TTS test fired");
+      } catch (err) {
+        console.warn("[NOVA voice] startup TTS test failed:", err);
+      }
+    }, 300);
+    return () => clearTimeout(timerId);
+  }, [initialized]);
 
   // When the preferred mic device changes (e.g. Bluetooth headphones connected),
   // drop the current stream so the next VAD cycle opens a fresh one on the new device.

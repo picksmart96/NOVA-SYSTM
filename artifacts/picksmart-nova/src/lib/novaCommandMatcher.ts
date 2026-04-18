@@ -1,4 +1,4 @@
-function normalizeText(input = "") {
+export function normalizeText(input = "") {
   return input
     .toLowerCase()
     .trim()
@@ -6,7 +6,7 @@ function normalizeText(input = "") {
     .replace(/\s+/g, " ");
 }
 
-function levenshtein(a = "", b = "") {
+export function levenshtein(a = "", b = "") {
   const m = a.length;
   const n = b.length;
   const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
@@ -28,7 +28,7 @@ function levenshtein(a = "", b = "") {
   return dp[m][n];
 }
 
-function closeEnough(input: string, target: string, maxDistance = 2) {
+export function closeEnough(input: string, target: string, maxDistance = 2) {
   const a = normalizeText(input);
   const b = normalizeText(target);
 
