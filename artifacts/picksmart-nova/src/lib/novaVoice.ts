@@ -168,8 +168,8 @@ export const initVoice = (lang: string, opts?: VoiceOpts): void => {
   // prevents the mic from reopening while NOVA is talking.
   rec.onend = () => {
     setListening(false);
-    if (!muteFlag) {
-      setTimeout(() => startListening(), 300);
+    if (!isSpeaking && !muteFlag) {
+      setTimeout(() => startListening(), 500);
     }
   };
 
