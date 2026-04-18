@@ -394,6 +394,25 @@ export default function NovaHelpPage() {
     ttsUnlockedRef.current = true;
   };
 
+  // ── Mic access — pre-request permission & help iOS route BT/headphone audio ─
+  // Calling getUserMedia() within the user gesture opens the audio capture
+  // session. iOS then routes through the active audio device (AirPods, wired
+  // headset, or built-in mic). We release the stream immediately — we just need
+  // the permission grant and the audio routing handshake.
+  const requestMicAccess = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      stream.getTracks().forEach((t) => t.stop());
+    } catch (err: any) {
+      if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
+        setErrorMsg(isSpanish
+          ? "Micrófono bloqueado. Ve a Ajustes → Safari → Micrófono y permite el acceso."
+          : "Mic blocked. Go to Settings → Safari → Microphone and allow access.");
+      }
+    }
+  }, [isSpanish]);
+
   // ── Wake Lock — keeps screen on while NOVA is active ─────────────────────
   const requestWakeLock = useCallback(async () => {
     if (!("wakeLock" in navigator)) return;
@@ -577,6 +596,7 @@ export default function NovaHelpPage() {
   }, [isSpanish, ttsLang, stopRecognition, navigate]);
 
   // ── Start wake listener ───────────────────────────────────────────────────
+  // Uses continuous=false + restart loop to avoid iOS "continuous mode" glitching.
   const startWakeListen = useCallback(() => {
     const Recognition = getRecognitionCtor();
     if (!Recognition || !sessionActiveRef.current) return;
@@ -586,28 +606,25 @@ export default function NovaHelpPage() {
     recognitionRef.current = rec;
     listenModeRef.current = "wake";
 
-    rec.continuous = true;
+    rec.continuous = false;      // Non-continuous: iOS-safe restart loop
     rec.interimResults = false;
     rec.lang = ttsLang;
-    rec.maxAlternatives = 1;
+    rec.maxAlternatives = 3;     // More alternatives → better "nova" detection
 
     rec.onresult = (e: SpeechRecognitionEvent) => {
-      const results = Array.from(e.results).slice(e.resultIndex);
-      for (const result of results) {
-        if (result.isFinal) {
-          dispatchTranscript(result[0].transcript, "wake");
-        }
-      }
+      const transcripts = Array.from(e.results)
+        .map((r) => Array.from(r).map((alt) => alt.transcript).join(" "))
+        .join(" ");
+      dispatchTranscript(transcripts, "wake");
     };
 
     rec.onend = () => {
-      // Restart if still in wake mode
       if (sessionActiveRef.current && listenModeRef.current === "wake") {
         setTimeout(() => {
           if (sessionActiveRef.current && listenModeRef.current === "wake") {
             startWakeRef.current?.();
           }
-        }, 500);
+        }, 300);
       }
     };
 
@@ -615,16 +632,15 @@ export default function NovaHelpPage() {
       if (e.error === "aborted" || e.error === "no-speech") return;
       if (e.error === "not-allowed") {
         setErrorMsg(isSpanish
-          ? "Micrófono bloqueado. Permite el acceso al micrófono y recarga."
-          : "Microphone blocked. Allow mic access and reload the page.");
+          ? "Micrófono bloqueado. Permite el acceso en Ajustes → Safari → Micrófono."
+          : "Mic blocked. Allow access in Settings → Safari → Microphone.");
         return;
       }
-      // Restart on transient errors
       setTimeout(() => {
         if (sessionActiveRef.current && listenModeRef.current === "wake") {
           startWakeRef.current?.();
         }
-      }, 800);
+      }, 700);
     };
 
     setPhase("wake_listening");
@@ -1012,6 +1028,10 @@ export default function NovaHelpPage() {
     // Do NOT cancel() here — that would wipe the fresh unlock utterance.
     ttsUnlockedRef.current = false;
     unlockTTS();
+
+    // Pre-request mic permission + tell iOS to route audio through the active
+    // device (headphones, AirPods, or built-in mic). Must be within gesture.
+    requestMicAccess();
 
     // Keep screen on + keep audio session alive so mic survives screen lock
     requestWakeLock();
@@ -1477,6 +1497,18 @@ export default function NovaHelpPage() {
         {errorMsg && (
           <div className="w-full rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-3 text-red-300 text-sm text-center">
             {errorMsg}
+          </div>
+        )}
+
+        {/* Headphone tip — shown before session starts */}
+        {!sessionActive && voiceInputSupported && (
+          <div className="w-full rounded-xl border border-slate-700/60 bg-slate-800/40 px-4 py-3 flex items-start gap-3">
+            <span className="text-lg shrink-0">🎧</span>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              {isSpanish
+                ? "Para usar auriculares: conéctalos primero, luego toca Iniciar NOVA. iOS redirige el micrófono automáticamente."
+                : "To use headphones: connect them first, then tap Start NOVA. iOS routes the mic automatically when you tap the button."}
+            </p>
           </div>
         )}
 
