@@ -856,18 +856,41 @@ export default function NovaHelpPage() {
   const startAlwaysListenRef = useRef<(() => void) | null>(null);
   const startSessionRef      = useRef<(() => void) | null>(null);
 
+  // Retry tracking for always-on listener — prevents infinite error loops on iOS
+  const alwaysRetryCount = useRef(0);
+  const alwaysRetryDelay = useRef(900);
+
   const startAlwaysListen = useCallback(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR || sessionActiveRef.current) return;
+
+    // Hard stop after too many consecutive errors — let browser recover for 15s
+    if (alwaysRetryCount.current >= 6) {
+      alwaysRetryCount.current = 0;
+      alwaysRetryDelay.current = 900;
+      setTimeout(() => {
+        if (!sessionActiveRef.current) startAlwaysListenRef.current?.();
+      }, 15000);
+      return;
+    }
+
     stopAlwaysListen();
 
     const rec = new SR();
-    rec.continuous     = true;
+    // Use continuous=false — iOS doesn't support true continuous mode and
+    // terminates sessions constantly, causing rapid restart glitches.
+    // The onend handler below re-starts automatically after each phrase.
+    rec.continuous     = false;
     rec.interimResults = false;
     rec.lang           = ttsLang;
     rec.maxAlternatives = 1;
 
-    rec.onstart = () => { alwaysActiveRef.current = true; setAlwaysListening(true); };
+    rec.onstart = () => {
+      alwaysActiveRef.current = true;
+      alwaysRetryCount.current = 0;
+      alwaysRetryDelay.current = 900;
+      setAlwaysListening(true);
+    };
 
     rec.onend = () => {
       alwaysActiveRef.current = false;
@@ -875,9 +898,10 @@ export default function NovaHelpPage() {
       alwaysRecRef.current = null;
       // Auto-restart unless session is now active
       if (!sessionActiveRef.current) {
+        const delay = Math.min(alwaysRetryDelay.current, 4000);
         setTimeout(() => {
           if (!sessionActiveRef.current) startAlwaysListenRef.current?.();
-        }, 900);
+        }, delay);
       }
     };
 
@@ -885,11 +909,15 @@ export default function NovaHelpPage() {
       alwaysActiveRef.current = false;
       setAlwaysListening(false);
       alwaysRecRef.current = null;
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") return; // Mic denied — give up
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") return;
+      if (e.error === "aborted") return; // We aborted it ourselves — don't count as error
+      alwaysRetryCount.current++;
+      alwaysRetryDelay.current = Math.min(alwaysRetryDelay.current * 1.5, 4000);
       if (!sessionActiveRef.current) {
+        const delay = Math.min(alwaysRetryDelay.current, 4000);
         setTimeout(() => {
           if (!sessionActiveRef.current) startAlwaysListenRef.current?.();
-        }, 1200);
+        }, delay);
       }
     };
 
@@ -910,7 +938,9 @@ export default function NovaHelpPage() {
     };
 
     alwaysRecRef.current = rec;
-    try { rec.start(); } catch { /* ignore */ }
+    try { rec.start(); } catch {
+      alwaysRetryCount.current++;
+    }
   }, [ttsLang, stopAlwaysListen]);
 
   useEffect(() => { startAlwaysListenRef.current = startAlwaysListen; }, [startAlwaysListen]);
@@ -970,6 +1000,14 @@ export default function NovaHelpPage() {
 
   // ── Session start ─────────────────────────────────────────────────────────
   const startSession = () => {
+    // CRITICAL: Stop always-on listener SYNCHRONOUSLY before anything else.
+    // The useEffect that watches sessionActive is async (fires after render),
+    // so if we don't stop it here, the recognition session will still be active
+    // when TTS tries to start — iOS audio session conflict → NOVA never speaks.
+    stopAlwaysListen();
+    stopRecognition();
+    try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+
     // Unlock TTS synchronously on this user gesture
     unlockTTS();
     // Keep screen on + keep audio session alive so mic survives screen lock
@@ -990,34 +1028,40 @@ export default function NovaHelpPage() {
     chatHistoryRef.current = [];
     setChatHistory([]);
 
-    // Personalized greeting for logged-in users
-    if (isRealUser && firstName) {
-      const greeting = buildGreeting();
-      addLog("NOVA", greeting);
-      setAnswer(greeting);
-      setPhase("speaking");
-      moodCheckActiveRef.current = true;
-      speakText(greeting, ttsLang, () => {
-        if (sessionActiveRef.current) {
-          // After greeting, listen for mood response
-          setPhase("listening");
-          startQuestionListenRef.current?.();
-        }
-      });
-    } else {
-      const hint = isSpanish
-        ? "Sesión activa. Di 'NOVA' para que te escuche."
-        : "Session active. Say 'NOVA' anytime to wake me.";
-      addLog("NOVA", hint);
-      setAnswer(hint);
-      setPhase("speaking");
-      speakText(hint, ttsLang, () => {
-        if (sessionActiveRef.current) {
-          setPhase("wake_listening");
-          startWakeRef.current?.();
-        }
-      });
-    }
+    // Delay 250ms so iOS has time to release the audio input session
+    // (rec.abort() is synchronous but the hardware switch is async on iOS).
+    // Without this gap, TTS starts while the mic is still "open" → no sound.
+    setTimeout(() => {
+      if (!sessionActiveRef.current) return;
+
+      // Personalized greeting for logged-in users
+      if (isRealUser && firstName) {
+        const greeting = buildGreeting();
+        addLog("NOVA", greeting);
+        setAnswer(greeting);
+        setPhase("speaking");
+        moodCheckActiveRef.current = true;
+        speakText(greeting, ttsLang, () => {
+          if (sessionActiveRef.current) {
+            setPhase("listening");
+            startQuestionListenRef.current?.();
+          }
+        });
+      } else {
+        const hint = isSpanish
+          ? "Sesión activa. Di 'NOVA' para que te escuche."
+          : "Session active. Say 'NOVA' anytime to wake me.";
+        addLog("NOVA", hint);
+        setAnswer(hint);
+        setPhase("speaking");
+        speakText(hint, ttsLang, () => {
+          if (sessionActiveRef.current) {
+            setPhase("wake_listening");
+            startWakeRef.current?.();
+          }
+        });
+      }
+    }, 250);
   };
 
   // Keep startSessionRef in sync (regular fn, not useCallback — update every render)
