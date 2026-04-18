@@ -1,0 +1,123 @@
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+const recognition = new SpeechRecognition();
+
+recognition.continuous = true;
+recognition.interimResults = true;
+recognition.lang = "en-US";
+
+let isSpeaking = false;
+let currentMode = "boot"; // boot → safety → briefing → trainer → help
+let lastSpeakTime = 0;
+
+// ================= VOICE OUTPUT =================
+const speak = (text, callback = null) => {
+  const msg = new SpeechSynthesisUtterance(text);
+
+  isSpeaking = true;
+
+  msg.rate = 1.15;
+
+  msg.onend = () => {
+    isSpeaking = false;
+    lastSpeakTime = Date.now();
+
+    if (callback) callback();
+  };
+
+  speechSynthesis.cancel();
+  speechSynthesis.speak(msg);
+};
+
+// ================= BOOT SEQUENCE =================
+const startSequence = () => {
+  currentMode = "safety";
+
+  speak(
+    "Safety check. Confirm brakes, battery, horn, wheels, and controls.",
+    startBriefing
+  );
+};
+
+const startBriefing = () => {
+  currentMode = "briefing";
+
+  speak(
+    "Today's briefing. Focus on accuracy and steady pace. Watch mixed aisles and keep pallets stable.",
+    startTrainer
+  );
+};
+
+const startTrainer = () => {
+  currentMode = "trainer";
+
+  speak("Training ready. Say ready when you are.");
+};
+
+// ================= HELP MODE =================
+const handleHelp = (cmd) => {
+  currentMode = "help";
+
+  if (cmd.includes("pallet")) {
+    speak("Start with heavy cases and build a flat base.", returnToTrainer);
+  }
+
+  else if (cmd.includes("safety")) {
+    speak("Always check brakes, horn, and battery before moving.", returnToTrainer);
+  }
+
+  else {
+    speak("How can I help?", returnToTrainer);
+  }
+};
+
+const returnToTrainer = () => {
+  currentMode = "trainer";
+  speak("Returning to training.");
+};
+
+// ================= TRAINER MODE =================
+const handleTrainer = (cmd) => {
+  if (cmd.includes("ready")) {
+    speak("Aisle 17. Slot 66. Pick 10.");
+  }
+
+  else if (cmd.includes("repeat")) {
+    speak("Repeating. Aisle 17. Slot 66. Pick 10.");
+  }
+
+  else if (cmd.includes("confirm")) {
+    speak("Check confirmed.");
+  }
+};
+
+// ================= MAIN VOICE ENGINE =================
+recognition.onresult = (event) => {
+  const result = event.results[event.results.length - 1];
+  const text = result[0].transcript.toLowerCase();
+
+  const now = Date.now();
+
+  // 🔥 Ignore while speaking or right after speaking
+  if (isSpeaking) return;
+  if (now - lastSpeakTime < 400) return;
+
+  console.log("Heard:", text);
+
+  // 🔥 WAKE WORD FOR HELP
+  if (text.includes("hey nova help") || text.includes("nova help")) {
+    handleHelp(text);
+    return;
+  }
+
+  // 🔥 NORMAL FLOW
+  if (currentMode === "trainer" && result.isFinal) {
+    handleTrainer(text);
+  }
+};
+
+// ================= START SYSTEM =================
+export const startSelectorVoice = () => {
+  recognition.start();
+  startSequence();
+};

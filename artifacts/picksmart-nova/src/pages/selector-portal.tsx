@@ -5,11 +5,10 @@ import { useAuthStore } from "@/lib/authStore";
 import { useTrainerStore } from "@/lib/trainerStore";
 import { useSupervisorPostStore } from "@/lib/supervisorPostStore";
 import { usePerformanceStore } from "@/lib/performanceStore";
-import { novaSpeak, NOVA_TEXT, matchNovaCommand } from "@/lib/novaSpeech";
+import { novaSpeak, NOVA_TEXT } from "@/lib/novaSpeech";
 import {
-  initVoice, startListening as voiceStart, stopListening as voiceStop,
-  destroyVoice, setVoiceMuted, voiceSpeaking,
-} from "@/lib/novaVoice";
+  startSelectorVoice, stopSelectorVoice, setSelectorSpeaking,
+} from "@/lib/selectorVoiceSystem";
 import { askNovaHelp, type ChatMessage } from "@/lib/novaHelpApi";
 import NovaWelcomeAssistant, { hasSeenWelcomeToday, markWelcomeSeen } from "@/components/NovaWelcomeAssistant";
 import {
@@ -134,9 +133,8 @@ export default function SelectorPortalPage() {
   const speak = useCallback((text: string, onDone?: () => void) => {
     if (mutedRef.current || !canSpeak) { onDone?.(); return; }
 
-    // Gate onresult — mic stays open but all transcripts are dropped while NOVA talks.
-    // No recognition.stop() needed; eliminates the entire stop/restart dance.
-    voiceSpeaking(true);
+    // Gate the selector voice onresult while NOVA talks
+    setSelectorSpeaking(true);
     setIsSpeaking(true);
 
     // Safety timer: if iOS TTS onend never fires (known WebKit bug),
@@ -146,7 +144,7 @@ export default function SelectorPortalPage() {
     const safetyTimer = setTimeout(() => {
       if (!done) {
         done = true;
-        voiceSpeaking(false);
+        setSelectorSpeaking(false);
         setIsSpeaking(false);
         onDone?.();
       }
@@ -156,12 +154,9 @@ export default function SelectorPortalPage() {
       if (!done) {
         done = true;
         clearTimeout(safetyTimer);
-        voiceSpeaking(false);
+        setSelectorSpeaking(false);
         setIsSpeaking(false);
         onDone?.();
-        // Mic was never stopped — only restart if session dropped unexpectedly during TTS.
-        // startListening() is a no-op when isListening is already true.
-        if (!mutedRef.current && !novaActiveRef.current) voiceStart();
       }
     });
   }, [canSpeak, lang]);
@@ -232,49 +227,7 @@ export default function SelectorPortalPage() {
     };
   }, [lang]); // eslint-disable-line
 
-  // ── window bridge — command routing ───────────────────────────────────────
-  // novaVoice.ts fires window.handleNovaCommand(text) after wake word.
-  // novaVoice.ts fires window.handleNovaWake() on "hey nova" detection.
-  useEffect(() => {
-    (window as any).handleNovaWake = () => {
-      speak(lang === "es" ? "Sí" : "Yes");
-      setNovaStatus(lang === "es" ? "NOVA activa. ¿Qué necesitas?" : "NOVA active. What do you need?");
-    };
-
-    (window as any).handleNovaCommand = (text: string) => {
-      setNovaStatus(`${NOVA_TEXT.heardCommand(lang)}"${text}"`);
-
-      const isHelpTrigger =
-        text.includes("question") || text.includes("help") ||
-        text.includes("ayuda")    || text.includes("ask nova") ||
-        text.includes("pregunta") || text.includes("preguntarle");
-
-      if (isHelpTrigger) {
-        setShowNovaHelp(true);
-        setVoiceQuestionMode(true);
-        voiceQuestionModeRef.current = true;
-        speak(lang === "es" ? "Claro, ¿qué quieres preguntarme?" : "Sure — what's your question?");
-        return;
-      }
-
-      if (voiceQuestionModeRef.current) {
-        voiceQuestionModeRef.current = false;
-        setVoiceQuestionMode(false);
-        handleNovaQuestion(text);
-        return;
-      }
-
-      const cmd = matchNovaCommand(text, lang);
-      if      (cmd === "focus")      speakTodayFocusRef.current();
-      else if (cmd === "update")     speakLatestUpdateRef.current();
-      else if (cmd === "assignment") speakAssignmentRef.current();
-    };
-
-    return () => {
-      (window as any).handleNovaCommand = null;
-      (window as any).handleNovaWake    = null;
-    };
-  }, [lang, speak]); // eslint-disable-line
+  // Bridge removed — selectorVoiceSystem handles help mode internally.
 
   // ── NOVA Help Q&A handler ─────────────────────────────────────────────────
   const handleNovaQuestion = useCallback(async (question: string) => {
@@ -309,28 +262,43 @@ export default function SelectorPortalPage() {
   const handleNovaActiveChange = useCallback((active: boolean) => {
     novaActiveRef.current = active;
     if (active) {
-      voiceStop();
+      stopSelectorVoice();
     } else {
       if (!mutedRef.current) {
-        setTimeout(() => { if (!novaActiveRef.current) voiceStart(); }, 500);
+        setTimeout(() => {
+          if (!novaActiveRef.current) {
+            startSelectorVoice(lang, {
+              onListeningChange: setIsListening,
+              onSpeakingChange:  setIsSpeaking,
+            });
+          }
+        }, 500);
       }
     }
-  }, []); // eslint-disable-line
+  }, [lang]); // eslint-disable-line
 
-  // ── Mount: init voice module + force mic active immediately ───────────────
+  // ── Mount: start selector voice system ────────────────────────────────────
   useEffect(() => {
     if (!canListen) return;
-    initVoice(lang, { onListeningChange: setIsListening });
-    if (!mutedRef.current) voiceStart(); // 🔥 force mic active when entering page
-    return () => { destroyVoice(); };
+    startSelectorVoice(lang, {
+      onListeningChange: setIsListening,
+      onSpeakingChange:  setIsSpeaking,
+    });
+    return () => stopSelectorVoice();
   }, []); // eslint-disable-line
 
-  // ── Lang change: rebuild recognition with new language ────────────────────
+  // ── Lang change: restart with new language ────────────────────────────────
   useEffect(() => {
     if (!canListen) return;
-    voiceStop();
-    initVoice(lang, { onListeningChange: setIsListening });
-    const t = setTimeout(() => { if (!mutedRef.current) voiceStart(); }, 400);
+    stopSelectorVoice();
+    const t = setTimeout(() => {
+      if (!mutedRef.current) {
+        startSelectorVoice(lang, {
+          onListeningChange: setIsListening,
+          onSpeakingChange:  setIsSpeaking,
+        });
+      }
+    }, 400);
     return () => clearTimeout(t);
   }, [lang]); // eslint-disable-line
 
@@ -341,8 +309,13 @@ export default function SelectorPortalPage() {
     setMuted(next);
     if (next) {
       if (canSpeak) { window.speechSynthesis.cancel(); setIsSpeaking(false); }
+      stopSelectorVoice();
+    } else {
+      startSelectorVoice(lang, {
+        onListeningChange: setIsListening,
+        onSpeakingChange:  setIsSpeaking,
+      });
     }
-    setVoiceMuted(next);
   };
 
   // ── Speak incoming coaching messages ───────────────────────────────────────
