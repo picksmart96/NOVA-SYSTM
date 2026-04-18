@@ -156,7 +156,7 @@ export default function SelectorPortalPage() {
         setIsSpeaking(false);
         onDone?.();
         if (!mutedRef.current && !novaActiveRef.current) {
-          setTimeout(() => startLoopRef.current?.(), 400);
+          setTimeout(() => startLoopRef.current?.(), 1000);
         }
       }
     }, safetyMs);
@@ -168,10 +168,12 @@ export default function SelectorPortalPage() {
         isSpeakingRef.current = false;
         setIsSpeaking(false);
         onDone?.();
-        // Restart the recognition loop after TTS ends, unless NWA owns the mic
-        // or the user has muted voice commands.
+        // Restart the recognition loop after TTS ends.
+        // 1000ms gives iOS / Bluetooth headsets enough time to hand the audio
+        // session back to the microphone (400ms was too short on iOS Safari
+        // and caused rec.start() to fire "aborted" silently).
         if (!mutedRef.current && !novaActiveRef.current) {
-          setTimeout(() => startLoopRef.current?.(), 400);
+          setTimeout(() => startLoopRef.current?.(), 1000);
         }
       }
     });
@@ -276,7 +278,8 @@ export default function SelectorPortalPage() {
 
     let gotResult = false;
     let restarted = false;
-    const restart = (delayMs: number) => {
+    // schedule one restart attempt; guards against double-scheduling
+    const scheduleRestart = (delayMs: number) => {
       if (restarted) return;
       restarted = true;
       setTimeout(() => {
@@ -292,7 +295,6 @@ export default function SelectorPortalPage() {
     };
 
     rec.onresult = (e: any) => {
-      // Collect all alternatives from all results
       const heard = Array.from(e.results as any[])
         .flatMap((r: any) => Array.from(r as any[]).map((alt: any) => alt.transcript?.toLowerCase() ?? ""))
         .join(" ")
@@ -304,7 +306,7 @@ export default function SelectorPortalPage() {
       setNovaStatus(`${NOVA_TEXT.heardCommand(lang)}"${heard}"`);
 
       // Low-confidence utterance — skip silently and keep listening
-      if (topConfidence < 0.35) { restart(300); return; }
+      if (topConfidence < 0.35) { scheduleRestart(300); return; }
 
       // Embedded NOVA Help trigger — "question", "help", "ayuda", "ask nova"
       const isHelpTrigger =
@@ -317,18 +319,17 @@ export default function SelectorPortalPage() {
         setVoiceQuestionMode(true);
         voiceQuestionModeRef.current = true;
         speak(lang === "es" ? "Claro, ¿qué quieres preguntarme?" : "Sure — what's your question?", () => {
-          // After speaking the prompt, start listening for the question
           startLoopRef.current?.();
         });
         return;
       }
 
-      // Voice question capture mode — the previous loop cycle asked for a question
+      // Voice question capture mode — next utterance is the user's question
       if (voiceQuestionModeRef.current) {
         voiceQuestionModeRef.current = false;
         setVoiceQuestionMode(false);
         handleNovaQuestion(heard);
-        restart(300);
+        scheduleRestart(300);
         return;
       }
 
@@ -337,26 +338,48 @@ export default function SelectorPortalPage() {
       if (cmd === "focus")           speakTodayFocusRef.current();
       else if (cmd === "update")     speakLatestUpdateRef.current();
       else if (cmd === "assignment") speakAssignmentRef.current();
-      else                           restart(300); // unrecognised — keep listening
+      else                           scheduleRestart(300);
     };
 
+    // onend always fires last (after onerror on failure paths).
+    // Only restart here when there was no result AND onerror didn't already schedule one.
     rec.onend = () => {
+      setIsListening(false);
       recRef.current = null;
-      if (!gotResult) restart(300);
+      if (!gotResult) scheduleRestart(400);
     };
 
     rec.onerror = (e: any) => {
       recRef.current = null;
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        // Mic permission denied — stop permanently, don't retry
         setIsListening(false);
         return;
       }
-      if (e.error === "aborted" || e.error === "no-speech") return; // onend handles restart
-      restart(800);
+      // "aborted" = iOS/Chrome cancelled the session (commonly right after TTS).
+      // Schedule a longer retry so the audio session has time to hand back to STT.
+      if (e.error === "aborted") {
+        scheduleRestart(700);
+        return;
+      }
+      // "no-speech" is normal — onend also fires, let it handle the restart
+      if (e.error === "no-speech") return;
+      scheduleRestart(800);
     };
 
     recRef.current = rec;
-    try { rec.start(); } catch { /* ignore double-start */ }
+    try {
+      rec.start();
+    } catch {
+      // rec.start() threw synchronously — audio session not ready yet (iOS post-TTS).
+      // Retry after a longer gap so iOS can hand the session back to STT.
+      recRef.current = null;
+      setTimeout(() => {
+        if (!mutedRef.current && !isSpeakingRef.current && !novaActiveRef.current) {
+          startLoopRef.current?.();
+        }
+      }, 800);
+    }
   // speak callbacks via refs — removed from deps to keep identity stable
   }, [canListen, lang]); // eslint-disable-line
 
@@ -562,10 +585,9 @@ export default function SelectorPortalPage() {
                 unlockTTS();
                 const name = currentUser?.fullName?.split(" ")[0] ?? (lang === "es" ? "amigo" : "there");
                 const hour = new Date().getHours();
-                // Auto-greet then start command listening immediately
-                setTimeout(() => speak(NOVA_TEXT.greeting(name, hour, lang), () => {
-                  setTimeout(() => startLoopRef.current?.(), 300);
-                }), 200);
+                // Greet the user — the speak() callback + internal 1000ms delay
+                // handles restarting the mic once TTS + audio-session handback complete.
+                setTimeout(() => speak(NOVA_TEXT.greeting(name, hour, lang)), 200);
               }}
               className="w-full mb-4 flex items-center justify-center gap-2 rounded-2xl bg-yellow-400 text-slate-950 font-black text-base py-4 hover:bg-yellow-300 active:scale-95 transition shadow-lg shadow-yellow-400/20"
             >
