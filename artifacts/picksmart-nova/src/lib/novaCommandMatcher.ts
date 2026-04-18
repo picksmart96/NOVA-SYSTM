@@ -30,6 +30,24 @@ export function levenshtein(a = "", b = "") {
   return dp[m][n];
 }
 
+// Returns true when `phrase` appears inside `text` at word boundaries in at
+// least one location (preceded by start-of-string or a space; followed by
+// end-of-string or a space). All occurrences are scanned so that an embedded
+// hit earlier in the string does not hide a valid standalone hit later.
+// Example: "incorrecto correcto" — the first hit of "correcto" is embedded
+// (preceded by 'o'), but the second is standalone; returns true.
+function containsAsWords(text: string, phrase: string): boolean {
+  let start = 0;
+  while (true) {
+    const idx = text.indexOf(phrase, start);
+    if (idx === -1) return false;
+    const before = idx === 0 ? " " : text[idx - 1];
+    const after = idx + phrase.length === text.length ? " " : text[idx + phrase.length];
+    if (before === " " && after === " ") return true;
+    start = idx + 1;
+  }
+}
+
 export function closeEnough(input: string, target: string, maxDistance = 2) {
   const a = normalizeText(input);
   const b = normalizeText(target);
@@ -42,7 +60,12 @@ export function closeEnough(input: string, target: string, maxDistance = 2) {
   // The includes check is also skipped for short targets for the same reason:
   // "hey nova".includes("no") would wrongly fire without this guard.
   const effectiveMax = b.length <= 2 ? 0 : maxDistance;
-  if (effectiveMax > 0 && (a.includes(b) || b.includes(a))) return true;
+  if (effectiveMax > 0 && (containsAsWords(a, b) || containsAsWords(b, a))) return true;
+  // Only allow Levenshtein to match when the strings are close in length
+  // (≤ 1 char apart). A length difference of 2+ means one word is a
+  // prefix/suffix extension of the other (e.g. "in" + "correcto") which
+  // should not count as a fuzzy spelling variant.
+  if (Math.abs(a.length - b.length) > 1) return false;
   return levenshtein(a, b) <= effectiveMax;
 }
 

@@ -253,9 +253,13 @@ describe("matchCommand — Spanish variants", () => {
     expect(matchCommand("negativo")).toBe("deny");
   });
 
-  it.todo(
-    'incorrecto → deny — BUG: "correcto" (confirm phrase) is a substring of "incorrecto" so confirm fires first via includes(); needs a priority or exact-match-first fix in matchCommand'
-  );
+  it('incorrecto → deny (not confirm — "correcto" substring must not win)', () => {
+    expect(matchCommand("incorrecto")).toBe("deny");
+  });
+
+  it('correcto after embedded occurrence → confirm ("incorrecto correcto" has a valid standalone "correcto")', () => {
+    expect(matchCommand("incorrecto correcto")).toBe("confirm");
+  });
 
   it('cancelar → deny', () => {
     expect(matchCommand("cancelar")).toBe("deny");
