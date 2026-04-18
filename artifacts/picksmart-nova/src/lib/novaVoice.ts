@@ -125,6 +125,9 @@ export const initVoice = (lang: string, opts?: VoiceOpts): void => {
   rec.onstart = () => setListening(true);
 
   rec.onresult = (event: any) => {
+    // Ignore everything while NOVA is speaking — mic stays open but output is gated
+    if (isSpeaking) return;
+
     // Always inspect the LATEST result only
     const result = event.results[event.results.length - 1];
     const raw    = result[0].transcript.toLowerCase();

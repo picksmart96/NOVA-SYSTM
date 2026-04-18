@@ -134,13 +134,13 @@ export default function SelectorPortalPage() {
   const speak = useCallback((text: string, onDone?: () => void) => {
     if (mutedRef.current || !canSpeak) { onDone?.(); return; }
 
-    // Block onend restart BEFORE stopping rec so the module sees isSpeaking=true
+    // Gate onresult — mic stays open but all transcripts are dropped while NOVA talks.
+    // No recognition.stop() needed; eliminates the entire stop/restart dance.
     voiceSpeaking(true);
     setIsSpeaking(true);
-    voiceStop(); // triggers rec.onend, which won't restart because isSpeaking=true
 
     // Safety timer: if iOS TTS onend never fires (known WebKit bug),
-    // this guarantees mic recovery so voice is never permanently frozen.
+    // ungate the mic so voice is never permanently frozen.
     let done = false;
     const safetyMs = Math.max(4000, text.length * 20 + 2000);
     const safetyTimer = setTimeout(() => {
@@ -149,9 +149,6 @@ export default function SelectorPortalPage() {
         voiceSpeaking(false);
         setIsSpeaking(false);
         onDone?.();
-        if (!mutedRef.current && !novaActiveRef.current) {
-          setTimeout(() => voiceStart(), 400);
-        }
       }
     }, safetyMs);
 
@@ -162,10 +159,9 @@ export default function SelectorPortalPage() {
         voiceSpeaking(false);
         setIsSpeaking(false);
         onDone?.();
-        // 400 ms — gives iOS/Bluetooth enough time to fully release the audio session
-        if (!mutedRef.current && !novaActiveRef.current) {
-          setTimeout(() => voiceStart(), 400);
-        }
+        // Mic was never stopped — only restart if session dropped unexpectedly during TTS.
+        // startListening() is a no-op when isListening is already true.
+        if (!mutedRef.current && !novaActiveRef.current) voiceStart();
       }
     });
   }, [canSpeak, lang]);
