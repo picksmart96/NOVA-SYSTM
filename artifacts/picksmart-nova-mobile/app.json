@@ -46,7 +46,14 @@
       ],
       "expo-font",
       "expo-web-browser",
-      "expo-av"
+      "expo-av",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "NOVA needs microphone access to listen for voice commands.",
+          "speechRecognitionPermission": "NOVA uses speech recognition to understand your picking commands."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

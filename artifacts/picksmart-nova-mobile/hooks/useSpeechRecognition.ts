@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 import { matchCommand } from "@workspace/nova-shared";
+import {
+  ExpoWebSpeechRecognition,
+  ExpoSpeechRecognitionModule,
+} from "expo-speech-recognition";
 
 export type SpeechMode = "wake" | "question";
 export type SpeechState = "off" | "starting" | "listening" | "processing";
@@ -11,6 +15,54 @@ interface UseWakeWordOptions {
   onWakeWord: () => void;
   onQuestion: (transcript: string) => void;
   onError?: (msg: string) => void;
+}
+
+/**
+ * Minimal interface covering the subset of the Web Speech API that this hook
+ * actually uses. Both `window.SpeechRecognition` (web) and
+ * `ExpoWebSpeechRecognition` (native) satisfy this shape.
+ */
+interface SpeechRecognizer {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  onstart: ((ev: Event) => void) | null;
+  onresult: ((ev: { resultIndex: number; results: SpeechRecognitionResultList }) => void) | null;
+  onerror: ((ev: { error?: string; code?: string }) => void) | null;
+  onend: ((ev: Event) => void) | null;
+  start(): void;
+  abort(): void;
+}
+
+interface SpeechRecognizerCtor {
+  new(): SpeechRecognizer;
+}
+
+/** Returns true if speech recognition is available on this platform/device. */
+function checkIsSupported(): boolean {
+  if (Platform.OS === "ios" || Platform.OS === "android") {
+    return ExpoSpeechRecognitionModule.isRecognitionAvailable();
+  }
+  return (
+    typeof window !== "undefined" &&
+    ("SpeechRecognition" in window || "webkitSpeechRecognition" in window)
+  );
+}
+
+/** Returns the SpeechRecognizer constructor appropriate for the current platform. */
+function getSRClass(): SpeechRecognizerCtor | null {
+  if (Platform.OS === "ios" || Platform.OS === "android") {
+    return ExpoWebSpeechRecognition as unknown as SpeechRecognizerCtor;
+  }
+  if (typeof window !== "undefined") {
+    const w = window as typeof window & {
+      SpeechRecognition?: SpeechRecognizerCtor;
+      webkitSpeechRecognition?: SpeechRecognizerCtor;
+    };
+    return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+  }
+  return null;
 }
 
 export function useWakeWordRecognition({
@@ -24,23 +76,20 @@ export function useWakeWordRecognition({
   const [state, setState] = useState<SpeechState>("off");
   const [interimText, setInterimText] = useState("");
 
-  const modeRef       = useRef<SpeechMode>("wake");
-  const recRef        = useRef<any>(null);
-  const restartTimer  = useRef<any>(null);
-  const enabledRef    = useRef(enabled);
-  const langRef       = useRef(language);
-  const mountedRef    = useRef(true);
+  const modeRef      = useRef<SpeechMode>("wake");
+  const recRef       = useRef<SpeechRecognizer | null>(null);
+  const restartTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enabledRef   = useRef(enabled);
+  const langRef      = useRef(language);
+  const mountedRef   = useRef(true);
 
   enabledRef.current = enabled;
   langRef.current    = language;
 
-  const isSupported =
-    Platform.OS === "web" &&
-    typeof window !== "undefined" &&
-    ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
+  const isSupported = checkIsSupported();
 
   const stopRec = useCallback(() => {
-    clearTimeout(restartTimer.current);
+    if (restartTimer.current) clearTimeout(restartTimer.current);
     if (recRef.current) {
       try { recRef.current.abort(); } catch { /* ignore */ }
       recRef.current = null;
@@ -52,15 +101,17 @@ export function useWakeWordRecognition({
   }, []);
 
   const startRec = useCallback((forceMode?: SpeechMode) => {
-    if (!isSupported || !enabledRef.current) return;
-    clearTimeout(restartTimer.current);
+    if (!checkIsSupported() || !enabledRef.current) return;
+    if (restartTimer.current) clearTimeout(restartTimer.current);
     if (recRef.current) {
       try { recRef.current.abort(); } catch { /* ignore */ }
       recRef.current = null;
     }
 
-    const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const rec = new SR();
+    const SRClass = getSRClass();
+    if (!SRClass) return;
+
+    const rec = new SRClass();
     recRef.current = rec;
 
     const currentMode = forceMode ?? modeRef.current;
@@ -75,7 +126,7 @@ export function useWakeWordRecognition({
       if (mountedRef.current) setState("listening");
     };
 
-    rec.onresult = (e: any) => {
+    rec.onresult = (e) => {
       let interim = "";
       let final   = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -97,44 +148,37 @@ export function useWakeWordRecognition({
             modeRef.current = "question";
             setMode("question");
             onWakeWord();
-            // immediately start listening for the question
             restartTimer.current = setTimeout(() => startRec("question"), 300);
           } else {
-            // not a wake word — keep listening in wake mode
             restartTimer.current = setTimeout(() => startRec("wake"), 400);
           }
         } else {
-          // question mode — fuzzy-match the transcript to a command key,
-          // fall back to raw text for numeric check codes and unknown inputs
           modeRef.current = "wake";
           setMode("wake");
           const matched = matchCommand(final);
           onQuestion(matched ?? final.trim());
-          // restart wake mode after question is sent
           restartTimer.current = setTimeout(() => startRec("wake"), 1800);
         }
       }
     };
 
-    rec.onerror = (e: any) => {
+    rec.onerror = (e) => {
       if (!mountedRef.current) return;
-      if (e.error === "no-speech") {
-        // silence — just restart
+      const errCode = e.error ?? e.code ?? "";
+      if (errCode === "no-speech") {
         restartTimer.current = setTimeout(() => startRec(), 300);
         return;
       }
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+      if (errCode === "not-allowed" || errCode === "service-not-allowed") {
         setState("off");
-        onError?.("Microphone access denied. Please allow mic permission in your browser settings.");
+        onError?.("Microphone access denied. Please allow mic permission in your device settings.");
         return;
       }
-      // other errors — restart after brief pause
       restartTimer.current = setTimeout(() => startRec(), 800);
     };
 
     rec.onend = () => {
       if (!mountedRef.current) return;
-      // If still enabled and no timer pending, restart
       if (enabledRef.current && recRef.current === rec) {
         recRef.current = null;
         restartTimer.current = setTimeout(() => startRec(), 350);
@@ -147,9 +191,8 @@ export function useWakeWordRecognition({
       recRef.current = null;
       restartTimer.current = setTimeout(() => startRec(), 1000);
     }
-  }, [isSupported, onWakeWord, onQuestion, onError]);
+  }, [onWakeWord, onQuestion, onError]);
 
-  // Auto-start / stop when enabled changes
   useEffect(() => {
     if (enabled && isSupported) {
       modeRef.current = "wake";
@@ -160,12 +203,11 @@ export function useWakeWordRecognition({
     }
   }, [enabled, isSupported]);
 
-  // Reset to wake mode (call after NOVA finishes speaking)
   const returnToWake = useCallback(() => {
     if (!enabledRef.current) return;
     modeRef.current = "wake";
     setMode("wake");
-    clearTimeout(restartTimer.current);
+    if (restartTimer.current) clearTimeout(restartTimer.current);
     restartTimer.current = setTimeout(() => startRec("wake"), 400);
   }, [startRec]);
 
@@ -173,7 +215,7 @@ export function useWakeWordRecognition({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      clearTimeout(restartTimer.current);
+      if (restartTimer.current) clearTimeout(restartTimer.current);
       stopRec();
     };
   }, []);

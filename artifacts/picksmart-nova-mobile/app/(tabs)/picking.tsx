@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { ExpoSpeechRecognitionModule } from "expo-speech-recognition";
 import colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import NovaOrb from "@/components/NovaOrb";
@@ -217,8 +218,25 @@ export default function PickingScreen() {
     ws.onerror = () => { setWsStatus("disconnected"); };
   }, [user, token, novaIdInput, language, handleState]);
 
-  const startSession = () => {
+  const startSession = async () => {
     setVoiceError(null);
+    // On native, request mic + speech-recognition permissions before starting.
+    // If denied, auto-disable voice so the picker can still use touch buttons.
+    if (Platform.OS === "ios" || Platform.OS === "android") {
+      try {
+        const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+        if (!granted) {
+          setVoiceEnabled(false);
+          setVoiceError(
+            isES
+              ? "Permiso de micrófono denegado. Puedes usar los botones táctiles."
+              : "Microphone permission denied. You can still use the touch buttons."
+          );
+        }
+      } catch {
+        // Permissions API unavailable (e.g. simulator) — proceed with current voice setting
+      }
+    }
     setSessionActive(true);
     connect();
   };
