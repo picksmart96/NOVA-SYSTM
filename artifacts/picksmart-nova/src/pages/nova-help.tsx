@@ -697,19 +697,21 @@ export default function NovaHelpPage() {
     };
 
     rec.onerror = (e: SpeechRecognitionErrorEvent) => {
-      setDiagMsg(`wake err: ${e.error}`);
+      // aborted / no-speech are normal browser events — onend handles restart
       if (e.error === "aborted" || e.error === "no-speech") return;
-      const delay = e.error === "not-allowed" ? 999999 : 900;
-      if (e.error === "not-allowed") {
+      // Permanent mic denial — show user-friendly message, do NOT retry
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
         setErrorMsg(isSpanish
           ? "Micrófono bloqueado. Ve a Ajustes → Safari → Micrófono."
           : "Mic blocked. Go to Settings → Safari → Microphone.");
+        return;
       }
+      // Transient error — retry after a short delay
       setTimeout(() => {
         if (sessionActiveRef.current && listenModeRef.current === "wake") {
           startWakeRef.current?.();
         }
-      }, delay);
+      }, 900);
     };
 
     setPhase("wake_listening");
@@ -762,17 +764,17 @@ export default function NovaHelpPage() {
     };
 
     rec.onerror = (e: SpeechRecognitionErrorEvent) => {
-      setDiagMsg(`q err: ${e.error}`);
-      if (e.error === "not-allowed") {
+      // Permanent mic denial — show user-friendly message, do NOT retry
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
         setErrorMsg(isSpanish
           ? "Micrófono bloqueado. Ve a Ajustes → Safari → Micrófono."
           : "Mic blocked. Go to Settings → Safari → Microphone.");
-        restarted = true;   // don't retry on permanent permission denial
+        restarted = true;
         return;
       }
-      // For all errors (including aborted): onend will also fire after this,
-      // scheduleRestart ensures only ONE restart happens.
-      scheduleRestart(e.error === "aborted" ? 500 : 700);
+      // aborted / no-speech are normal — onend will also fire and handle restart
+      // via scheduleRestart, so we just let it propagate.
+      scheduleRestart(e.error === "aborted" || e.error === "no-speech" ? 400 : 700);
     };
 
     setPhase("listening");
@@ -972,10 +974,10 @@ export default function NovaHelpPage() {
     // Use continuous=false — iOS doesn't support true continuous mode and
     // terminates sessions constantly, causing rapid restart glitches.
     // The onend handler below re-starts automatically after each phrase.
-    rec.continuous     = false;
-    rec.interimResults = false;
-    rec.lang           = ttsLang;
-    rec.maxAlternatives = 1;
+    rec.continuous      = false;
+    rec.interimResults  = false;
+    rec.lang            = ttsLang;
+    rec.maxAlternatives = 3; // check multiple hypotheses for better wake-word detection
 
     rec.onstart = () => {
       alwaysActiveRef.current = true;
@@ -1001,8 +1003,11 @@ export default function NovaHelpPage() {
       alwaysActiveRef.current = false;
       setAlwaysListening(false);
       alwaysRecRef.current = null;
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") return;
-      if (e.error === "aborted") return; // We aborted it ourselves — don't count as error
+      // These are all normal — onend handles restart, no retry count increase
+      if (
+        e.error === "not-allowed" || e.error === "service-not-allowed" ||
+        e.error === "aborted" || e.error === "no-speech"
+      ) return;
       alwaysRetryCount.current++;
       alwaysRetryDelay.current = Math.min(alwaysRetryDelay.current * 1.5, 4000);
       if (!sessionActiveRef.current) {
@@ -1017,9 +1022,13 @@ export default function NovaHelpPage() {
       const results = Array.from(e.results as any[]).slice(e.resultIndex);
       for (const result of results as any[]) {
         if (!result.isFinal) continue;
-        const text = (result[0]?.transcript || "").toLowerCase().trim();
+        // Check all alternatives for the wake word — maxAlternatives=3 so we
+        // catch accented or partial "nova" recognitions in any hypothesis
+        const allText = Array.from(result as any[])
+          .map((alt: any) => (alt.transcript || "").toLowerCase())
+          .join(" ");
         // Wake words: "nova", "hey nova", "hola nova", "oye nova"
-        if (/\bnova\b|hey nova|hola nova|oye nova/i.test(text)) {
+        if (/\bnova\b|hey nova|hola nova|oye nova/i.test(allText)) {
           stopAlwaysListen();
           if (!sessionActiveRef.current) {
             startSessionRef.current?.();
@@ -1592,12 +1601,7 @@ export default function NovaHelpPage() {
           </div>
         )}
 
-        {/* Mic diagnostic — shows recognition errors in real time (debug) */}
-        {sessionActive && diagMsg && (
-          <div className="w-full rounded-lg border border-slate-600/40 bg-slate-900/60 px-4 py-2 text-slate-400 text-xs font-mono text-center">
-            {diagMsg}
-          </div>
-        )}
+        {/* diagMsg intentionally not shown to users — used for internal debug only */}
 
         {/* Headphone tip — shown before session starts */}
         {!sessionActive && voiceInputSupported && (
