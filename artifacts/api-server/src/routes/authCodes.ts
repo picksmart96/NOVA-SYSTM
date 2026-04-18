@@ -1,23 +1,45 @@
 import { Router } from "express";
 import { ReplitConnectors } from "@replit/connectors-sdk";
 import { logger } from "../lib/logger";
+import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
 
 const router = Router();
-
-// In-memory code store: email → { code, expiresAt, type }
-const codeStore = new Map<string, { code: string; expiresAt: number; type: string }>();
 
 function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+// DB-backed code store — survives server restarts
+async function storeCode(email: string, code: string, type: string): Promise<void> {
+  const expiresAt = Date.now() + 10 * 60 * 1000;
+  await db.execute(sql`
+    INSERT INTO psa_verification_codes (email, code, expires_at, type)
+    VALUES (${email.toLowerCase()}, ${code}, ${expiresAt}, ${type})
+    ON CONFLICT (email) DO UPDATE
+    SET code = EXCLUDED.code, expires_at = EXCLUDED.expires_at, type = EXCLUDED.type
+  `);
+}
+
+async function getCode(email: string): Promise<{ code: string; expiresAt: number; type: string } | null> {
+  const rows = await db.execute(sql`
+    SELECT code, expires_at, type FROM psa_verification_codes WHERE email = ${email.toLowerCase()}
+  `);
+  const row = rows.rows?.[0] as { code: string; expires_at: string; type: string } | undefined;
+  if (!row) return null;
+  return { code: row.code, expiresAt: Number(row.expires_at), type: row.type };
+}
+
+async function deleteCode(email: string): Promise<void> {
+  await db.execute(sql`DELETE FROM psa_verification_codes WHERE email = ${email.toLowerCase()}`);
+}
+
 function buildCodeEmail(name: string, code: string, type: "verify" | "reset" | "username", username?: string): string {
   const appUrl = process.env.APP_URL ?? "https://nova-warehouse-control.replit.app";
   const isVerify = type === "verify";
-  const isReset = type === "reset";
   const isUsername = type === "username";
 
-  const title = isVerify ? "Verify your email" : isReset ? "Reset your password" : "Your username";
+  const title = isVerify ? "Verify your email" : type === "reset" ? "Reset your password" : "Your username";
   const bodyContent = isUsername
     ? `<p>Your PickSmart NOVA username is:</p>
        <div style="background:#141a26;border:1px solid #252d3d;border-radius:12px;padding:20px;text-align:center;margin:24px 0;">
@@ -89,15 +111,17 @@ router.post("/auth/send-code", async (req, res) => {
   if (!email) { res.status(400).json({ error: "Email is required" }); return; }
 
   const code = generateCode();
-  codeStore.set(email.toLowerCase(), { code, expiresAt: Date.now() + 10 * 60 * 1000, type });
-
-  const subjects: Record<string, string> = {
-    verify: "Your PickSmart NOVA verification code",
-    reset: "Reset your PickSmart NOVA password",
-    username: "Your PickSmart NOVA username",
-  };
 
   try {
+    // Persist to DB — survives server restarts
+    await storeCode(email, code, type);
+
+    const subjects: Record<string, string> = {
+      verify: "Your PickSmart NOVA verification code",
+      reset: "Reset your PickSmart NOVA password",
+      username: "Your PickSmart NOVA username",
+    };
+
     const connectors = new ReplitConnectors();
     const html = buildCodeEmail(name, code, type as "verify" | "reset" | "username");
     const raw = buildRawMessage({
@@ -154,21 +178,31 @@ router.post("/auth/send-username", async (req, res) => {
 });
 
 // POST /api/auth/verify-code — check a code
-router.post("/auth/verify-code", (req, res) => {
+router.post("/auth/verify-code", async (req, res) => {
   const { email, code } = req.body as { email: string; code: string };
   if (!email || !code) { res.status(400).json({ error: "Email and code required" }); return; }
 
-  const entry = codeStore.get(email.toLowerCase());
-  if (!entry) { res.status(400).json({ error: "No code found for this email. Request a new one." }); return; }
-  if (Date.now() > entry.expiresAt) {
-    codeStore.delete(email.toLowerCase());
-    res.status(400).json({ error: "Code has expired. Request a new one." });
-    return;
+  try {
+    const entry = await getCode(email);
+    if (!entry) {
+      res.status(400).json({ error: "No code found for this email. Request a new one." });
+      return;
+    }
+    if (Date.now() > entry.expiresAt) {
+      await deleteCode(email);
+      res.status(400).json({ error: "Code has expired. Request a new one." });
+      return;
+    }
+    if (entry.code !== code.trim()) {
+      res.status(400).json({ error: "Incorrect code. Check your email and try again." });
+      return;
+    }
+    await deleteCode(email);
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "verify-code error");
+    res.status(500).json({ error: "Server error verifying code" });
   }
-  if (entry.code !== code.trim()) { res.status(400).json({ error: "Incorrect code. Check your email and try again." }); return; }
-
-  codeStore.delete(email.toLowerCase());
-  res.json({ ok: true });
 });
 
 export default router;
