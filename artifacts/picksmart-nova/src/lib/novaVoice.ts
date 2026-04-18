@@ -34,6 +34,11 @@ type VoiceOpts = {
 };
 let onListeningChange: ((v: boolean) => void) | undefined;
 
+// ── Echo phrase filter ─────────────────────────────────────────────────────────
+// Words NOVA speaks as short replies — high false-positive risk if they bleed
+// through the mic after TTS. Filtered before any wake/command processing.
+const IGNORE_PHRASES = ["yes", "loading", "okay", "ready"];
+
 // ── Internal helpers ───────────────────────────────────────────────────────────
 
 function setListening(v: boolean) {
@@ -142,6 +147,9 @@ export const initVoice = (lang: string, opts?: VoiceOpts): void => {
 
     const result = event.results[event.results.length - 1];
     const text   = result[0].transcript.toLowerCase();
+
+    // 🔇 Drop short NOVA reply echoes ("yes", "loading", "okay", "ready")
+    if (IGNORE_PHRASES.some((p) => text.includes(p))) return;
 
     console.debug("Heard:", text);
 
