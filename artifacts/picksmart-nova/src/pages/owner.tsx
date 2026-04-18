@@ -793,8 +793,8 @@ function InviteManagement() {
         }),
       });
       if (res.ok) {
-        const { token } = await res.json() as { token: string };
-        setLastLink(`${window.location.origin}/invite/${token}`);
+        const { inviteUrl } = await res.json() as { token: string; inviteUrl: string };
+        setLastLink(inviteUrl);
         setFullName("");
         setEmail("");
       }
@@ -1521,6 +1521,9 @@ function UsersAccessSection() {
     } catch { /* silent */ }
   };
 
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteSendStatus, setInviteSendStatus] = useState<"idle" | "sent" | "error">("idle");
+
   const handleInviteUser = async () => {
     if (!inviteForm.fullName.trim() || !inviteForm.email.trim()) return;
     inviteAppUser({ fullName: inviteForm.fullName, email: inviteForm.email, role: inviteForm.role, inviteLink });
@@ -1548,12 +1551,14 @@ function UsersAccessSection() {
           }),
         });
         if (res.ok) {
-          const { token } = await res.json() as { token: string };
-          const url = `${window.location.origin}/invite/${token}`;
+          // Use server-returned inviteUrl — always the production domain,
+          // never window.location.origin which may be the Replit dev URL
+          const { inviteUrl: url } = await res.json() as { token: string; inviteUrl: string };
           setGeneratedInviteUrl(url);
           setGeneratedInviteName(name);
           setGeneratedInviteEmail(email);
           setGeneratedInviteRole(role);
+          setInviteSendStatus("idle");
         }
       } catch { /* silent */ }
     } else {
@@ -1562,13 +1567,32 @@ function UsersAccessSection() {
     setInviteForm({ fullName: "", email: "", role: "Selector", warehouseSlug: allWarehouses[0]?.slug ?? "" });
   };
 
-  const handleSendEmail = () => {
-    if (!generatedInviteUrl) return;
-    const subject = encodeURIComponent("You've been invited to PickSmart Academy");
-    const body = encodeURIComponent(
-      `Hi ${generatedInviteName},\n\nYou've been invited to join PickSmart Academy as a ${generatedInviteRole}.\n\nClick the link below to create your account:\n\n${generatedInviteUrl}\n\nSee you on the floor!\n— PickSmart Academy`
-    );
-    window.open(`mailto:${generatedInviteEmail}?subject=${subject}&body=${body}`, "_blank");
+  const handleSendEmail = async () => {
+    if (!generatedInviteUrl || inviteSending) return;
+    setInviteSending(true);
+    setInviteSendStatus("idle");
+    try {
+      const raw = localStorage.getItem("picksmart-auth-store");
+      const jwt = raw ? (JSON.parse(raw) as { state?: { jwtToken?: string } })?.state?.jwtToken : null;
+      const res = await fetch("/api/invites/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
+        },
+        body: JSON.stringify({
+          email: generatedInviteEmail,
+          name: generatedInviteName,
+          role: generatedInviteRole,
+          inviteUrl: generatedInviteUrl,
+        }),
+      });
+      setInviteSendStatus(res.ok ? "sent" : "error");
+    } catch {
+      setInviteSendStatus("error");
+    } finally {
+      setInviteSending(false);
+    }
   };
 
   const handleShare = async () => {
@@ -1690,9 +1714,12 @@ function UsersAccessSection() {
                 <div className="flex flex-wrap gap-3">
                   <button
                     onClick={handleSendEmail}
-                    className="flex-1 min-w-[140px] rounded-2xl bg-yellow-400 px-4 py-2.5 font-bold text-sm text-slate-950 hover:bg-yellow-300 transition flex items-center justify-center gap-2"
+                    disabled={inviteSending}
+                    className="flex-1 min-w-[140px] rounded-2xl bg-yellow-400 px-4 py-2.5 font-bold text-sm text-slate-950 hover:bg-yellow-300 transition flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    <Mail className="h-4 w-4" /> Send Email
+                    {inviteSending
+                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending…</>
+                      : <><Mail className="h-4 w-4" /> Send Email</>}
                   </button>
                   {canShare && (
                     <button
@@ -1711,9 +1738,16 @@ function UsersAccessSection() {
                       : <><Copy className="h-4 w-4" /> Copy Link</>}
                   </button>
                 </div>
-                <p className="text-xs text-green-400/70">
-                  "Send Email" opens your email app pre-filled with {generatedInviteEmail} and the invite link.
-                </p>
+                {inviteSendStatus === "sent" && (
+                  <p className="text-xs text-green-400 font-semibold flex items-center gap-1.5">
+                    <Check className="h-3.5 w-3.5" /> Email sent to {generatedInviteEmail}
+                  </p>
+                )}
+                {inviteSendStatus === "error" && (
+                  <p className="text-xs text-red-400 font-semibold">
+                    Email failed to send. Copy the link and send it manually.
+                  </p>
+                )}
               </div>
             )}
           </div>

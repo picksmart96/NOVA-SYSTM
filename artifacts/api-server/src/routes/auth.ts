@@ -316,7 +316,7 @@ router.post("/auth/invite", requireAuth, async (req, res) => {
       },
     });
 
-    res.status(201).json({ token });
+    res.status(201).json({ token, inviteUrl: builtInviteUrl });
   } catch (err) {
     logger.error({ err }, "[Auth] Create invite error");
     res.status(500).json({ error: "Server error" });

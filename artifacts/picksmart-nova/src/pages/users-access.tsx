@@ -124,8 +124,7 @@ export default function UsersAccessPage() {
           }),
         });
         if (res.ok) {
-          const { token } = await res.json() as { token: string };
-          const url = `${window.location.origin}/invite/${token}`;
+          const { inviteUrl: url } = await res.json() as { token: string; inviteUrl: string };
           setGeneratedInviteUrl(url);
           setGeneratedInviteName(name);
           setGeneratedInviteEmail(email);

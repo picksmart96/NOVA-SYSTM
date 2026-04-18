@@ -115,14 +115,14 @@ export default function SupervisorPage() {
         }),
       });
       if (!res.ok) return;
-      const { token } = await res.json() as { token: string };
-      setInviteToken(token);
+      const { inviteUrl } = await res.json() as { token: string; inviteUrl: string };
+      setInviteToken(inviteUrl);
       setTrainerName("");
       setTrainerEmail("");
     } catch { /* silent — user can retry */ }
   };
 
-  const generatedInviteUrl = inviteToken ? `${window.location.origin}/invite/${inviteToken}` : null;
+  const generatedInviteUrl = inviteToken ?? null;
 
   const handleCopy = async (text: string, label: string) => {
     try {

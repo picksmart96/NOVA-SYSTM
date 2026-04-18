@@ -98,10 +98,10 @@ function InviteCard({ card }: { card: RoleCard }) {
           warehouseSlug: currentUser?.warehouseSlug ?? null,
         }),
       });
-      const data = await res.json() as { token?: string; error?: string };
+      const data = await res.json() as { token?: string; inviteUrl?: string; error?: string };
       if (!res.ok) { setError(data.error ?? "Failed to generate link. Please try again."); return; }
 
-      const finalUrl = `${appUrl}/invite/${data.token}`;
+      const finalUrl = data.inviteUrl ?? `${appUrl}/invite/${data.token}`;
       setLink(finalUrl);
 
       // Update the alert with the real URL (fire-and-forget)
