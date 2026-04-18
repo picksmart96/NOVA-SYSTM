@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
-import { matchCommand } from "@/lib/novaCommandMatcher";
+import { matchCommand } from "@workspace/nova-shared";
 
 export type SpeechMode = "wake" | "question";
 export type SpeechState = "off" | "starting" | "listening" | "processing";

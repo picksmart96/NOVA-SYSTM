@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVoiceEngine } from "@/hooks/useVoiceEngine";
 import { useHeadphones } from "@/hooks/useHeadphones";
-import { matchCommand } from "@/lib/novaCommandMatcher";
+import { matchCommand } from "@workspace/nova-shared";
 import { useTrainerStore } from "@/lib/trainerStore";
 import { useAuthStore } from "@/lib/authStore";
 

@@ -9,7 +9,7 @@ import { useAuthStore } from "@/lib/authStore";
 import {
   normalizeSpeech, extractNumber,
 } from "@/lib/parser";
-import { matchCommand } from "@/lib/novaCommandMatcher";
+import { matchCommand } from "@workspace/nova-shared";
 import {
   Headphones, Mic, MicOff, Volume2, RotateCcw, Shield,
   CheckCircle2, AlertTriangle, Package, DoorOpen,

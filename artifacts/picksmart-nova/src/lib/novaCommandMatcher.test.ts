@@ -4,7 +4,7 @@ import {
   levenshtein,
   closeEnough,
   matchCommand,
-} from "./novaCommandMatcher";
+} from "@workspace/nova-shared";
 
 // ─── normalizeText ────────────────────────────────────────────────────────────
 

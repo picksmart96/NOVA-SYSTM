@@ -1,0 +1,12 @@
+{
+  "name": "@workspace/nova-shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/novaCommandMatcher.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}
