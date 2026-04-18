@@ -492,7 +492,8 @@ export default function NovaHelpPage() {
       .then((stream) => {
         btStreamRef.current = stream;   // keep alive → HFP stays engaged
         setDiagMsg("⏳ waiting for BT switch…");
-        // 1500 ms: generous time for iOS to complete A2DP → HFP profile switch
+        // 2500 ms: generous time for iOS to complete A2DP → HFP profile switch
+        // (slower headphones can take up to 2 seconds for this switch)
         setTimeout(() => {
           if (!sessionActiveRef.current || listenModeRef.current !== mode) {
             releaseBtStream();
@@ -502,7 +503,7 @@ export default function NovaHelpPage() {
           try { rec.start(); } catch (e: any) {
             setDiagMsg(`rec.start err: ${e?.message ?? String(e)}`);
           }
-        }, 1500);
+        }, 2500);
       })
       .catch(() => {
         // getUserMedia failed — fall back to built-in mic without HFP
@@ -769,6 +770,17 @@ export default function NovaHelpPage() {
     rec.maxAlternatives = 1;
 
     let gotResult = false;
+    let restarted = false;   // prevent double-restart from onerror + onend both firing
+
+    const scheduleRestart = (delayMs: number) => {
+      if (restarted) return;
+      restarted = true;
+      setTimeout(() => {
+        if (sessionActiveRef.current && listenModeRef.current === "question") {
+          startQuestionListenRef.current?.();
+        }
+      }, delayMs);
+    };
 
     rec.onresult = (e: SpeechRecognitionEvent) => {
       setDiagMsg("✅ heard speech");
@@ -784,13 +796,7 @@ export default function NovaHelpPage() {
 
     rec.onend = () => {
       if (!sessionActiveRef.current || listenModeRef.current !== "question") return;
-      if (!gotResult) {
-        setTimeout(() => {
-          if (sessionActiveRef.current && listenModeRef.current === "question") {
-            startQuestionListenRef.current?.();
-          }
-        }, 400);
-      }
+      if (!gotResult) scheduleRestart(300);
     };
 
     rec.onerror = (e: SpeechRecognitionErrorEvent) => {
@@ -799,22 +805,12 @@ export default function NovaHelpPage() {
         setErrorMsg(isSpanish
           ? "Micrófono bloqueado. Ve a Ajustes → Safari → Micrófono."
           : "Mic blocked. Go to Settings → Safari → Microphone.");
+        restarted = true;   // don't retry on permanent permission denial
         return;
       }
-      if (e.error === "aborted") {
-        // 'aborted' = iOS audio session wasn't ready yet. Wait 800ms then retry.
-        setTimeout(() => {
-          if (sessionActiveRef.current && listenModeRef.current === "question") {
-            startQuestionListenRef.current?.();
-          }
-        }, 800);
-        return;
-      }
-      setTimeout(() => {
-        if (sessionActiveRef.current && listenModeRef.current === "question") {
-          startQuestionListenRef.current?.();
-        }
-      }, 900);
+      // For all errors (including aborted): onend will also fire after this,
+      // scheduleRestart ensures only ONE restart happens.
+      scheduleRestart(e.error === "aborted" ? 500 : 700);
     };
 
     setPhase("listening");
