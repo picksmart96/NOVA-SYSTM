@@ -352,6 +352,7 @@ export default function NovaHelpPage() {
   const [lastQuestion, setLastQuestion] = useState("");
   const [textInput, setTextInput]       = useState("");
   const [errorMsg, setErrorMsg]         = useState("");
+  const [diagMsg, setDiagMsg]           = useState("");   // visible mic diagnostics
   const [log, setLog]                   = useState<LogEntry[]>([]);
   const [safetyMode, setSafetyMode]     = useState(false);
   const [safetyIndex, setSafetyIndex]   = useState(0);
@@ -445,41 +446,47 @@ export default function NovaHelpPage() {
     }
   }, [isSpanish, releaseBtStream]);
 
-  // Starts a SpeechRecognition instance.
-  // The BT stream is already open from startSession; just call rec.start().
-  // If the stream died (tab backgrounded), re-open it quietly then start.
+  // ── startRecWithBT ────────────────────────────────────────────────────────
+  //
+  // Strategy: getUserMedia (held since startSession tap) established HFP.
+  // Before calling rec.start() we RELEASE the getUserMedia tracks so iOS
+  // doesn't have two APIs competing for the same capture device.
+  // HFP stays engaged briefly after the stream is released; recognition
+  // grabs the BT mic during that window.
+  //
+  // If the stream already died, we re-open it first to re-establish HFP,
+  // wait 700 ms for the BT profile switch, release it, then start.
+  //
   const startRecWithBT = useCallback((
     rec: SpeechRecognition,
     mode: "wake" | "question"
   ): void => {
     const hasLiveStream = btStreamRef.current?.getTracks().some((t) => t.readyState === "live");
 
-    if (hasLiveStream) {
-      // HFP already engaged — start immediately
+    const doStart = () => {
       if (!sessionActiveRef.current || listenModeRef.current !== mode) return;
-      try { rec.start(); } catch { /* already started */ }
-    } else {
-      // Stream died (tab was backgrounded, etc.) — re-open quietly
-      if (!navigator.mediaDevices?.getUserMedia) {
-        if (!sessionActiveRef.current || listenModeRef.current !== mode) return;
-        try { rec.start(); } catch { /* ignore */ }
-        return;
+      // Release getUserMedia tracks NOW — frees the mic for SpeechRecognition
+      try { btStreamRef.current?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
+      btStreamRef.current = null;
+      setDiagMsg("🎤 mic open…");
+      try { rec.start(); } catch (e: any) {
+        setDiagMsg(`rec.start error: ${e?.message ?? e}`);
       }
+    };
+
+    if (hasLiveStream) {
+      doStart();
+    } else {
+      // Stream gone — re-establish HFP then start
+      if (!navigator.mediaDevices?.getUserMedia) { doStart(); return; }
       navigator.mediaDevices
         .getUserMedia({ audio: true, video: false })
         .then((stream) => {
           btStreamRef.current = stream;
-          // Give iOS 600 ms to complete the BT profile switch before starting
-          setTimeout(() => {
-            if (!sessionActiveRef.current || listenModeRef.current !== mode) return;
-            try { rec.start(); } catch { /* already started */ }
-          }, 600);
+          // Wait for BT profile switch to complete
+          setTimeout(doStart, 700);
         })
-        .catch(() => {
-          // getUserMedia failed — still try recognition on built-in mic
-          if (!sessionActiveRef.current || listenModeRef.current !== mode) return;
-          try { rec.start(); } catch { /* ignore */ }
-        });
+        .catch(() => doStart()); // no BT, fall back to built-in mic
     }
   }, []);
 
@@ -685,6 +692,7 @@ export default function NovaHelpPage() {
     rec.maxAlternatives = 3;
 
     rec.onresult = (e: SpeechRecognitionEvent) => {
+      setDiagMsg("✅ heard wake");
       const transcripts = Array.from(e.results)
         .map((r) => Array.from(r).map((alt) => alt.transcript).join(" "))
         .join(" ");
@@ -702,23 +710,22 @@ export default function NovaHelpPage() {
     };
 
     rec.onerror = (e: SpeechRecognitionErrorEvent) => {
+      setDiagMsg(`wake err: ${e.error}`);
       if (e.error === "aborted" || e.error === "no-speech") return;
-      // For audio-capture / BT handshake failures, retry with longer delay
-      setTimeout(() => {
-        if (sessionActiveRef.current && listenModeRef.current === "wake") {
-          startWakeRef.current?.();
-        }
-      }, e.error === "not-allowed" ? 999999 : 900);
+      const delay = e.error === "not-allowed" ? 999999 : 900;
       if (e.error === "not-allowed") {
         setErrorMsg(isSpanish
           ? "Micrófono bloqueado. Ve a Ajustes → Safari → Micrófono."
           : "Mic blocked. Go to Settings → Safari → Microphone.");
       }
+      setTimeout(() => {
+        if (sessionActiveRef.current && listenModeRef.current === "wake") {
+          startWakeRef.current?.();
+        }
+      }, delay);
     };
 
     setPhase("wake_listening");
-    // Use BT-aware start: getUserMedia first to force iOS into HFP mic profile,
-    // then start recognition (guaranteed to capture from BT headphone mic).
     startRecWithBT(rec, "wake");
   }, [ttsLang, isSpanish, stopRecognition, dispatchTranscript, startRecWithBT]);
 
@@ -740,6 +747,7 @@ export default function NovaHelpPage() {
     let gotResult = false;
 
     rec.onresult = (e: SpeechRecognitionEvent) => {
+      setDiagMsg("✅ heard speech");
       const transcript = Array.from(e.results)
         .map((r) => r[0].transcript)
         .join(" ")
@@ -762,6 +770,7 @@ export default function NovaHelpPage() {
     };
 
     rec.onerror = (e: SpeechRecognitionErrorEvent) => {
+      setDiagMsg(`q err: ${e.error}`);
       if (e.error === "aborted") return;
       if (e.error === "not-allowed") {
         setErrorMsg(isSpanish
@@ -769,7 +778,6 @@ export default function NovaHelpPage() {
           : "Mic blocked. Go to Settings → Safari → Microphone.");
         return;
       }
-      // audio-capture / BT switch — longer delay, then retry
       setTimeout(() => {
         if (sessionActiveRef.current && listenModeRef.current === "question") {
           startQuestionListenRef.current?.();
@@ -778,7 +786,6 @@ export default function NovaHelpPage() {
     };
 
     setPhase("listening");
-    // BT-aware start: getUserMedia forces iOS to HFP mic profile before rec.start()
     startRecWithBT(rec, "question");
   }, [ttsLang, isSpanish, stopRecognition, dispatchTranscript, startRecWithBT]);
 
@@ -1152,6 +1159,7 @@ export default function NovaHelpPage() {
     setLastHeard("");
     setLastQuestion("");
     setErrorMsg("");
+    setDiagMsg("");
     setLog([]);
     chatHistoryRef.current = [];
     setChatHistory([]);
@@ -1603,6 +1611,13 @@ export default function NovaHelpPage() {
         {errorMsg && (
           <div className="w-full rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-3 text-red-300 text-sm text-center">
             {errorMsg}
+          </div>
+        )}
+
+        {/* Mic diagnostic — shows recognition errors in real time (debug) */}
+        {sessionActive && diagMsg && (
+          <div className="w-full rounded-lg border border-slate-600/40 bg-slate-900/60 px-4 py-2 text-slate-400 text-xs font-mono text-center">
+            {diagMsg}
           </div>
         )}
 
