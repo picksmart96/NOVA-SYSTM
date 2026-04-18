@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
+import { matchCommand } from "@/lib/novaCommandMatcher";
 
 export type SpeechMode = "wake" | "question";
 export type SpeechState = "off" | "starting" | "listening" | "processing";
@@ -91,8 +92,8 @@ export function useWakeWordRecognition({
         }
 
         if (currentMode === "wake") {
-          const lower = final.toLowerCase();
-          if (lower.includes("nova") || lower.includes("no va") || lower.includes("nova")) {
+          const cmd = matchCommand(final);
+          if (cmd === "wake") {
             modeRef.current = "question";
             setMode("question");
             onWakeWord();
@@ -103,10 +104,12 @@ export function useWakeWordRecognition({
             restartTimer.current = setTimeout(() => startRec("wake"), 400);
           }
         } else {
-          // question mode — send transcript
+          // question mode — fuzzy-match the transcript to a command key,
+          // fall back to raw text for numeric check codes and unknown inputs
           modeRef.current = "wake";
           setMode("wake");
-          onQuestion(final.trim());
+          const matched = matchCommand(final);
+          onQuestion(matched ?? final.trim());
           // restart wake mode after question is sent
           restartTimer.current = setTimeout(() => startRec("wake"), 1800);
         }
