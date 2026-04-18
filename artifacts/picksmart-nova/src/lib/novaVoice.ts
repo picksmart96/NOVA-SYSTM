@@ -7,10 +7,10 @@
  *   continuous = true      →  always listening; session never ends between phrases
  *   interimResults = true  →  partial text for faster wake detection
  *   maxAlternatives = 1    →  simpler, lower latency
- *   getUserMedia           →  echo/noise/AGC constraints primed before SR starts
  *   isSpeaking gate        →  onresult ignored while NOVA talks; mic stays open
  *   lastSpeakTime cooldown →  500 ms post-TTS echo guard after isSpeaking flips
- *   wake word              →  "hey nova" / "oye nova" on any result (interim ok)
+ *   wake word (first)      →  checked before any phrase filtering — always fires
+ *   IGNORE_PHRASES         →  TTS echo filter applied to commands only, not wake
  *   resetSleepTimer()      →  4 s auto-sleep after last activity
  *   commands (final only)  →  result.isFinal gate — no partial noise
  *   safeStart retry        →  start() throws → retry once after 500 ms
@@ -118,17 +118,6 @@ export const initVoice = (lang: string, opts?: VoiceOpts): void => {
   muteFlag     = false;
   lastSpeakTime = 0;
 
-  // 🔥 Prime the audio pipeline with echo/noise constraints so the browser's
-  //    audio session is configured before SpeechRecognition takes over.
-  //    This significantly reduces NOVA's own TTS voice bleeding into the mic.
-  navigator.mediaDevices?.getUserMedia({
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl:  true,
-    },
-  }).catch(() => { /* permission denied handled by onerror */ });
-
   const rec = new SR();
   rec.continuous      = true;   // 🔥 always listening — no per-phrase restart
   rec.interimResults  = true;   // 🔥 partial results for early wake detection
@@ -148,12 +137,9 @@ export const initVoice = (lang: string, opts?: VoiceOpts): void => {
     const result = event.results[event.results.length - 1];
     const text   = result[0].transcript.toLowerCase();
 
-    // 🔇 Drop short NOVA reply echoes ("yes", "loading", "okay", "ready")
-    if (IGNORE_PHRASES.some((p) => text.includes(p))) return;
-
     console.debug("Heard:", text);
 
-    // 🟡 WAKE WORD
+    // 🟡 WAKE WORD — checked first, before any filtering
     if (!isAwake && (text.includes("hey nova") || text.includes("oye nova"))) {
       isAwake = true;
       console.debug("⚡ NOVA ACTIVATED");
@@ -164,6 +150,8 @@ export const initVoice = (lang: string, opts?: VoiceOpts): void => {
 
     // 🔵 COMMAND MODE — final results only
     if (isAwake && result.isFinal) {
+      // 🔇 Drop TTS echo fragments before routing the command
+      if (IGNORE_PHRASES.some((p) => text.includes(p))) return;
       (window as any).handleNovaCommand?.(text);
       resetSleepTimer();
     }
