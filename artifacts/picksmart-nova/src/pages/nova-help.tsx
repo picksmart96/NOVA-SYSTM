@@ -407,66 +407,65 @@ export default function NovaHelpPage() {
     ttsUnlockedRef.current = true;
   };
 
-  // ── Mic access — pre-request permission & help iOS route BT/headphone audio ─
-  const requestMicAccess = useCallback(async () => {
-    if (!navigator.mediaDevices?.getUserMedia) return;
+  // ── Bluetooth HFP session management ─────────────────────────────────────
+  //
+  // On iOS, Bluetooth headphones default to A2DP (high-quality output only).
+  // Speech recognition needs the HFP profile (which carries the mic channel).
+  // The ONLY reliable way to get HFP is:
+  //   1. Call getUserMedia() within a user gesture (tap).
+  //   2. KEEP the resulting stream alive (tracks NOT stopped) for the whole session.
+  //      While the stream lives, iOS holds HFP open — no mid-session profile switches.
+  //   3. Stop the tracks only when the session ends.
+  //
+  // Any call to .stop() on the tracks during the session drops iOS back to A2DP,
+  // requiring another 1–2 s switch before the next recognition attempt — which
+  // is the root cause of the "mic doesn't work with Bluetooth" bug.
+
+  const releaseBtStream = useCallback(() => {
+    try { btStreamRef.current?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
+    btStreamRef.current = null;
+  }, []);
+
+  // Call this ONCE at session start within the user-gesture callback.
+  // Returns the stream (or null on permission error).
+  const openBtStream = useCallback(async (): Promise<MediaStream | null> => {
+    releaseBtStream();
+    if (!navigator.mediaDevices?.getUserMedia) return null;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      stream.getTracks().forEach((t) => t.stop());
+      btStreamRef.current = stream;   // ← keep alive for entire session
+      return stream;
     } catch (err: any) {
       if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
         setErrorMsg(isSpanish
           ? "Micrófono bloqueado. Ve a Ajustes → Safari → Micrófono y permite el acceso."
           : "Mic blocked. Go to Settings → Safari → Microphone and allow access.");
       }
+      return null;
     }
-  }, [isSpanish]);
+  }, [isSpanish, releaseBtStream]);
 
-  // ── Bluetooth HFP mic activator ────────────────────────────────────────────
-  // iOS Bluetooth headphones default to the A2DP profile for audio output.
-  // Speech Recognition needs the HFP (hands-free) profile for mic input.
-  // Calling getUserMedia() and KEEPING the stream alive forces iOS to hold
-  // the HFP channel open, so recognition gets the headphone mic instead of
-  // the built-in mic (or silence if A2DP is still active).
-  const releaseBtStream = useCallback(() => {
-    try { btStreamRef.current?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
-    btStreamRef.current = null;
-  }, []);
-
-  // Opens the BT/HFP channel and starts a SpeechRecognition instance.
-  // Returns true if recognition started, false on permission error.
+  // Starts a SpeechRecognition instance, reusing the existing BT stream.
+  // If the stream has gone away (e.g. tab backgrounded), re-opens it first.
   const startRecWithBT = useCallback(async (
     rec: SpeechRecognition,
     mode: "wake" | "question"
   ): Promise<boolean> => {
-    // Release any old stream first
-    releaseBtStream();
-
-    // Open audio capture — forces iOS to switch BT to HFP mic profile.
-    if (navigator.mediaDevices?.getUserMedia) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        btStreamRef.current = stream;   // keep alive → HFP stays active
-      } catch (err: any) {
-        if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
-          setErrorMsg(isSpanish
-            ? "Micrófono bloqueado. Ve a Ajustes → Safari → Micrófono."
-            : "Mic blocked. Go to Settings → Safari → Microphone.");
-          return false;
-        }
-        // Permission granted but getUserMedia failed for another reason — continue
-      }
+    // If stream died, re-open it (profile already unlocked, just renew the track)
+    const hasLiveStream = btStreamRef.current?.getTracks().some((t) => t.readyState === "live");
+    if (!hasLiveStream) {
+      const s = await openBtStream();
+      if (!s) return false;
+      // Small pause for iOS to confirm HFP is fully engaged
+      await new Promise<void>((r) => setTimeout(r, 600));
     }
 
-    // Guard: check state hasn't changed while we awaited getUserMedia
-    if (!sessionActiveRef.current || listenModeRef.current !== mode) {
-      releaseBtStream();
-      return false;
-    }
+    // Guard: ensure session/mode didn't change while we were async
+    if (!sessionActiveRef.current || listenModeRef.current !== mode) return false;
 
-    try { rec.start(); } catch { /* ignore double-start */ }
+    try { rec.start(); } catch { /* already started or aborted */ }
     return true;
-  }, [isSpanish, releaseBtStream]);
+  }, [openBtStream]);
 
   // ── Wake Lock — keeps screen on while NOVA is active ─────────────────────
   const requestWakeLock = useCallback(async () => {
@@ -541,13 +540,14 @@ export default function NovaHelpPage() {
   }, [requestWakeLock]);
 
   // ── Stop recognition ──────────────────────────────────────────────────────
+  // IMPORTANT: do NOT touch btStreamRef here.
+  // Stopping the BT tracks during a session drops iOS back to A2DP,
+  // which requires a 1-2 s profile switch before the mic works again.
   const stopRecognition = useCallback(() => {
     listenModeRef.current = null;
     try { recognitionRef.current?.abort(); } catch { /* ignore */ }
     recognitionRef.current = null;
-    // Release BT/HFP stream so iOS can return to A2DP for playback
-    try { btStreamRef.current?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
-    btStreamRef.current = null;
+    // btStreamRef is intentionally left alive — stopRecognition ≠ endSession
   }, []);
 
   // ── Dispatch a voice transcript ───────────────────────────────────────────
@@ -1078,20 +1078,21 @@ export default function NovaHelpPage() {
   };
 
   // ── Session start ─────────────────────────────────────────────────────────
-  const startSession = () => {
+  const startSession = async () => {
     // CRITICAL: Stop always-on listener SYNCHRONOUSLY before anything else.
     stopAlwaysListen();
     stopRecognition();
 
     // Force-reset TTS unlock so unlockTTS() re-queues a silent utterance
     // on THIS user gesture — even if a prior "enable voice" tap already set it.
-    // Do NOT cancel() here — that would wipe the fresh unlock utterance.
     ttsUnlockedRef.current = false;
     unlockTTS();
 
-    // Pre-request mic permission + tell iOS to route audio through the active
-    // device (headphones, AirPods, or built-in mic). Must be within gesture.
-    requestMicAccess();
+    // ── Bluetooth HFP: open the mic stream NOW, within this user-gesture ──────
+    // This forces iOS to switch from A2DP (BT output) to HFP (BT mic+output).
+    // We keep the stream alive (tracks NOT stopped) for the entire session so
+    // iOS never drops back to A2DP. No mid-session profile switches = reliable mic.
+    await openBtStream();
 
     // Keep screen on + keep audio session alive so mic survives screen lock
     requestWakeLock();
@@ -1156,6 +1157,8 @@ export default function NovaHelpPage() {
     setSafetyMode(false);
     setSafetyIndex(0);
     stopRecognition();
+    // NOW we release the BT stream — session is truly over
+    releaseBtStream();
     try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
     releaseWakeLock();
     stopAudioKeepAlive();
@@ -1583,37 +1586,14 @@ export default function NovaHelpPage() {
           </button>
         )}
 
-        {/* Tap to speak — manual mic trigger, works with BT headphones */}
+        {/* Tap to speak — manual question listen trigger */}
         {sessionActive && (phase === "listening" || phase === "wake_listening") && (
           <button
             onClick={() => {
-              // Called within user gesture — most reliable BT mic activation path
               stopRecognition();
               listenModeRef.current = "question";
-              const Recognition = getRecognitionCtor();
-              if (!Recognition) return;
-              const rec = new Recognition();
-              recognitionRef.current = rec;
-              rec.continuous = false;
-              rec.interimResults = false;
-              rec.lang = ttsLang;
-              rec.maxAlternatives = 1;
-              let gotResult = false;
-              rec.onresult = (e: SpeechRecognitionEvent) => {
-                const t = Array.from(e.results).map((r) => r[0].transcript).join(" ").trim();
-                if (t) { gotResult = true; dispatchTranscript(t, "question"); }
-              };
-              rec.onend = () => {
-                if (!gotResult && sessionActiveRef.current && listenModeRef.current === "question") {
-                  setTimeout(() => startQuestionListenRef.current?.(), 400);
-                }
-              };
-              rec.onerror = (e: SpeechRecognitionErrorEvent) => {
-                if (e.error === "aborted") return;
-                setTimeout(() => startQuestionListenRef.current?.(), 900);
-              };
               setPhase("listening");
-              startRecWithBT(rec, "question");
+              startQuestionListenRef.current?.();
             }}
             className="w-full py-4 rounded-2xl bg-violet-700/30 hover:bg-violet-700/50 active:bg-violet-700/70 border border-violet-500/50 text-violet-200 font-bold text-base tracking-wide transition-all duration-150 active:scale-95 flex items-center justify-center gap-3"
           >
