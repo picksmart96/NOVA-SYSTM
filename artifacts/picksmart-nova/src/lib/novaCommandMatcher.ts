@@ -1,6 +1,8 @@
 export function normalizeText(input = "") {
   return input
     .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .trim()
     .replace(/[^\w\s]/g, "")
     .replace(/\s+/g, " ");
@@ -34,11 +36,13 @@ export function closeEnough(input: string, target: string, maxDistance = 2) {
 
   if (!a || !b) return false;
   if (a === b) return true;
-  if (a.includes(b) || b.includes(a)) return true;
 
   // Short targets (≤ 2 chars) must be exact — a distance of 2 on "no" would
   // match digit words like "one", "oh", "ok", "dos", "un" causing false denies.
+  // The includes check is also skipped for short targets for the same reason:
+  // "hey nova".includes("no") would wrongly fire without this guard.
   const effectiveMax = b.length <= 2 ? 0 : maxDistance;
+  if (effectiveMax > 0 && (a.includes(b) || b.includes(a))) return true;
   return levenshtein(a, b) <= effectiveMax;
 }
 
