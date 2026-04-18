@@ -144,7 +144,8 @@ export default function NovaTrainerPage() {
   const novaRateRef = useRef(0.95);
 
   // Refs
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef       = useRef<any>(null);
+  const startListeningRef    = useRef<(() => void) | null>(null);
   const shouldKeepListeningRef = useRef(false);
   const phaseRef = useRef<Phase>("IDLE");
   const safetyIndexRef = useRef(0);
@@ -184,19 +185,22 @@ export default function NovaTrainerPage() {
       setSpeaking(true);
       addLog("NOVA", text);
 
-      // Pause mic while NOVA speaks so her voice doesn't get recognised
+      // Stop mic while NOVA speaks — prevents her voice being recognised
       shouldKeepListeningRef.current = false;
       try { recognitionRef.current?.stop(); } catch {}
+      try { recognitionRef.current?.abort(); } catch {}
+      recognitionRef.current = null;   // force fresh instance on next listen
 
       speakText(text, lang, () => {
         setSpeaking(false);
-        // Auto-restart mic after NOVA finishes — hands-free for selectors
+        // Auto-restart mic after NOVA finishes.
+        // 3000 ms gap: iOS needs this to release TTS audio session before
+        // the mic can open (especially with Bluetooth headphones where the
+        // A2DP → HFP profile switch takes 1–2 s on its own).
         const p = phaseRef.current;
         if (!["IDLE", "SAFETY_FAILED"].includes(p)) {
           shouldKeepListeningRef.current = true;
-          setTimeout(() => {
-            try { recognitionRef.current?.start(); } catch {}
-          }, 350);
+          setTimeout(() => startListeningRef.current?.(), 3000);
         }
       }, novaRateRef.current);
     },
@@ -208,52 +212,60 @@ export default function NovaTrainerPage() {
   const startListening = useCallback(() => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition || !shouldKeepListeningRef.current) return;
 
-    if (!recognitionRef.current) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = novaRecogLang(lang);
+    // Always create a fresh instance — iOS won't restart a stopped instance
+    try { recognitionRef.current?.abort(); } catch {}
+    recognitionRef.current = null;
 
-      recognition.onstart = () => setListening(true);
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = novaRecogLang(lang);
 
-      recognition.onend = () => {
-        setListening(false);
-        if (shouldKeepListeningRef.current) {
-          setTimeout(() => {
-            try { recognition.start(); } catch {}
-          }, 300);
-        }
-      };
+    let restarted = false;
+    const scheduleRestart = (delayMs: number) => {
+      if (restarted || !shouldKeepListeningRef.current) return;
+      restarted = true;
+      setTimeout(() => startListeningRef.current?.(), delayMs);
+    };
 
-      recognition.onerror = () => {
-        setListening(false);
-        if (shouldKeepListeningRef.current) {
-          setTimeout(() => {
-            try { recognition.start(); } catch {}
-          }, 500);
-        }
-      };
+    recognition.onstart = () => setListening(true);
 
-      recognition.onresult = (event: any) => {
-        const transcript = normalizeSpeech(event.results?.[0]?.[0]?.transcript || "");
-        setHeardText(transcript);
-        addLog("USER", transcript || "[no input]");
-        handleVoiceInput(transcript);
-      };
+    recognition.onresult = (event: any) => {
+      const transcript = normalizeSpeech(event.results?.[0]?.[0]?.transcript || "");
+      setHeardText(transcript);
+      addLog("USER", transcript || "[no input]");
+      handleVoiceInput(transcript);
+    };
 
-      recognitionRef.current = recognition;
-    }
+    recognition.onend = () => {
+      setListening(false);
+      scheduleRestart(300);
+    };
 
-    shouldKeepListeningRef.current = true;
-    try { recognitionRef.current.start(); } catch {}
-  }, [addLog]); // eslint-disable-line react-hooks/exhaustive-deps
+    recognition.onerror = (e: any) => {
+      setListening(false);
+      if (e?.error === "not-allowed") {
+        shouldKeepListeningRef.current = false;
+        return;
+      }
+      // aborted = audio session not ready yet — retry with extra delay
+      scheduleRestart(e?.error === "aborted" ? 800 : 500);
+    };
+
+    recognitionRef.current = recognition;
+    try { recognition.start(); } catch {}
+  }, [addLog, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep ref in sync so setPromptAndSpeak's setTimeout can call latest version
+  useEffect(() => { startListeningRef.current = startListening; }, [startListening]);
 
   const stopListening = useCallback(() => {
     shouldKeepListeningRef.current = false;
     setListening(false);
-    try { recognitionRef.current?.stop(); } catch {}
+    try { recognitionRef.current?.abort(); } catch {}
+    recognitionRef.current = null;
   }, []);
 
   // ── Command shortcuts (global during session) ───────────────────────────
@@ -633,11 +645,13 @@ export default function NovaTrainerPage() {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRec) {
       setMicMode("browser");
-      setTimeout(() => startListening(), 1800);
+      shouldKeepListeningRef.current = true;
+      // 3000 ms: wait for TTS audio session to release before opening mic
+      setTimeout(() => startListeningRef.current?.(), 3000);
     } else {
       setMicMode("button");
     }
-  }, [assignment, setPromptAndSpeak, startListening]);
+  }, [assignment, setPromptAndSpeak]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resetSession = useCallback(() => {
     stopListening();
