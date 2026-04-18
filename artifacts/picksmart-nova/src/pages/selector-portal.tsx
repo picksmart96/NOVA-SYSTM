@@ -102,22 +102,25 @@ export default function SelectorPortalPage() {
   const [isSpeaking,     setIsSpeaking]     = useState(false);
   const [novaStatus,     setNovaStatus]     = useState<string>("");
   const [ttsReady,       setTtsReady]       = useState(false);
-  const mutedRef      = useRef(false);
-  const ttsReadyRef   = useRef(false);
-  const recLoopRef    = useRef<any>(null);
-  const loopActiveRef = useRef(false);
-  const loopRestartRef = useRef<(() => void) | null>(null);
-  // Mirrors isSpeaking state so startLoop can check without stale closure
-  const isSpeakingRef = useRef(false);
+  const mutedRef       = useRef(false);
+  const ttsReadyRef    = useRef(false);
+  // Two-phase voice: wake-word listener → command listener → back to wake
+  const wakeRecRef     = useRef<any>(null);   // "Hey NOVA" wake recognizer
+  const cmdRecRef      = useRef<any>(null);   // one-shot command recognizer
+  const listenModeRef  = useRef<"wake" | "command" | "off">("off");
+  // Mirrors isSpeaking state so recognizers can check without stale closure
+  const isSpeakingRef  = useRef(false);
   // Tracks whether the NOVA Welcome Assistant currently owns the audio session.
-  // When true the portal pauses its own speech-recognition loop so the two
-  // recognizers don't fight each other (Chrome only permits one at a time).
-  const novaActiveRef = useRef(false);
-  const stopLoopRef   = useRef<(() => void) | null>(null);
-  const startLoopRef  = useRef<(() => void) | null>(null);
-  // Stable refs for the speak callbacks — lets startLoop read the latest
-  // data without capturing stale closures, and removes these from startLoop's
-  // dependency array so startLoop's identity never changes on data load.
+  // When true the portal pauses its own speech-recognition so the two
+  // recognizers don't fight each other (browsers permit only one at a time).
+  const novaActiveRef  = useRef(false);
+  // Stable function refs — used by speak() and NWA coordinator
+  const stopLoopRef    = useRef<(() => void) | null>(null);   // → stopAllRec
+  const startLoopRef   = useRef<(() => void) | null>(null);   // → startWakeLoop
+  const startWakeRef   = useRef<(() => void) | null>(null);
+  const startCmdRef    = useRef<(() => void) | null>(null);
+  // Stable refs for the speak callbacks — lets command handler read the latest
+  // data without capturing stale closures.
   const speakTodayFocusRef  = useRef<(() => void)>(() => {});
   const speakLatestUpdateRef = useRef<(() => void)>(() => {});
   const speakAssignmentRef  = useRef<(() => void)>(() => {})
@@ -236,84 +239,177 @@ export default function SelectorPortalPage() {
     };
   }, [lang]); // eslint-disable-line
 
-  // ── Always-on continuous voice loop ────────────────────────────────────────
-  // Listens indefinitely — no tap required. After each command, auto-restarts.
-  const stopLoop = useCallback(() => {
-    loopActiveRef.current = false;
+  // ── Two-phase NOVA voice system ────────────────────────────────────────────
+  //
+  // Phase 1 – WAKE: lightweight listener (continuous=false, auto-restarts)
+  //   Waits for "Hey NOVA" / "Hola NOVA" / "Nova".
+  //   maxAlternatives=3 so partial matches across all hypotheses are checked.
+  //
+  // Phase 2 – COMMAND: one-shot listener (continuous=false, fires once)
+  //   Captures exactly one utterance, matches against portal commands, then
+  //   returns to wake phase automatically.
+  //
+  // This pattern is iOS-compatible (fresh instances, no getUserMedia conflict),
+  // Bluetooth-friendly (follows speak → 3 s gap → listen discipline), and
+  // battery-efficient vs. always-on continuous recognition.
+
+  const stopAllRec = useCallback(() => {
+    listenModeRef.current = "off";
     setIsListening(false);
-    try { recLoopRef.current?.abort(); } catch { /* ignore */ }
-    recLoopRef.current = null;
+    try { wakeRecRef.current?.abort(); } catch { /* ignore */ }
+    try { cmdRecRef.current?.abort();  } catch { /* ignore */ }
+    wakeRecRef.current = null;
+    cmdRecRef.current  = null;
   }, []);
 
-  const startLoop = useCallback(() => {
-    if (!canListen) return;
-    // Never start recognition while TTS is playing — on iOS the audio session
-    // cannot handle both simultaneously and the page freezes.
-    if (isSpeakingRef.current) return;
-    // Don't restart while the NOVA Welcome Assistant owns the audio session —
-    // Chrome only allows one SpeechRecognition at a time.
-    if (novaActiveRef.current) return;
+  // ── Phase 2: one-shot command listener ─────────────────────────────────────
+  const startCommandListen = useCallback(() => {
+    if (!canListen || isSpeakingRef.current || novaActiveRef.current || mutedRef.current) return;
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR || loopActiveRef.current) return;
-    try { recLoopRef.current?.abort(); } catch { /* ignore */ }
-    recLoopRef.current = null;
+    if (!SR) return;
+
+    try { cmdRecRef.current?.abort(); } catch { /* ignore */ }
+    cmdRecRef.current = null;
 
     const rec = new SR();
-    rec.continuous     = true;
-    rec.interimResults = false;
-    rec.lang           = novaRecogLang(lang);
+    rec.continuous      = false;
+    rec.interimResults  = false;
+    rec.lang            = novaRecogLang(lang);
     rec.maxAlternatives = 1;
 
+    let gotResult = false;
+    let restarted = false;
+    const returnToWake = (delayMs: number) => {
+      if (restarted) return;
+      restarted = true;
+      listenModeRef.current = "wake";
+      setTimeout(() => {
+        if (!mutedRef.current && !isSpeakingRef.current && !novaActiveRef.current) {
+          startWakeRef.current?.();
+        }
+      }, delayMs);
+    };
+
     rec.onstart = () => {
-      loopActiveRef.current = true;
       setIsListening(true);
-      setNovaStatus(NOVA_TEXT.listeningStatus(lang));
+      setNovaStatus(lang === "es" ? "NOVA escucha — di tu comando…" : "NOVA listening — say your command…");
+    };
+
+    rec.onresult = (e: any) => {
+      const text       = (e.results?.[0]?.[0]?.transcript ?? "").toLowerCase().trim();
+      const confidence = (e.results?.[0]?.[0]?.confidence ?? 1) as number;
+      if (!text) return;
+      gotResult = true;
+      setNovaStatus(`${NOVA_TEXT.heardCommand(lang)}"${text}"`);
+
+      // Low-confidence result — skip rather than misfire
+      if (confidence < 0.45) { returnToWake(400); return; }
+
+      const cmd = matchNovaCommand(text, lang);
+      if (cmd === "focus")           speakTodayFocusRef.current();
+      else if (cmd === "update")     speakLatestUpdateRef.current();
+      else if (cmd === "assignment") speakAssignmentRef.current();
+      // speak() will call startLoopRef (→ startWakeLoop) when TTS ends
+      returnToWake(400);
     };
 
     rec.onend = () => {
-      loopActiveRef.current = false;
-      recLoopRef.current = null;
-      setIsListening(false);
-      // Auto-restart — keep the loop alive
-      setTimeout(() => { if (!mutedRef.current) loopRestartRef.current?.(); }, 600);
+      cmdRecRef.current = null;
+      if (!gotResult) returnToWake(300);
     };
 
     rec.onerror = (e: any) => {
-      loopActiveRef.current = false;
-      recLoopRef.current = null;
-      setIsListening(false);
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") return; // Mic denied
-      setTimeout(() => { if (!mutedRef.current) loopRestartRef.current?.(); }, 1000);
+      cmdRecRef.current = null;
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        listenModeRef.current = "off";
+        setIsListening(false);
+        return;
+      }
+      returnToWake(e.error === "aborted" ? 500 : 800);
     };
 
-    rec.onresult = (event: any) => {
-      const text = (event.results?.[event.results.length - 1]?.[0]?.transcript ?? "").toLowerCase().trim();
-      if (!text) return;
-      setNovaStatus(`${NOVA_TEXT.heardCommand(lang)}"${text}"`);
-
-      const cmd = matchNovaCommand(text, lang);
-      // Use refs so the handler always calls the LATEST version of each
-      // speak function — avoids stale closures when data loads after mount.
-      if (cmd === "focus")           { speakTodayFocusRef.current();  }
-      else if (cmd === "update")     { speakLatestUpdateRef.current(); }
-      else if (cmd === "assignment") { speakAssignmentRef.current();   }
-      // Ignore unrecognised words — don't interrupt with "didn't catch that"
-    };
-
-    recLoopRef.current = rec;
+    cmdRecRef.current = rec;
+    listenModeRef.current = "command";
     try { rec.start(); } catch { /* ignore double-start */ }
-  // speakTodayFocus/LatestUpdate/Assignment removed from deps — we use refs
-  // so startLoop's identity is stable across data loads. This prevents the
-  // lang-change effect from firing on every data update and causing iOS crashes.
   }, [canListen, lang]); // eslint-disable-line
 
-  useEffect(() => { loopRestartRef.current  = startLoop;         }, [startLoop]);
-  useEffect(() => { stopLoopRef.current    = stopLoop;           }, [stopLoop]);
-  useEffect(() => { startLoopRef.current   = startLoop;          }, [startLoop]);
-  useEffect(() => { isSpeakingRef.current  = isSpeaking;         }, [isSpeaking]);
-  useEffect(() => { speakTodayFocusRef.current  = speakTodayFocus;  }, [speakTodayFocus]);
+  // ── Phase 1: wake-word listener ─────────────────────────────────────────────
+  const startWakeLoop = useCallback(() => {
+    if (!canListen || isSpeakingRef.current || novaActiveRef.current || mutedRef.current) return;
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+
+    try { wakeRecRef.current?.abort(); } catch { /* ignore */ }
+    wakeRecRef.current = null;
+
+    const rec = new SR();
+    rec.continuous      = false;   // iOS-safe: use auto-restart pattern
+    rec.interimResults  = false;
+    rec.lang            = novaRecogLang(lang);
+    rec.maxAlternatives = 3;       // check all hypotheses for wake word
+
+    rec.onstart = () => {
+      setIsListening(true);
+      setNovaStatus(lang === "es" ? "Di 'Hola NOVA' para activar…" : "Say 'Hey NOVA' to activate…");
+    };
+
+    rec.onend = () => {
+      wakeRecRef.current = null;
+      if (listenModeRef.current === "wake" && !mutedRef.current && !isSpeakingRef.current && !novaActiveRef.current) {
+        setTimeout(() => startWakeRef.current?.(), 300);
+      } else if (listenModeRef.current !== "command") {
+        setIsListening(false);
+      }
+    };
+
+    rec.onerror = (e: any) => {
+      wakeRecRef.current = null;
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        listenModeRef.current = "off";
+        setIsListening(false);
+        return;
+      }
+      // aborted / no-speech are normal — onend fires next and handles restart
+      if (e.error === "aborted" || e.error === "no-speech") return;
+      if (listenModeRef.current === "wake" && !mutedRef.current) {
+        setTimeout(() => startWakeRef.current?.(), 900);
+      }
+    };
+
+    rec.onresult = (e: any) => {
+      // Collect all text across all results and all alternatives
+      const heard = Array.from(e.results as any[])
+        .flatMap((r: any) => Array.from(r as any[]).map((alt: any) => alt.transcript?.toLowerCase() ?? ""))
+        .join(" ");
+
+      const isWake =
+        heard.includes("hey nova") || heard.includes("hey, nova") ||
+        heard.includes("hola nova") || heard.includes("oye nova") ||
+        heard.trim() === "nova";
+
+      if (isWake) {
+        listenModeRef.current = "command";
+        try { rec.abort(); } catch { /* ignore */ }
+        setNovaStatus(lang === "es" ? "NOVA activa — di tu comando…" : "NOVA active — say your command…");
+        // Brief pause so the user hears the status update, then open command mic
+        setTimeout(() => startCmdRef.current?.(), 300);
+      }
+    };
+
+    wakeRecRef.current = rec;
+    listenModeRef.current = "wake";
+    try { rec.start(); } catch { /* ignore double-start */ }
+  // speak callbacks removed from deps — stable via refs, avoids iOS restart floods
+  }, [canListen, lang]); // eslint-disable-line
+
+  useEffect(() => { stopLoopRef.current   = stopAllRec;           }, [stopAllRec]);
+  useEffect(() => { startLoopRef.current  = startWakeLoop;        }, [startWakeLoop]);
+  useEffect(() => { startWakeRef.current  = startWakeLoop;        }, [startWakeLoop]);
+  useEffect(() => { startCmdRef.current   = startCommandListen;   }, [startCommandListen]);
+  useEffect(() => { isSpeakingRef.current = isSpeaking;           }, [isSpeaking]);
+  useEffect(() => { speakTodayFocusRef.current   = speakTodayFocus;   }, [speakTodayFocus]);
   useEffect(() => { speakLatestUpdateRef.current = speakLatestUpdate; }, [speakLatestUpdate]);
-  useEffect(() => { speakAssignmentRef.current  = speakAssignment;  }, [speakAssignment]);
+  useEffect(() => { speakAssignmentRef.current   = speakAssignment;   }, [speakAssignment]);
 
   // ── Coordinate with NOVA Welcome Assistant ────────────────────────────────
   // The NWA runs its own SpeechRecognition session.  Chrome allows only one
@@ -333,17 +429,16 @@ export default function SelectorPortalPage() {
     }
   }, []);
 
-  // Start always-on loop on mount.
-  // 300 ms delay gives the browser time to hand off the audio context after
-  // page load without blocking the mic indicator appearing near-instantly.
+  // Start wake-word listener on mount.
+  // 300 ms delay lets the browser finish the page-load audio context handoff
+  // before we claim the mic — avoids immediate "not-allowed" on first render.
   useEffect(() => {
-    const t = setTimeout(() => { if (!mutedRef.current) startLoop(); }, 300);
-    return () => { clearTimeout(t); stopLoop(); };
+    const t = setTimeout(() => { if (!mutedRef.current) startWakeLoop(); }, 300);
+    return () => { clearTimeout(t); stopAllRec(); };
   }, []); // eslint-disable-line
 
-  // Restart loop when lang changes ONLY — intentionally using refs so that
-  // data loads that change startLoop's identity don't trigger abort/restart
-  // cycles (those cycles cause rapid onerror→retry floods on iOS → page freeze).
+  // Restart wake listener when lang changes ONLY — intentionally using refs so
+  // that data loads don't trigger abort/restart cycles (causes iOS freeze).
   useEffect(() => {
     stopLoopRef.current?.();
     const t = setTimeout(() => {
@@ -352,16 +447,16 @@ export default function SelectorPortalPage() {
     return () => clearTimeout(t);
   }, [lang]); // eslint-disable-line
 
-  // Toggle mute — also pauses/resumes the loop
+  // Toggle mute — also pauses/resumes the wake listener
   const toggleMuteAndLoop = () => {
     const next = !mutedRef.current;
     mutedRef.current = next;
     setMuted(next);
     if (next) {
       if (canSpeak) { window.speechSynthesis.cancel(); setIsSpeaking(false); }
-      stopLoop();
+      stopAllRec();
     } else {
-      startLoop();
+      startWakeLoop();
     }
   };
 
@@ -498,7 +593,7 @@ export default function SelectorPortalPage() {
             </button>
           )}
 
-          {/* Always-listening status — shows when mic is active */}
+          {/* Wake-word / command status — shows when mic is active */}
           {!muted && (
             <div className="flex items-center gap-3 mb-4">
               {isListening ? (
@@ -508,9 +603,7 @@ export default function SelectorPortalPage() {
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-400" />
                   </span>
                   <p className="text-sm text-yellow-300 font-semibold">
-                    {lang === "es"
-                      ? "NOVA escuchando — di \"enfoque de hoy\", \"mi tarea\", o \"última actualización\""
-                      : "NOVA listening — say \"today's focus\", \"my assignment\", or \"supervisor update\""}
+                    {novaStatus || (lang === "es" ? "Di 'Hola NOVA' para activar…" : "Say 'Hey NOVA' to activate…")}
                   </p>
                 </>
               ) : isSpeaking ? (

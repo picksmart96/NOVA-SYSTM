@@ -148,7 +148,7 @@ function speakText(text: string, lang: string, onEnd?: () => void) {
   u.pitch = 1;
 
   let done = false;
-  const safetyMs = Math.max(6000, text.length * 75 + 3000);
+  const safetyMs = Math.max(4000, text.length * 20 + 2000);
   const safetyTimer = onEnd
     ? setTimeout(() => { if (!done) { done = true; onEnd(); } }, safetyMs)
     : undefined;

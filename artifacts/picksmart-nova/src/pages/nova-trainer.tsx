@@ -238,9 +238,10 @@ export default function NovaTrainerPage() {
     recognitionRef.current = null;
 
     const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = novaRecogLang(lang);
+    recognition.continuous      = false;
+    recognition.interimResults  = false;
+    recognition.lang            = novaRecogLang(lang);
+    recognition.maxAlternatives = 3; // collect up to 3 hypotheses for command matching
 
     let restarted = false;
     const scheduleRestart = (delayMs: number) => {
@@ -252,7 +253,23 @@ export default function NovaTrainerPage() {
     recognition.onstart = () => setListening(true);
 
     recognition.onresult = (event: any) => {
-      const transcript = normalizeSpeech(event.results?.[0]?.[0]?.transcript || "");
+      const results = event.results?.[0];
+      if (!results) return;
+
+      // Start with highest-confidence hypothesis
+      let transcript = normalizeSpeech(results[0]?.transcript || "");
+      const topConfidence = (results[0]?.confidence ?? 1) as number;
+
+      // If top hypothesis is low-confidence, scan alternatives for a known command
+      if (topConfidence < 0.60) {
+        for (let i = 1; i < results.length; i++) {
+          const alt = normalizeSpeech(results[i]?.transcript || "");
+          const matchesCommand =
+            isReady(alt) || isConfirm(alt) || isDeny(alt) || isLoadPicks(alt) || !!extractNumber(alt);
+          if (matchesCommand) { transcript = alt; break; }
+        }
+      }
+
       setHeardText(transcript);
       addLog("USER", transcript || "[no input]");
       handleVoiceInput(transcript);
