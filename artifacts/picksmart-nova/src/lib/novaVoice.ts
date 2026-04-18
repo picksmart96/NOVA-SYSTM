@@ -3,12 +3,17 @@
  *
  * Module-level recognition state: one instance per page, shared across re-renders.
  *
- * Pattern (matches user's canonical design):
- *   continuous = false  →  one phrase per session
- *   onend               →  always restart unless speaking or muted
- *   speak()             →  stops mic, TTS plays, msg.onend restarts mic at 200 ms
- *   wake word           →  "hey nova" / "oye nova" arms NOVA for 5 seconds
- *   window.handleNovaCommand / window.handleNovaWake  →  React bridge
+ * Pattern (v3 — matches user's latest design):
+ *   continuous = true       →  always listening; no per-phrase restart needed
+ *   interimResults = true   →  partial text fires early → faster wake detection
+ *   maxAlternatives = 1     →  simpler, lower latency
+ *   cleanText()             →  strip noise chars before matching
+ *   wake word (interim)     →  "hey nova" / "hey no" / "anova" caught mid-phrase
+ *   lastWakeTime debounce   →  1500 ms guard against double-trigger
+ *   resetSleepTimer()       →  4 s auto-sleep after last activity
+ *   commands (final only)   →  result.isFinal gate — no interim command noise
+ *   speak() restart         →  100 ms after TTS ends (down from 200 ms)
+ *   onend recovery          →  restart after 300 ms if session drops unexpectedly
  */
 
 import { novaRecogLang } from "./novaSpeech";
@@ -20,6 +25,7 @@ let isListening  = false;
 let isSpeaking   = false;
 let isAwake      = false;
 let muteFlag     = false;
+let lastWakeTime = 0;
 let wakeTimeout: ReturnType<typeof setTimeout> | null = null;
 
 type VoiceOpts = {
@@ -34,6 +40,20 @@ function setListening(v: boolean) {
   onListeningChange?.(v);
 }
 
+/** Strip punctuation / noise chars before matching. */
+function cleanText(raw: string): string {
+  return raw.replace(/[^\w\s]/gi, "").trim();
+}
+
+/** Arm/re-arm the 4-second sleep timer. */
+function resetSleepTimer(): void {
+  if (wakeTimeout) clearTimeout(wakeTimeout);
+  wakeTimeout = setTimeout(() => {
+    isAwake = false;
+    console.debug("😴 NOVA SLEEP");
+  }, 4000);
+}
+
 // ── Public API ─────────────────────────────────────────────────────────────────
 
 /**
@@ -44,18 +64,19 @@ export const voiceSpeaking = (v: boolean): void => {
   isSpeaking = v;
 };
 
-/** Start one recognition session. Guards: listening / speaking / muted. */
+/** Start the continuous recognition session. Guards: already running / speaking / muted. */
 export const startListening = (): void => {
   if (!recognition || isListening || isSpeaking || muteFlag) return;
   try {
     recognition.start();
     setListening(true);
   } catch {
-    // start() threw (audio session still busy) — onend loop will retry
+    // start() threw synchronously (audio session still busy after TTS)
+    // onend recovery or the next startListening() call will retry
   }
 };
 
-/** Stop the current session cleanly (triggers onend → restart logic). */
+/** Stop the session cleanly (onend fires → recovery restart if not muted). */
 export const stopListening = (): void => {
   try { recognition?.stop(); } catch { /* ignore */ }
   setListening(false);
@@ -84,59 +105,63 @@ export const initVoice = (lang: string, opts?: VoiceOpts): void => {
   destroyVoice(); // tear down any previous instance first
 
   onListeningChange = opts?.onListeningChange;
-  isAwake   = false;
-  muteFlag  = false;
+  isAwake      = false;
+  muteFlag     = false;
+  lastWakeTime = 0;
 
   const rec = new SR();
-  rec.continuous      = false;  // one phrase per session; onend auto-restarts
-  rec.interimResults  = false;
+  rec.continuous      = true;   // 🔥 always listening — no per-phrase restart
+  rec.interimResults  = true;   // 🔥 partial results for early wake detection
   rec.lang            = novaRecogLang(lang);
-  rec.maxAlternatives = 3;      // top-3 alternatives for accent tolerance
+  rec.maxAlternatives = 1;      // simpler + lower latency
 
   rec.onstart = () => setListening(true);
 
   rec.onresult = (event: any) => {
-    // Flatten all hypotheses → widest accent coverage
-    const text = Array.from(event.results as any[])
-      .flatMap((r: any) =>
-        Array.from(r as any[]).map((alt: any) => alt.transcript?.toLowerCase() ?? "")
-      )
-      .join(" ")
-      .trim();
+    // Always inspect the LATEST result only
+    const result = event.results[event.results.length - 1];
+    const raw    = result[0].transcript.toLowerCase();
+    const text   = cleanText(raw);
+    const now    = Date.now();
 
-    const confidence = (event.results?.[0]?.[0]?.confidence ?? 1) as number;
-    if (!text || confidence < 0.35) return;
+    console.debug("Heard:", text, result.isFinal ? "(final)" : "(interim)");
 
-    // Wake word — English + Spanish phonetic variants
+    // ── Wake word — on INTERIM too for instant response ───────────────────
+    // Catches "hey nova" as the user is still speaking it.
     const isWake =
       text.includes("hey nova")  || text.includes("oye nova")  ||
+      text.includes("hey no")    ||                               // early partial
+      text.includes("anova")     || text.includes("hey noba")  || // mishear
       text.includes("ey nova")   || text.includes("hola nova") ||
       text.includes("ok nova")   || text.includes("okay nova") ||
-      text.includes("a nova")    || text.includes("hey noba")  ||
-      text.includes("nova")      && text.split(" ").length <= 2; // bare "nova"
+      (text === "nova");                                          // bare "nova"
 
     if (!isAwake && isWake) {
+      // 1500 ms debounce — ignore if we just woke
+      if (now - lastWakeTime < 1500) return;
+      lastWakeTime = now;
       isAwake = true;
-      if (wakeTimeout) clearTimeout(wakeTimeout);
-      wakeTimeout = setTimeout(() => { isAwake = false; }, 5000);
+      console.debug("⚡ NOVA ACTIVATED");
       (window as any).handleNovaWake?.();
+      resetSleepTimer();
       return;
     }
 
-    if (isAwake) {
-      // Reset 5-second sleep timer after each command
-      if (wakeTimeout) clearTimeout(wakeTimeout);
-      wakeTimeout = setTimeout(() => { isAwake = false; }, 5000);
+    // ── Commands — FINAL results only (ignore partial noise) ─────────────
+    if (isAwake && result.isFinal) {
       (window as any).handleNovaCommand?.(text);
+      resetSleepTimer(); // keep NOVA awake after each command
     }
   };
 
-  // ⭐ THE KEY — matches the canonical pattern exactly:
-  //   onend fires after every phrase, after stop(), and after errors.
-  //   If NOVA is not speaking and not muted → always restart.
+  // ── onend: recovery restart ───────────────────────────────────────────────
+  // With continuous=true this fires only if the session drops unexpectedly
+  // (browser idle timeout, network error, or explicit stop() during TTS).
+  // Always restart unless muted — the isSpeaking guard in startListening()
+  // prevents the mic from reopening while NOVA is talking.
   rec.onend = () => {
     setListening(false);
-    if (!isSpeaking && !muteFlag) {
+    if (!muteFlag) {
       setTimeout(() => startListening(), 300);
     }
   };
@@ -144,7 +169,8 @@ export const initVoice = (lang: string, opts?: VoiceOpts): void => {
   rec.onerror = (e: any) => {
     if (e.error === "not-allowed" || e.error === "service-not-allowed") {
       setListening(false);
-      muteFlag = true; // permanent — don't retry
+      muteFlag = true; // permanent — do not retry
+      return;
     }
     // aborted / no-speech / network → onend fires next and handles restart
   };
@@ -152,13 +178,14 @@ export const initVoice = (lang: string, opts?: VoiceOpts): void => {
   recognition = rec;
 };
 
-/** Fully tear down the recognition instance. */
+/** Fully tear down the recognition instance (unmount / lang change). */
 export const destroyVoice = (): void => {
   try { recognition?.abort(); } catch { /* ignore */ }
   recognition  = null;
   isListening  = false;
   isSpeaking   = false;
   isAwake      = false;
+  lastWakeTime = 0;
   onListeningChange = undefined;
   if (wakeTimeout) { clearTimeout(wakeTimeout); wakeTimeout = null; }
 };

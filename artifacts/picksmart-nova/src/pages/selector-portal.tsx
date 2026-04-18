@@ -150,7 +150,7 @@ export default function SelectorPortalPage() {
         setIsSpeaking(false);
         onDone?.();
         if (!mutedRef.current && !novaActiveRef.current) {
-          setTimeout(() => voiceStart(), 200);
+          setTimeout(() => voiceStart(), 100);
         }
       }
     }, safetyMs);
@@ -162,9 +162,9 @@ export default function SelectorPortalPage() {
         voiceSpeaking(false);
         setIsSpeaking(false);
         onDone?.();
-        // 200 ms gap — iOS/Bluetooth needs time to hand audio session back to STT
+        // 100 ms gap — just enough for iOS/Bluetooth to release the audio session
         if (!mutedRef.current && !novaActiveRef.current) {
-          setTimeout(() => voiceStart(), 200);
+          setTimeout(() => voiceStart(), 100);
         }
       }
     });
