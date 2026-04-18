@@ -7,7 +7,9 @@
  *   continuous = true      →  always listening; session never ends between phrases
  *   interimResults = true  →  partial text for faster wake detection
  *   maxAlternatives = 1    →  simpler, lower latency
+ *   getUserMedia           →  echo/noise/AGC constraints primed before SR starts
  *   isSpeaking gate        →  onresult ignored while NOVA talks; mic stays open
+ *   lastSpeakTime cooldown →  500 ms post-TTS echo guard after isSpeaking flips
  *   wake word              →  "hey nova" / "oye nova" on any result (interim ok)
  *   resetSleepTimer()      →  4 s auto-sleep after last activity
  *   commands (final only)  →  result.isFinal gate — no partial noise
@@ -24,6 +26,7 @@ let isListening  = false;
 let isSpeaking   = false;
 let isAwake      = false;
 let muteFlag     = false;
+let lastSpeakTime = 0;
 let wakeTimeout: ReturnType<typeof setTimeout> | null = null;
 
 type VoiceOpts = {
@@ -55,6 +58,7 @@ function resetSleepTimer(): void {
  */
 export const voiceSpeaking = (v: boolean): void => {
   isSpeaking = v;
+  if (!v) lastSpeakTime = Date.now(); // 🔥 mark end of TTS
 };
 
 /** Start the continuous recognition session. Guards: already running / speaking / muted.
@@ -105,8 +109,20 @@ export const initVoice = (lang: string, opts?: VoiceOpts): void => {
   destroyVoice(); // tear down any previous instance first
 
   onListeningChange = opts?.onListeningChange;
-  isAwake  = false;
-  muteFlag = false;
+  isAwake      = false;
+  muteFlag     = false;
+  lastSpeakTime = 0;
+
+  // 🔥 Prime the audio pipeline with echo/noise constraints so the browser's
+  //    audio session is configured before SpeechRecognition takes over.
+  //    This significantly reduces NOVA's own TTS voice bleeding into the mic.
+  navigator.mediaDevices?.getUserMedia({
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl:  true,
+    },
+  }).catch(() => { /* permission denied handled by onerror */ });
 
   const rec = new SR();
   rec.continuous      = true;   // 🔥 always listening — no per-phrase restart
@@ -119,6 +135,10 @@ export const initVoice = (lang: string, opts?: VoiceOpts): void => {
   rec.onresult = (event: any) => {
     // ❌ Ignore while NOVA is speaking — mic stays open, output is gated
     if (isSpeaking) return;
+
+    // 🔥 500 ms post-TTS echo guard — catches the brief window after
+    //    isSpeaking flips false but mic may still be picking up TTS echo
+    if (Date.now() - lastSpeakTime < 500) return;
 
     const result = event.results[event.results.length - 1];
     const text   = result[0].transcript.toLowerCase();
