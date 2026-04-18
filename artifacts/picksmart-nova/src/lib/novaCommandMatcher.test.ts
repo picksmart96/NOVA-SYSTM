@@ -289,9 +289,9 @@ describe("matchCommand — Spanish variants", () => {
     expect(matchCommand("mis picks")).toBe("load_picks");
   });
 
-  it.todo(
-    'parar → stop — BUG: levenshtein("parar","cargar") = 2 so load_picks fires first (load_picks is checked before stop); needs command ordering or minimum phrase-length protection'
-  );
+  it('parar → stop (not load_picks — exact phrase match takes priority over fuzzy hit on "cargar")', () => {
+    expect(matchCommand("parar")).toBe("stop");
+  });
 
   it('detener → stop', () => {
     expect(matchCommand("detener")).toBe("stop");

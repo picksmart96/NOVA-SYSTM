@@ -180,6 +180,22 @@ export function matchCommand(input = "") {
     },
   ];
 
+  // First pass: exact single-word phrase matches only — explicit single-word
+  // phrases always win over fuzzy matches from other commands. This prevents
+  // e.g. "parar" (stop) from being swallowed by a fuzzy hit on "cargar"
+  // (load_picks) just because levenshtein("parar","cargar") === 2.
+  // Multi-word phrases are intentionally excluded so that substring matching
+  // in the fuzzy pass can still override them (e.g. "ready to go" → "ready").
+  for (const command of commands) {
+    for (const phrase of command.phrases) {
+      const normalized = normalizeText(phrase);
+      if (!normalized.includes(" ") && normalized === text) {
+        return command.key;
+      }
+    }
+  }
+
+  // Second pass: fuzzy / substring matches
   for (const command of commands) {
     for (const phrase of command.phrases) {
       if (closeEnough(text, phrase)) {
