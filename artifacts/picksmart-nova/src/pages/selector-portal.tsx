@@ -6,6 +6,7 @@ import { useTrainerStore } from "@/lib/trainerStore";
 import { useSupervisorPostStore } from "@/lib/supervisorPostStore";
 import { usePerformanceStore } from "@/lib/performanceStore";
 import { novaSpeak, novaRecogLang, NOVA_TEXT, matchNovaCommand } from "@/lib/novaSpeech";
+import { askNovaHelp, type ChatMessage } from "@/lib/novaHelpApi";
 import NovaWelcomeAssistant, { hasSeenWelcomeToday, markWelcomeSeen } from "@/components/NovaWelcomeAssistant";
 import {
   Headphones, BookOpen, HelpCircle, TrendingUp, Star, AlertTriangle, KeyRound,
@@ -104,26 +105,29 @@ export default function SelectorPortalPage() {
   const [ttsReady,       setTtsReady]       = useState(false);
   const mutedRef       = useRef(false);
   const ttsReadyRef    = useRef(false);
-  // Two-phase voice: wake-word listener → command listener → back to wake
-  const wakeRecRef     = useRef<any>(null);   // "Hey NOVA" wake recognizer
-  const cmdRecRef      = useRef<any>(null);   // one-shot command recognizer
-  const listenModeRef  = useRef<"wake" | "command" | "off">("off");
-  // Mirrors isSpeaking state so recognizers can check without stale closure
+  // Single-phase always-on command listener (no wake word required after tap)
+  const recRef         = useRef<any>(null);
+  // Mirrors isSpeaking so the recognizer guard never reads a stale value
   const isSpeakingRef  = useRef(false);
-  // Tracks whether the NOVA Welcome Assistant currently owns the audio session.
-  // When true the portal pauses its own speech-recognition so the two
-  // recognizers don't fight each other (browsers permit only one at a time).
+  // Tracks whether the NOVA Welcome Assistant currently owns the audio session
   const novaActiveRef  = useRef(false);
   // Stable function refs — used by speak() and NWA coordinator
-  const stopLoopRef    = useRef<(() => void) | null>(null);   // → stopAllRec
-  const startLoopRef   = useRef<(() => void) | null>(null);   // → startWakeLoop
-  const startWakeRef   = useRef<(() => void) | null>(null);
-  const startCmdRef    = useRef<(() => void) | null>(null);
-  // Stable refs for the speak callbacks — lets command handler read the latest
-  // data without capturing stale closures.
+  const stopLoopRef    = useRef<(() => void) | null>(null);
+  const startLoopRef   = useRef<(() => void) | null>(null);
+  // Stable refs for the speak callbacks
   const speakTodayFocusRef  = useRef<(() => void)>(() => {});
   const speakLatestUpdateRef = useRef<(() => void)>(() => {});
-  const speakAssignmentRef  = useRef<(() => void)>(() => {})
+  const speakAssignmentRef  = useRef<(() => void)>(() => {});
+
+  // ── NOVA Help Q&A embedded in portal ──────────────────────────────────────
+  const [novaQuestion,   setNovaQuestion]   = useState("");
+  const [novaAnswer,     setNovaAnswer]     = useState("");
+  const [novaAsking,     setNovaAsking]     = useState(false);
+  const [showNovaHelp,   setShowNovaHelp]   = useState(false);
+  const novaChatHistory  = useRef<ChatMessage[]>([]);
+  // Voice question capture mode — after "help"/"question" command
+  const [voiceQuestionMode, setVoiceQuestionMode] = useState(false);
+  const voiceQuestionModeRef = useRef(false);
 
   const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window;
   const canListen =
@@ -239,174 +243,151 @@ export default function SelectorPortalPage() {
     };
   }, [lang]); // eslint-disable-line
 
-  // ── Two-phase NOVA voice system ────────────────────────────────────────────
+  // ── Always-on NOVA command loop ────────────────────────────────────────────
   //
-  // Phase 1 – WAKE: lightweight listener (continuous=false, auto-restarts)
-  //   Waits for "Hey NOVA" / "Hola NOVA" / "Nova".
-  //   maxAlternatives=3 so partial matches across all hypotheses are checked.
+  // Single-phase: listens continuously for portal commands with no wake word.
+  // After tapping "Enable Voice" once (iOS TTS unlock), NOVA greets the user
+  // and then listens directly for: "today's focus", "my assignment",
+  // "supervisor update", or "question / ayuda" (→ embedded NOVA Help Q&A).
   //
-  // Phase 2 – COMMAND: one-shot listener (continuous=false, fires once)
-  //   Captures exactly one utterance, matches against portal commands, then
-  //   returns to wake phase automatically.
-  //
-  // This pattern is iOS-compatible (fresh instances, no getUserMedia conflict),
-  // Bluetooth-friendly (follows speak → 3 s gap → listen discipline), and
-  // battery-efficient vs. always-on continuous recognition.
+  // Uses continuous=false + auto-restart (iOS-compatible, Bluetooth-safe).
+  // maxAlternatives=3 gives the best chance of catching a command even when
+  // warehouse noise pushes the best match into an alternate hypothesis.
 
   const stopAllRec = useCallback(() => {
-    listenModeRef.current = "off";
     setIsListening(false);
-    try { wakeRecRef.current?.abort(); } catch { /* ignore */ }
-    try { cmdRecRef.current?.abort();  } catch { /* ignore */ }
-    wakeRecRef.current = null;
-    cmdRecRef.current  = null;
+    try { recRef.current?.abort(); } catch { /* ignore */ }
+    recRef.current = null;
   }, []);
 
-  // ── Phase 2: one-shot command listener ─────────────────────────────────────
-  const startCommandListen = useCallback(() => {
+  const startCommandLoop = useCallback(() => {
     if (!canListen || isSpeakingRef.current || novaActiveRef.current || mutedRef.current) return;
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
 
-    try { cmdRecRef.current?.abort(); } catch { /* ignore */ }
-    cmdRecRef.current = null;
+    try { recRef.current?.abort(); } catch { /* ignore */ }
+    recRef.current = null;
 
     const rec = new SR();
     rec.continuous      = false;
     rec.interimResults  = false;
     rec.lang            = novaRecogLang(lang);
-    rec.maxAlternatives = 1;
+    rec.maxAlternatives = 3;
 
     let gotResult = false;
     let restarted = false;
-    const returnToWake = (delayMs: number) => {
+    const restart = (delayMs: number) => {
       if (restarted) return;
       restarted = true;
-      listenModeRef.current = "wake";
       setTimeout(() => {
         if (!mutedRef.current && !isSpeakingRef.current && !novaActiveRef.current) {
-          startWakeRef.current?.();
+          startLoopRef.current?.();
         }
       }, delayMs);
     };
 
     rec.onstart = () => {
       setIsListening(true);
-      setNovaStatus(lang === "es" ? "NOVA escucha — di tu comando…" : "NOVA listening — say your command…");
+      setNovaStatus(lang === "es" ? "NOVA escuchando…" : "NOVA listening…");
     };
 
     rec.onresult = (e: any) => {
-      const text       = (e.results?.[0]?.[0]?.transcript ?? "").toLowerCase().trim();
-      const confidence = (e.results?.[0]?.[0]?.confidence ?? 1) as number;
-      if (!text) return;
+      // Collect all alternatives from all results
+      const heard = Array.from(e.results as any[])
+        .flatMap((r: any) => Array.from(r as any[]).map((alt: any) => alt.transcript?.toLowerCase() ?? ""))
+        .join(" ")
+        .trim();
+      const topConfidence = (e.results?.[0]?.[0]?.confidence ?? 1) as number;
+
+      if (!heard) return;
       gotResult = true;
-      setNovaStatus(`${NOVA_TEXT.heardCommand(lang)}"${text}"`);
+      setNovaStatus(`${NOVA_TEXT.heardCommand(lang)}"${heard}"`);
 
-      // Low-confidence result — skip rather than misfire
-      if (confidence < 0.45) { returnToWake(400); return; }
+      // Low-confidence utterance — skip silently and keep listening
+      if (topConfidence < 0.35) { restart(300); return; }
 
-      const cmd = matchNovaCommand(text, lang);
+      // Embedded NOVA Help trigger — "question", "help", "ayuda", "ask nova"
+      const isHelpTrigger =
+        heard.includes("question") || heard.includes("help") ||
+        heard.includes("ayuda") || heard.includes("ask nova") ||
+        heard.includes("pregunta") || heard.includes("preguntarle");
+
+      if (isHelpTrigger) {
+        setShowNovaHelp(true);
+        setVoiceQuestionMode(true);
+        voiceQuestionModeRef.current = true;
+        speak(lang === "es" ? "Claro, ¿qué quieres preguntarme?" : "Sure — what's your question?", () => {
+          // After speaking the prompt, start listening for the question
+          startLoopRef.current?.();
+        });
+        return;
+      }
+
+      // Voice question capture mode — the previous loop cycle asked for a question
+      if (voiceQuestionModeRef.current) {
+        voiceQuestionModeRef.current = false;
+        setVoiceQuestionMode(false);
+        handleNovaQuestion(heard);
+        restart(300);
+        return;
+      }
+
+      // Standard portal commands
+      const cmd = matchNovaCommand(heard, lang);
       if (cmd === "focus")           speakTodayFocusRef.current();
       else if (cmd === "update")     speakLatestUpdateRef.current();
       else if (cmd === "assignment") speakAssignmentRef.current();
-      // speak() will call startLoopRef (→ startWakeLoop) when TTS ends
-      returnToWake(400);
+      else                           restart(300); // unrecognised — keep listening
     };
 
     rec.onend = () => {
-      cmdRecRef.current = null;
-      if (!gotResult) returnToWake(300);
+      recRef.current = null;
+      if (!gotResult) restart(300);
     };
 
     rec.onerror = (e: any) => {
-      cmdRecRef.current = null;
+      recRef.current = null;
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-        listenModeRef.current = "off";
         setIsListening(false);
         return;
       }
-      returnToWake(e.error === "aborted" ? 500 : 800);
+      if (e.error === "aborted" || e.error === "no-speech") return; // onend handles restart
+      restart(800);
     };
 
-    cmdRecRef.current = rec;
-    listenModeRef.current = "command";
+    recRef.current = rec;
     try { rec.start(); } catch { /* ignore double-start */ }
+  // speak callbacks via refs — removed from deps to keep identity stable
   }, [canListen, lang]); // eslint-disable-line
 
-  // ── Phase 1: wake-word listener ─────────────────────────────────────────────
-  const startWakeLoop = useCallback(() => {
-    if (!canListen || isSpeakingRef.current || novaActiveRef.current || mutedRef.current) return;
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
+  // ── NOVA Help Q&A handler ─────────────────────────────────────────────────
+  const handleNovaQuestion = useCallback(async (question: string) => {
+    const q = question.trim();
+    if (!q) return;
+    setNovaQuestion(q);
+    setNovaAnswer("");
+    setNovaAsking(true);
+    setShowNovaHelp(true);
+    try {
+      const answer = await askNovaHelp(q, lang.startsWith("es") ? "es" : "en", novaChatHistory.current);
+      novaChatHistory.current = [
+        ...novaChatHistory.current,
+        { role: "user", content: q },
+        { role: "assistant", content: answer },
+      ].slice(-10); // keep last 5 exchanges
+      setNovaAnswer(answer);
+      speak(answer);
+    } catch {
+      const fallback = lang.startsWith("es") ? "No pude obtener una respuesta. Intenta de nuevo." : "Couldn't get a response. Please try again.";
+      setNovaAnswer(fallback);
+    } finally {
+      setNovaAsking(false);
+    }
+  }, [lang]); // eslint-disable-line
 
-    try { wakeRecRef.current?.abort(); } catch { /* ignore */ }
-    wakeRecRef.current = null;
-
-    const rec = new SR();
-    rec.continuous      = false;   // iOS-safe: use auto-restart pattern
-    rec.interimResults  = false;
-    rec.lang            = novaRecogLang(lang);
-    rec.maxAlternatives = 3;       // check all hypotheses for wake word
-
-    rec.onstart = () => {
-      setIsListening(true);
-      setNovaStatus(lang === "es" ? "Di 'Hola NOVA' para activar…" : "Say 'Hey NOVA' to activate…");
-    };
-
-    rec.onend = () => {
-      wakeRecRef.current = null;
-      if (listenModeRef.current === "wake" && !mutedRef.current && !isSpeakingRef.current && !novaActiveRef.current) {
-        setTimeout(() => startWakeRef.current?.(), 300);
-      } else if (listenModeRef.current !== "command") {
-        setIsListening(false);
-      }
-    };
-
-    rec.onerror = (e: any) => {
-      wakeRecRef.current = null;
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-        listenModeRef.current = "off";
-        setIsListening(false);
-        return;
-      }
-      // aborted / no-speech are normal — onend fires next and handles restart
-      if (e.error === "aborted" || e.error === "no-speech") return;
-      if (listenModeRef.current === "wake" && !mutedRef.current) {
-        setTimeout(() => startWakeRef.current?.(), 900);
-      }
-    };
-
-    rec.onresult = (e: any) => {
-      // Collect all text across all results and all alternatives
-      const heard = Array.from(e.results as any[])
-        .flatMap((r: any) => Array.from(r as any[]).map((alt: any) => alt.transcript?.toLowerCase() ?? ""))
-        .join(" ");
-
-      const isWake =
-        heard.includes("hey nova") || heard.includes("hey, nova") ||
-        heard.includes("hola nova") || heard.includes("oye nova") ||
-        heard.trim() === "nova";
-
-      if (isWake) {
-        listenModeRef.current = "command";
-        try { rec.abort(); } catch { /* ignore */ }
-        setNovaStatus(lang === "es" ? "NOVA activa — di tu comando…" : "NOVA active — say your command…");
-        // Brief pause so the user hears the status update, then open command mic
-        setTimeout(() => startCmdRef.current?.(), 300);
-      }
-    };
-
-    wakeRecRef.current = rec;
-    listenModeRef.current = "wake";
-    try { rec.start(); } catch { /* ignore double-start */ }
-  // speak callbacks removed from deps — stable via refs, avoids iOS restart floods
-  }, [canListen, lang]); // eslint-disable-line
-
-  useEffect(() => { stopLoopRef.current   = stopAllRec;           }, [stopAllRec]);
-  useEffect(() => { startLoopRef.current  = startWakeLoop;        }, [startWakeLoop]);
-  useEffect(() => { startWakeRef.current  = startWakeLoop;        }, [startWakeLoop]);
-  useEffect(() => { startCmdRef.current   = startCommandListen;   }, [startCommandListen]);
-  useEffect(() => { isSpeakingRef.current = isSpeaking;           }, [isSpeaking]);
+  useEffect(() => { stopLoopRef.current   = stopAllRec;         }, [stopAllRec]);
+  useEffect(() => { startLoopRef.current  = startCommandLoop;   }, [startCommandLoop]);
+  useEffect(() => { isSpeakingRef.current = isSpeaking;         }, [isSpeaking]);
   useEffect(() => { speakTodayFocusRef.current   = speakTodayFocus;   }, [speakTodayFocus]);
   useEffect(() => { speakLatestUpdateRef.current = speakLatestUpdate; }, [speakLatestUpdate]);
   useEffect(() => { speakAssignmentRef.current   = speakAssignment;   }, [speakAssignment]);
@@ -429,16 +410,14 @@ export default function SelectorPortalPage() {
     }
   }, []);
 
-  // Start wake-word listener on mount.
-  // 300 ms delay lets the browser finish the page-load audio context handoff
-  // before we claim the mic — avoids immediate "not-allowed" on first render.
+  // Start always-on command listener on mount.
+  // 300 ms delay lets the browser finish the page-load audio context handoff.
   useEffect(() => {
-    const t = setTimeout(() => { if (!mutedRef.current) startWakeLoop(); }, 300);
+    const t = setTimeout(() => { if (!mutedRef.current) startCommandLoop(); }, 300);
     return () => { clearTimeout(t); stopAllRec(); };
   }, []); // eslint-disable-line
 
-  // Restart wake listener when lang changes ONLY — intentionally using refs so
-  // that data loads don't trigger abort/restart cycles (causes iOS freeze).
+  // Restart command listener when lang changes — use ref to avoid iOS restart floods
   useEffect(() => {
     stopLoopRef.current?.();
     const t = setTimeout(() => {
@@ -447,7 +426,7 @@ export default function SelectorPortalPage() {
     return () => clearTimeout(t);
   }, [lang]); // eslint-disable-line
 
-  // Toggle mute — also pauses/resumes the wake listener
+  // Toggle mute — also pauses/resumes the command listener
   const toggleMuteAndLoop = () => {
     const next = !mutedRef.current;
     mutedRef.current = next;
@@ -456,7 +435,7 @@ export default function SelectorPortalPage() {
       if (canSpeak) { window.speechSynthesis.cancel(); setIsSpeaking(false); }
       stopAllRec();
     } else {
-      startWakeLoop();
+      startCommandLoop();
     }
   };
 
@@ -576,24 +555,26 @@ export default function SelectorPortalPage() {
             </button>
           </div>
 
-          {/* One-time TTS unlock — tap once, then everything is voice-only */}
+          {/* One-time TTS unlock — tap once, NOVA greets you and starts listening */}
           {!ttsReady && !muted && (
             <button
               onClick={() => {
                 unlockTTS();
-                // Also speak the greeting if TTS was just unlocked
                 const name = currentUser?.fullName?.split(" ")[0] ?? (lang === "es" ? "amigo" : "there");
                 const hour = new Date().getHours();
-                setTimeout(() => speak(NOVA_TEXT.greeting(name, hour, lang)), 200);
+                // Auto-greet then start command listening immediately
+                setTimeout(() => speak(NOVA_TEXT.greeting(name, hour, lang), () => {
+                  setTimeout(() => startLoopRef.current?.(), 300);
+                }), 200);
               }}
               className="w-full mb-4 flex items-center justify-center gap-2 rounded-2xl bg-yellow-400 text-slate-950 font-black text-base py-4 hover:bg-yellow-300 active:scale-95 transition shadow-lg shadow-yellow-400/20"
             >
               <Mic className="h-5 w-5" />
-              {lang === "es" ? "Toca una vez para activar la voz de NOVA" : "Tap once to enable NOVA's voice"}
+              {lang === "es" ? "Toca para activar NOVA" : "Tap to activate NOVA"}
             </button>
           )}
 
-          {/* Wake-word / command status — shows when mic is active */}
+          {/* Live mic status indicator */}
           {!muted && (
             <div className="flex items-center gap-3 mb-4">
               {isListening ? (
@@ -603,7 +584,9 @@ export default function SelectorPortalPage() {
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-400" />
                   </span>
                   <p className="text-sm text-yellow-300 font-semibold">
-                    {novaStatus || (lang === "es" ? "Di 'Hola NOVA' para activar…" : "Say 'Hey NOVA' to activate…")}
+                    {voiceQuestionMode
+                      ? (lang === "es" ? "Di tu pregunta…" : "Say your question…")
+                      : (novaStatus || (lang === "es" ? "NOVA escuchando…" : "NOVA listening…"))}
                   </p>
                 </>
               ) : isSpeaking ? (
@@ -622,14 +605,14 @@ export default function SelectorPortalPage() {
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-slate-600" />
                   </span>
                   <p className="text-sm text-slate-500">
-                    {novaStatus || (lang === "es" ? "Reconectando micrófono…" : "Reconnecting mic…")}
+                    {lang === "es" ? "Reconectando micrófono…" : "Reconnecting mic…"}
                   </p>
                 </>
               )}
             </div>
           )}
 
-          {/* Quick tap chips — always visible, tap instead of speaking */}
+          {/* Quick tap chips */}
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => { unlockTTS(); speakTodayFocus(); }}
@@ -652,14 +635,80 @@ export default function SelectorPortalPage() {
               <Megaphone className="h-3.5 w-3.5 text-violet-300" />
               {lang === "es" ? "Actualización" : "Supervisor Update"}
             </button>
+            <button
+              onClick={() => { unlockTTS(); setShowNovaHelp(v => !v); }}
+              className={`flex items-center gap-2 rounded-xl border transition px-4 py-2.5 text-sm font-semibold ${
+                showNovaHelp
+                  ? "bg-indigo-500/20 border-indigo-400/60 text-indigo-200"
+                  : "bg-slate-800 border-slate-700 hover:border-indigo-400/50 text-slate-300"
+              }`}
+            >
+              <HelpCircle className="h-3.5 w-3.5 text-indigo-400" />
+              {lang === "es" ? "Pregunta a NOVA" : "Ask NOVA"}
+            </button>
           </div>
 
           {/* Voice command hint */}
           <p className="mt-3 text-xs text-slate-600">
             {lang === "es"
-              ? "Di: \"enfoque de hoy\" · \"mi tarea\" · \"última actualización\""
-              : "Say: \"today's focus\" · \"my assignment\" · \"supervisor update\""}
+              ? "Di: \"enfoque de hoy\" · \"mi tarea\" · \"actualización\" · \"ayuda\""
+              : "Say: \"today's focus\" · \"my assignment\" · \"supervisor update\" · \"question\""}
           </p>
+
+          {/* ── Embedded NOVA Help Q&A ─────────────────────────────────────── */}
+          {showNovaHelp && (
+            <div className="mt-4 rounded-2xl border border-indigo-500/30 bg-indigo-950/40 p-4 space-y-3">
+              <p className="text-xs font-bold uppercase tracking-widest text-indigo-400">
+                {lang === "es" ? "Pregunta a NOVA" : "Ask NOVA Anything"}
+              </p>
+
+              {/* Text input row */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!novaQuestion.trim()) return;
+                  handleNovaQuestion(novaQuestion);
+                  setNovaQuestion("");
+                }}
+                className="flex gap-2"
+              >
+                <input
+                  type="text"
+                  value={novaQuestion}
+                  onChange={(e) => setNovaQuestion(e.target.value)}
+                  placeholder={lang === "es" ? "Escribe tu pregunta…" : "Type your question…"}
+                  className="flex-1 rounded-xl bg-slate-800 border border-slate-700 focus:border-indigo-400/60 outline-none text-white text-sm px-3 py-2.5 placeholder:text-slate-600"
+                />
+                <button
+                  type="submit"
+                  disabled={!novaQuestion.trim() || novaAsking}
+                  className="rounded-xl bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white font-bold px-4 py-2.5 text-sm transition active:scale-95"
+                >
+                  {novaAsking ? "…" : "↑"}
+                </button>
+              </form>
+
+              {/* Answer display */}
+              {novaAsking && (
+                <div className="flex items-center gap-2 text-slate-400 text-sm">
+                  <span className="animate-pulse">●</span>
+                  {lang === "es" ? "NOVA está pensando…" : "NOVA is thinking…"}
+                </div>
+              )}
+              {novaAnswer && !novaAsking && (
+                <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-3 text-sm text-slate-200 leading-relaxed">
+                  <p className="text-xs font-bold text-indigo-400 mb-1.5">NOVA</p>
+                  {novaAnswer}
+                </div>
+              )}
+
+              <p className="text-xs text-slate-600">
+                {lang === "es"
+                  ? "Di \"ayuda\" o escribe cualquier pregunta sobre el almacén"
+                  : "Say \"question\" or type anything about picking, safety, or your assignment"}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* ── Performance Log ──────────────────────────────────────────────── */}
