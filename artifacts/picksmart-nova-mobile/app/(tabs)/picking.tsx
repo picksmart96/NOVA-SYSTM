@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import * as Speech from "expo-speech";
 import { useFocusEffect } from "expo-router";
@@ -102,6 +103,26 @@ export default function PickingScreen() {
   const [isSpeaking, setIsSpeaking]   = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [voiceError, setVoiceError]   = useState<string | null>(null);
+  const voicePrefLoadedRef = useRef(false);
+
+  // Load persisted voice preference for this user
+  useEffect(() => {
+    if (!user?.id) return;
+    const key = `nova_voice_${user.id}`;
+    AsyncStorage.getItem(key).then((val) => {
+      if (val !== null) {
+        setVoiceEnabled(val === "true");
+      }
+      voicePrefLoadedRef.current = true;
+    });
+  }, [user?.id]);
+
+  // Save voice preference whenever it changes (after initial load)
+  useEffect(() => {
+    if (!user?.id || !voicePrefLoadedRef.current) return;
+    const key = `nova_voice_${user.id}`;
+    AsyncStorage.setItem(key, String(voiceEnabled));
+  }, [voiceEnabled, user?.id]);
 
   const speak = useCallback((text: string, onDone?: () => void) => {
     if (!text) return;
