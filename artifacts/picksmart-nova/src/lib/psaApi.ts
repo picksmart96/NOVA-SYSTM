@@ -119,6 +119,9 @@ export const psaApi = {
       body: JSON.stringify(data),
     }),
 
+  revokeInvite: (token: string) =>
+    request<{ ok: boolean }>(`/auth/invite/${token}`, { method: "DELETE" }),
+
   getInvite: (token: string) =>
     request<{
       invite: {

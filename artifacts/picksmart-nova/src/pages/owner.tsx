@@ -763,7 +763,7 @@ function UserManagement() {
 
 // ── Invite Management ─────────────────────────────────────────────────────────
 function InviteManagement() {
-  const { pendingInvites } = useAuthStore();
+  const { pendingInvites, revokeInvite } = useAuthStore();
   const { customWarehouses } = useWarehouseStore();
   const allWarehouses = [...DEFAULT_WAREHOUSES, ...customWarehouses];
   const [fullName, setFullName] = useState("");
@@ -869,12 +869,20 @@ function InviteManagement() {
           <p className="text-xs text-slate-500 uppercase tracking-widest mb-2">Pending Invites</p>
           <div className="space-y-2">
             {pendingInvites.slice(-5).reverse().map((inv) => (
-              <div key={inv.token} className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 flex justify-between items-center">
-                <div>
-                  <p className="text-sm font-semibold">{inv.fullName}</p>
-                  <p className="text-xs text-slate-500">{inv.email} · {inv.role}{inv.warehouseSlug ? ` · ${inv.warehouseSlug}` : ""}</p>
+              <div key={inv.token} className="rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 flex justify-between items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate">{inv.fullName}</p>
+                  <p className="text-xs text-slate-500 truncate">{inv.email} · {inv.role}{inv.warehouseSlug ? ` · ${inv.warehouseSlug}` : ""}</p>
                 </div>
-                <RoleBadge role={inv.role} />
+                <div className="flex items-center gap-2 shrink-0">
+                  <RoleBadge role={inv.role} />
+                  <button
+                    onClick={() => revokeInvite(inv.token)}
+                    className="text-xs px-2.5 py-1 rounded-lg bg-red-900/40 hover:bg-red-700/60 text-red-400 hover:text-red-200 border border-red-800/50 transition font-semibold"
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             ))}
           </div>

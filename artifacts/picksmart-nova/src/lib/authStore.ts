@@ -71,6 +71,7 @@ interface AuthState {
   createAccount: (data: { username: string; password: string; fullName: string; role: AuthRole }) => void;
   removeAccount: (accountId: string) => void;
   addInvite: (data: { fullName: string; email: string; role: AuthRole; warehouseId?: string | null; warehouseSlug?: string | null }) => string;
+  revokeInvite: (token: string) => void;
   acceptInvite: (token: string, username: string, password: string) => boolean;
   getInvite: (token: string) => PendingInvite | undefined;
   getUserByEmail: (email: string) => AuthAccount | undefined;
@@ -362,6 +363,13 @@ export const useAuthStore = create<AuthState>()(
           ],
         }));
         return token;
+      },
+
+      revokeInvite: (token) => {
+        set((state) => ({
+          pendingInvites: state.pendingInvites.filter((i) => i.token !== token),
+        }));
+        psaApi.revokeInvite(token).catch(() => {});
       },
 
       getInvite: (token) => {

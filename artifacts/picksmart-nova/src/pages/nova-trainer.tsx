@@ -102,7 +102,7 @@ export default function NovaTrainerPage() {
   const { i18n } = useTranslation();
   const lang = i18n.language?.startsWith("es") ? "es" : "en";
   const { selectors } = useTrainerStore();
-  const { currentUser } = useAuthStore();
+  const { currentUser, pendingInvites, revokeInvite } = useAuthStore();
 
   // Selector selection (logged-in selectors auto-select their own assignment)
   const [selectedSelectorId, setSelectedSelectorId] = useState<string>("");
@@ -1222,6 +1222,31 @@ export default function NovaTrainerPage() {
               ))}
             </div>
           </div>
+
+          {/* Invite Activity */}
+          {pendingInvites.length > 0 && (
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+              <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
+                <User className="h-3.5 w-3.5" /> Invite Activity
+              </h2>
+              <div className="space-y-2">
+                {pendingInvites.slice(-5).reverse().map((inv) => (
+                  <div key={inv.token} className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold truncate text-white">{inv.fullName}</p>
+                      <p className="text-xs text-slate-500 truncate">{inv.email} · <span className="text-yellow-400/80">{inv.role}</span></p>
+                    </div>
+                    <button
+                      onClick={() => revokeInvite(inv.token)}
+                      className="text-xs px-2 py-1 rounded-lg bg-red-900/40 hover:bg-red-700/60 text-red-400 hover:text-red-200 border border-red-800/50 transition font-semibold shrink-0"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

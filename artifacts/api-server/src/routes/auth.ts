@@ -323,6 +323,17 @@ router.post("/auth/invite", requireAuth, async (req, res) => {
   }
 });
 
+// ── DELETE /api/auth/invite/:token ── revoke a pending invite ─────────────────
+router.delete("/auth/invite/:token", async (req, res) => {
+  try {
+    await db.delete(psaInvites).where(eq(psaInvites.token, req.params.token));
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "[Auth] Revoke invite error");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ── GET /api/auth/invite/:token ───────────────────────────────────────────────
 router.get("/auth/invite/:token", async (req, res) => {
   try {
