@@ -191,7 +191,26 @@ export default function NovaTrainerPage() {
       try { recognitionRef.current?.abort(); } catch {}
       recognitionRef.current = null;   // force fresh instance on next listen
 
+      // Safety timer: if iOS TTS silently fails (onend never fires), rescue
+      // the session automatically.  Formula: ~50 ms/char + 5 s buffer covers
+      // the expected TTS duration + the 3 s Bluetooth A2DP→HFP switch delay.
+      let done = false;
+      const safetyMs = Math.max(8000, text.length * 50 + 5000);
+      const safetyTimer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        setSpeaking(false);
+        const p = phaseRef.current;
+        if (!["IDLE", "SAFETY_FAILED"].includes(p)) {
+          shouldKeepListeningRef.current = true;
+          setTimeout(() => startListeningRef.current?.(), 3000);
+        }
+      }, safetyMs);
+
       speakText(text, lang, () => {
+        if (done) return;
+        done = true;
+        clearTimeout(safetyTimer);
         setSpeaking(false);
         // Auto-restart mic after NOVA finishes.
         // 3000 ms gap: iOS needs this to release TTS audio session before
