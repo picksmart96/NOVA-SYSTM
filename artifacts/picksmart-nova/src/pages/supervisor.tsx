@@ -336,33 +336,86 @@ export default function SupervisorPage() {
         </div>
 
         {/* Tab content */}
-        {tab === "Overview" && (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {selectors.map((s) => (
-              <div key={s.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-                <h3 className="font-black capitalize">{s.name}</h3>
-                <p className="text-slate-400 text-sm mt-1">{s.novaId} · Age {s.age}</p>
-                <p className="text-slate-400 text-sm">{s.experience}</p>
-                {s.novaPin && (
-                  <div className="mt-2 inline-flex items-center gap-1.5 rounded-xl border border-yellow-400/30 bg-yellow-400/5 px-2.5 py-1">
-                    <KeyRound className="h-3 w-3 text-yellow-400" />
-                    <span className="text-xs font-black text-yellow-300 tracking-widest">{s.novaPin}</span>
+        {tab === "Overview" && (() => {
+          const trainerAccounts = accounts.filter((a) => a.role === "trainer");
+          return (
+            <div className="space-y-6">
+              {/* Trainers management */}
+              <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+                <h2 className="text-xl font-black mb-4 flex items-center gap-2">
+                  <UserCheck className="h-5 w-5 text-blue-400" /> Trainers
+                </h2>
+                {trainerAccounts.length === 0 ? (
+                  <p className="text-slate-500 text-sm">No trainer accounts yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {trainerAccounts.map((a) => (
+                      <div key={a.id} className="rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-xl bg-blue-500/20 flex items-center justify-center shrink-0">
+                            <UserCheck className="h-3.5 w-3.5 text-blue-300" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-sm capitalize truncate">{a.fullName}</p>
+                            <p className="text-xs text-slate-500">@{a.username}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-bold border ${a.status === "active" ? "bg-green-500/10 text-green-300 border-green-500/30" : "bg-slate-700 text-slate-400 border-slate-600"}`}>{a.status}</span>
+                          {confirmTrainer === a.id ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-red-400 font-semibold">Remove?</span>
+                              <button onClick={() => { removeAccount(a.id); setConfirmTrainer(null); }} className="rounded-lg bg-red-600 hover:bg-red-500 px-3 py-1 text-xs font-bold text-white transition">Yes</button>
+                              <button onClick={() => setConfirmTrainer(null)} className="rounded-lg border border-slate-600 px-3 py-1 text-xs font-bold text-slate-300 hover:border-slate-400 transition">Cancel</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setConfirmTrainer(a.id)} className="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-bold text-red-400 hover:bg-red-500/10 transition flex items-center gap-1">
+                              <Trash2 className="h-3 w-3" /> Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="rounded-full bg-yellow-500/10 px-2.5 py-1 text-xs font-bold text-yellow-300 border border-yellow-500/30">{s.level}</span>
-                  {s.novaActive && <span className="rounded-full bg-green-500/10 px-2.5 py-1 text-xs font-bold text-green-300 border border-green-500/30">NOVA Active</span>}
-                  {s.assignedAssignmentId && <span className="rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-bold text-blue-300 border border-blue-500/30">Assigned</span>}
-                </div>
               </div>
-            ))}
-            {selectors.length === 0 && (
-              <div className="col-span-full rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-500">
-                No selectors registered yet.
+
+              {/* Training records management */}
+              <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
+                <h2 className="text-xl font-black mb-4 flex items-center gap-2">
+                  <Users className="h-5 w-5 text-yellow-400" /> Training Records
+                </h2>
+                {selectors.length === 0 ? (
+                  <p className="text-slate-500 text-sm">No training records yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {selectors.map((s) => (
+                      <div key={s.id} className="rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm capitalize truncate">{s.name}</p>
+                          <p className="text-xs text-slate-500">{s.novaId} · {s.level}{s.novaActive ? " · NOVA Active" : ""}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {confirmSelector === s.id ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-red-400 font-semibold">Delete?</span>
+                              <button onClick={() => { removeSelector(s.id); setConfirmSelector(null); }} className="rounded-lg bg-red-600 hover:bg-red-500 px-3 py-1 text-xs font-bold text-white transition">Yes</button>
+                              <button onClick={() => setConfirmSelector(null)} className="rounded-lg border border-slate-600 px-3 py-1 text-xs font-bold text-slate-300 hover:border-slate-400 transition">Cancel</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setConfirmSelector(s.id)} className="rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-bold text-red-400 hover:bg-red-500/10 transition flex items-center gap-1">
+                              <Trash2 className="h-3 w-3" /> Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          );
+        })()}
 
         {tab === "Assignments" && (
           <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
