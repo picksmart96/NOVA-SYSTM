@@ -158,10 +158,10 @@ function speakText(text: string, lang: string, onEnd?: () => void) {
       if (!done) {
         done = true;
         clearTimeout(safetyTimer);
-        // ← 400 ms gap: iOS needs this to flip the audio session from
-        // "playback" back to "record" mode.  Fire onEnd at zero delay and
-        // the mic starts while the speaker is still locked → silent failure.
-        setTimeout(onEnd, 400);
+        // 1500 ms gap: iOS needs time to exit its playback audio session and
+        // re-enter PlayAndRecord mode before SpeechRecognition can start.
+        // 400 ms was not enough when Bluetooth headphones are connected.
+        setTimeout(onEnd, 1500);
       }
     };
     // On error fire immediately — there's no audio session to release.
@@ -461,32 +461,32 @@ export default function NovaHelpPage() {
     rec: SpeechRecognition,
     mode: "wake" | "question"
   ): void => {
-    const hasLiveStream = btStreamRef.current?.getTracks().some((t) => t.readyState === "live");
-
     const doStart = () => {
       if (!sessionActiveRef.current || listenModeRef.current !== mode) return;
-      // Release getUserMedia tracks NOW — frees the mic for SpeechRecognition
-      try { btStreamRef.current?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
-      btStreamRef.current = null;
+      // Do NOT stop btStream here — stopping tracks changes the iOS audio
+      // session state and immediately causes an `aborted` error on rec.start().
+      // Keep the stream alive so the audio session stays in PlayAndRecord mode.
       setDiagMsg("🎤 mic open…");
       try { rec.start(); } catch (e: any) {
-        setDiagMsg(`rec.start error: ${e?.message ?? e}`);
+        setDiagMsg(`rec.start err: ${e?.message ?? String(e)}`);
       }
     };
+
+    const hasLiveStream = btStreamRef.current?.getTracks().some((t) => t.readyState === "live");
 
     if (hasLiveStream) {
       doStart();
     } else {
-      // Stream gone — re-establish HFP then start
+      // Stream gone (tab backgrounded, or first cycle before getUserMedia resolved).
+      // Re-open it to force HFP, wait for BT profile switch, then start.
       if (!navigator.mediaDevices?.getUserMedia) { doStart(); return; }
       navigator.mediaDevices
         .getUserMedia({ audio: true, video: false })
         .then((stream) => {
           btStreamRef.current = stream;
-          // Wait for BT profile switch to complete
-          setTimeout(doStart, 700);
+          setTimeout(doStart, 800);   // wait for BT HFP switch
         })
-        .catch(() => doStart()); // no BT, fall back to built-in mic
+        .catch(() => doStart());      // no getUserMedia — fall back to built-in mic
     }
   }, []);
 
@@ -771,11 +771,19 @@ export default function NovaHelpPage() {
 
     rec.onerror = (e: SpeechRecognitionErrorEvent) => {
       setDiagMsg(`q err: ${e.error}`);
-      if (e.error === "aborted") return;
       if (e.error === "not-allowed") {
         setErrorMsg(isSpanish
           ? "Micrófono bloqueado. Ve a Ajustes → Safari → Micrófono."
           : "Mic blocked. Go to Settings → Safari → Microphone.");
+        return;
+      }
+      if (e.error === "aborted") {
+        // 'aborted' = iOS audio session wasn't ready yet. Wait 800ms then retry.
+        setTimeout(() => {
+          if (sessionActiveRef.current && listenModeRef.current === "question") {
+            startQuestionListenRef.current?.();
+          }
+        }, 800);
         return;
       }
       setTimeout(() => {
