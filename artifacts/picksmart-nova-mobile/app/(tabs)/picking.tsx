@@ -18,6 +18,7 @@ import { Feather } from "@expo/vector-icons";
 import colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import NovaOrb from "@/components/NovaOrb";
+import { useWakeWordRecognition } from "@/hooks/useSpeechRecognition";
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? "https://nova-warehouse-control.replit.app";
 const c = colors.dark;
@@ -67,6 +68,21 @@ function buildWsUrl() {
   return `${proto}://${base}/api/ws/nova-trainer`;
 }
 
+/** Map a matched command key (from matchCommand) to what the NOVA server expects */
+function commandKeyToInput(key: string): string {
+  switch (key) {
+    case "confirm":    return "confirm";
+    case "deny":       return "no";
+    case "ready":      return "ready";
+    case "load_picks": return "load picks";
+    case "stop":       return "stop";
+    case "resume":     return "resume";
+    case "repeat":     return "repeat";
+    case "wake":       return "hey nova";
+    default:           return key;
+  }
+}
+
 export default function PickingScreen() {
   const insets = useSafeAreaInsets();
   const { user, token, language } = useAuth();
@@ -83,6 +99,8 @@ export default function PickingScreen() {
   const [checkInput, setCheckInput]   = useState("");
   const [sessionActive, setSessionActive] = useState(false);
   const [isSpeaking, setIsSpeaking]   = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [voiceError, setVoiceError]   = useState<string | null>(null);
 
   const speak = useCallback((text: string, onDone?: () => void) => {
     if (!text) return;
@@ -106,6 +124,48 @@ export default function PickingScreen() {
     sendWs({ type: "input", text });
   }, [sendWs]);
 
+  const handleVoiceAction = useCallback((cmd: string) => {
+    sendInput(cmd);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, [sendInput]);
+
+  // ── Voice recognition callbacks ────────────────────────────────────────────
+
+  const onWakeWord = useCallback(() => {
+    // Wake word detected — trigger the session wake action
+    handleVoiceAction("hey nova");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+  }, [handleVoiceAction]);
+
+  const onQuestion = useCallback((transcript: string) => {
+    // transcript is either a command key (from matchCommand) or raw text (check codes)
+    const input = commandKeyToInput(transcript);
+    sendInput(input);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, [sendInput]);
+
+  const onVoiceError = useCallback((msg: string) => {
+    setVoiceError(msg);
+  }, []);
+
+  const { state: speechState, interimText, isSupported, returnToWake } =
+    useWakeWordRecognition({
+      language: (language as "en" | "es") ?? "en",
+      enabled: sessionActive && voiceEnabled,
+      onWakeWord,
+      onQuestion,
+      onError: onVoiceError,
+    });
+
+  // After NOVA finishes speaking, return mic to wake-word listening mode
+  useEffect(() => {
+    if (!isSpeaking && sessionActive && voiceEnabled) {
+      returnToWake();
+    }
+  }, [isSpeaking]);
+
+  // ── Session state handler ──────────────────────────────────────────────────
+
   const handleState = useCallback((s: TrainerState) => {
     if (s.seq <= seqRef.current) return;
     seqRef.current = s.seq;
@@ -122,6 +182,8 @@ export default function PickingScreen() {
       speak(s.prompt);
     }
   }, [sendWs, speak]);
+
+  // ── WebSocket ──────────────────────────────────────────────────────────────
 
   const connect = useCallback(() => {
     if (!user) return;
@@ -156,6 +218,7 @@ export default function PickingScreen() {
   }, [user, token, novaIdInput, language, handleState]);
 
   const startSession = () => {
+    setVoiceError(null);
     setSessionActive(true);
     connect();
   };
@@ -168,6 +231,7 @@ export default function PickingScreen() {
     setState(null);
     seqRef.current = -1;
     setCheckInput("");
+    setVoiceError(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
   };
 
@@ -187,11 +251,6 @@ export default function PickingScreen() {
     };
   }, []);
 
-  const handleVoiceAction = (cmd: string) => {
-    sendInput(cmd);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  };
-
   const handleCheckCode = () => {
     if (!checkInput.trim()) return;
     sendInput(checkInput.trim());
@@ -204,11 +263,16 @@ export default function PickingScreen() {
   const isWaiting   = phase === "WAIT_WAKE" || phase === "STOPPED" || !phase;
   const isComplete  = phase.startsWith("COMPLETE");
 
+  // Orb state: voice recognition states take priority while the session is active
   const orbState: "idle" | "wake" | "listening" | "thinking" | "speaking" =
     isSpeaking ? "speaking"
     : wsStatus === "connecting" ? "thinking"
+    : sessionActive && voiceEnabled && speechState === "listening" ? "listening"
+    : sessionActive && voiceEnabled && speechState === "processing" ? "thinking"
     : sessionActive ? "wake"
     : "idle";
+
+  // ── Pre-session screen ─────────────────────────────────────────────────────
 
   if (!sessionActive) {
     return (
@@ -284,6 +348,17 @@ export default function PickingScreen() {
     );
   }
 
+  // ── Active session screen ──────────────────────────────────────────────────
+
+  const voiceStatusLabel = (() => {
+    if (!isSupported) return null;
+    if (!voiceEnabled) return isES ? "Voz desactivada" : "Voice off";
+    if (speechState === "listening") return isES ? "Escuchando…" : "Listening…";
+    if (speechState === "processing") return isES ? "Procesando…" : "Processing…";
+    if (speechState === "starting") return isES ? "Iniciando mic…" : "Starting mic…";
+    return isES ? "Di: Hey NOVA" : "Say: Hey NOVA";
+  })();
+
   return (
     <View style={[styles.container, { backgroundColor: c.background }]}>
       <View style={[styles.header, { paddingTop: insets.top + 12 + webTop, backgroundColor: c.card, borderBottomColor: c.border }]}>
@@ -295,10 +370,27 @@ export default function PickingScreen() {
               : (isES ? "Desconectado" : "Disconnected")}
           </Text>
         </View>
-        <Pressable onPress={endSession} style={styles.endBtn}>
-          <Feather name="x" size={14} color="#ef4444" />
-          <Text style={styles.endBtnText}>{isES ? "Salir" : "End"}</Text>
-        </Pressable>
+        <View style={styles.headerRight}>
+          {isSupported && (
+            <Pressable
+              onPress={() => { setVoiceEnabled(v => !v); setVoiceError(null); }}
+              style={[
+                styles.voiceToggleBtn,
+                { borderColor: voiceEnabled ? "rgba(124,58,237,0.5)" : "rgba(255,255,255,0.15)" },
+              ]}
+            >
+              <Feather
+                name={voiceEnabled ? "mic" : "mic-off"}
+                size={14}
+                color={voiceEnabled ? "#a78bfa" : c.mutedForeground}
+              />
+            </Pressable>
+          )}
+          <Pressable onPress={endSession} style={styles.endBtn}>
+            <Feather name="x" size={14} color="#ef4444" />
+            <Text style={styles.endBtnText}>{isES ? "Salir" : "End"}</Text>
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -308,7 +400,56 @@ export default function PickingScreen() {
       >
         <View style={styles.orbCenter}>
           <NovaOrb state={orbState} size={110} />
+          {voiceStatusLabel ? (
+            <View style={[
+              styles.voiceStatusPill,
+              {
+                backgroundColor: speechState === "listening"
+                  ? "rgba(124,58,237,0.2)"
+                  : speechState === "processing"
+                  ? "rgba(245,194,0,0.15)"
+                  : "rgba(255,255,255,0.06)",
+                borderColor: speechState === "listening"
+                  ? "rgba(124,58,237,0.5)"
+                  : speechState === "processing"
+                  ? "rgba(245,194,0,0.4)"
+                  : "rgba(255,255,255,0.1)",
+              }
+            ]}>
+              <Feather
+                name={voiceEnabled ? "mic" : "mic-off"}
+                size={11}
+                color={
+                  speechState === "listening" ? "#a78bfa"
+                  : speechState === "processing" ? "#f5c200"
+                  : c.mutedForeground
+                }
+              />
+              <Text style={[
+                styles.voiceStatusText,
+                {
+                  color: speechState === "listening" ? "#a78bfa"
+                    : speechState === "processing" ? "#f5c200"
+                    : c.mutedForeground
+                }
+              ]}>
+                {voiceStatusLabel}
+              </Text>
+            </View>
+          ) : null}
+          {interimText ? (
+            <Text style={[styles.interimText, { color: "#a78bfa" }]} numberOfLines={1}>
+              "{interimText}"
+            </Text>
+          ) : null}
         </View>
+
+        {voiceError ? (
+          <View style={[styles.invalidBanner, { backgroundColor: "rgba(239,68,68,0.1)", borderColor: "rgba(239,68,68,0.3)", marginBottom: 8 }]}>
+            <Feather name="mic-off" size={13} color="#ef4444" />
+            <Text style={styles.invalidText}>{voiceError}</Text>
+          </View>
+        ) : null}
 
         {state?.prompt ? (
           <View style={[styles.promptBox, { backgroundColor: "rgba(124,58,237,0.12)", borderColor: "rgba(124,58,237,0.3)" }]}>
@@ -378,7 +519,7 @@ export default function PickingScreen() {
               keyboardType="number-pad"
               returnKeyType="done"
               onSubmitEditing={handleCheckCode}
-              autoFocus
+              autoFocus={!voiceEnabled || !isSupported}
             />
             <Pressable
               onPress={handleCheckCode}
@@ -469,9 +610,25 @@ const styles = StyleSheet.create({
   },
   headerTitle:  { fontSize: 20, fontWeight: "800" as const, color: "#fff" },
   headerSub:    { fontSize: 12, marginTop: 2 },
+  headerRight:  { flexDirection: "row", alignItems: "center", gap: 8 },
+  voiceToggleBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1,
+  },
   startContent: { padding: 20, gap: 16 },
-  orbCenter:    { alignItems: "center", paddingVertical: 20 },
+  orbCenter:    { alignItems: "center", paddingVertical: 20, gap: 8 },
   orbSubtitle:  { fontSize: 13, marginTop: 10, textAlign: "center" },
+  voiceStatusPill: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 20, borderWidth: 1,
+  },
+  voiceStatusText: { fontSize: 11, fontWeight: "600" as const },
+  interimText: {
+    fontSize: 13, fontStyle: "italic", textAlign: "center",
+    paddingHorizontal: 20, opacity: 0.8,
+  },
   card: { borderRadius: 16, borderWidth: 1, padding: 16, gap: 10 },
   cardLabel:    { fontSize: 11, fontWeight: "700" as const, letterSpacing: 1 },
   novaInput: {
