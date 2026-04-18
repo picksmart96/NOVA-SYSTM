@@ -71,18 +71,51 @@ export function matchCommand(input = "") {
       ],
     },
     {
-      // "load picks" — extended with phonetic variants from mobile STT mishearings
+      // "load picks" — comprehensive accent-tolerant variants
+      // Covers French/West-African, Spanish, US, and standard accent mishearings
       key: "load_picks",
       phrases: [
+        // ── canonical ──
         "load picks", "load pick",
-        "lo picks", "lo pick",
+        // ── lode / lod ──
+        "lode picks", "lode pick", "lode pix", "lode peaks", "lode peak",
+        "lod picks", "lod pick",
+        // ── lo / low ──
+        "lo picks", "lo pick", "lo pix",
+        "low picks", "low pick", "low pix",
+        // ── loaded / load up / load my ──
         "loaded picks", "loaded pick",
         "load up picks", "load up pick",
         "load my picks", "load my pick",
-        "lode picks", "lode pick",
+        // ── loud / laud / lope ──
+        "loud picks", "loud pick",
+        "laud picks", "laud pick",
+        "lope picks", "lope pick",
+        // ── road (r/l swap) ──
+        "road picks", "road pick", "road pix",
+        // ── note / node / nod ──
+        "note picks", "note pick",
+        "node picks", "node pick",
+        "nod picks", "nod pick",
+        // ── loan / log / lot / lord ──
+        "loan pick", "loan picks",
+        "log pick", "log picks",
+        "lot pick", "lot picks",
+        // ── go pick ──
         "go picks", "go pick",
-        // Spanish
-        "cargar picks", "cargar pix", "cargar", "carga picks",
+        // ── "picks" heard as peaks / pique / pix / pics / big / mix ──
+        "load peaks", "load peak",
+        "load pique", "load pix", "load pics",
+        "load peeks", "load peek",
+        "load big", "load fix", "load mix",
+        // ── start / begin / open intent ──
+        "start picks", "start pick",
+        "begin picks", "begin pick",
+        "open picks", "open pick",
+        // ── Spanish ──
+        "cargar picks", "cargar pick", "cargar pix", "cargar",
+        "carga picks", "carga pick",
+        "mis picks", "mis piks",
       ],
     },
     {
