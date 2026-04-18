@@ -7,7 +7,7 @@ import { LessonVideoPlayer } from "@/components/training/LessonVideoPlayer";
 import { useBilingualSpeech } from "@/hooks/useBilingualSpeech";
 import {
   ArrowLeft, Volume2, VolumeX, CheckCircle2, XCircle, ChevronLeft,
-  ChevronRight, Clock, BookOpen, Headphones, Award, ShieldCheck,
+  ChevronRight, Clock, BookOpen, Headphones, Award, ShieldCheck, Mic,
 } from "lucide-react";
 
 
@@ -26,6 +26,23 @@ export default function WarehouseSafetyLessonPage() {
   const [scoreRecorded, setScoreRecorded] = useState(false);
 
   const { isSpeaking, muted, toggleMute, speak, stopSpeaking } = useBilingualSpeech();
+
+  // ── Mic / voice-engine connection status ───────────────────────────────────
+  const [micReady, setMicReady] = useState(false);
+
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) { setMicReady(true); return; }
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) { setMicReady(true); return; }
+    const onVoices = () => { setMicReady(true); };
+    window.speechSynthesis.addEventListener("voiceschanged", onVoices);
+    // Fallback: mark ready after 3 s regardless
+    const t = setTimeout(() => setMicReady(true), 3000);
+    return () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", onVoices);
+      clearTimeout(t);
+    };
+  }, []);
 
   useEffect(() => {
     startLesson("mod-2");
@@ -198,6 +215,34 @@ export default function WarehouseSafetyLessonPage() {
             <div className="rounded-2xl border border-slate-700 bg-slate-900 p-6">
               <p className="text-xs font-bold uppercase tracking-widest text-yellow-400 mb-2">{lesson.introCard.title}</p>
               <p className="text-slate-200 leading-relaxed">{lesson.introCard.text}</p>
+            </div>
+
+            {/* Mic / voice-engine status */}
+            <div className={`flex items-center gap-3 rounded-2xl border px-5 py-4 transition-all duration-500 ${
+              micReady
+                ? "border-green-500/30 bg-green-500/5"
+                : "border-yellow-400/30 bg-yellow-400/5"
+            }`}>
+              <div className={`flex items-center justify-center w-9 h-9 rounded-xl shrink-0 ${
+                micReady ? "bg-green-500/20" : "bg-yellow-400/20"
+              }`}>
+                <Mic className={`h-4 w-4 ${micReady ? "text-green-400" : "text-yellow-400"}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-xs font-bold uppercase tracking-widest ${
+                  micReady ? "text-green-400" : "text-yellow-400"
+                }`}>
+                  {micReady ? "NOVA Ready" : "Mic Connecting…"}
+                </p>
+                <p className="text-slate-400 text-xs mt-0.5">
+                  {micReady
+                    ? "Voice engine loaded — NOVA will read every section aloud."
+                    : "Loading NOVA voice engine, please wait a moment."}
+                </p>
+              </div>
+              <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                micReady ? "bg-green-400" : "bg-yellow-400 animate-pulse"
+              }`} />
             </div>
 
             <button
