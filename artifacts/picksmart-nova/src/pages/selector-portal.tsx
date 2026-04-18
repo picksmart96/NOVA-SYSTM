@@ -348,10 +348,10 @@ export default function SelectorPortalPage() {
     recRef.current = null;
 
     const rec = new SR();
-    rec.continuous      = true;   // keep running after each phrase
+    rec.continuous      = false;  // one phrase per session; onend auto-restarts
     rec.interimResults  = false;
     rec.lang            = novaRecogLang(lang);
-    rec.maxAlternatives = 3;
+    rec.maxAlternatives = 3;     // scan top 3 alternatives for accent tolerance
 
     rec.onstart = () => {
       setIsListening(true);
@@ -359,20 +359,17 @@ export default function SelectorPortalPage() {
     };
 
     rec.onresult = (e: any) => {
-      // With continuous=true grab only the latest final result
-      const latest = e.results[e.results.length - 1];
-      if (!latest?.isFinal) return;
-
-      const heard = Array.from(latest as any[])
-        .map((alt: any) => alt.transcript?.toLowerCase() ?? "")
+      // Scan all alternatives across all hypotheses for the best command match
+      const heard = Array.from(e.results as any[])
+        .flatMap((r: any) => Array.from(r as any[]).map((alt: any) => alt.transcript?.toLowerCase() ?? ""))
         .join(" ")
         .trim();
-      const topConfidence = (latest[0]?.confidence ?? 1) as number;
+      const topConfidence = (e.results?.[0]?.[0]?.confidence ?? 1) as number;
 
       if (!heard) return;
       setNovaStatus(`${NOVA_TEXT.heardCommand(lang)}"${heard}"`);
 
-      // Low-confidence — ignore, keep listening
+      // Drop very low-confidence noise — onend will restart
       if (topConfidence < 0.35) return;
 
       // NOVA Help trigger
@@ -389,7 +386,7 @@ export default function SelectorPortalPage() {
         return;
       }
 
-      // Voice question capture — next final result IS the question
+      // Voice question capture — this utterance IS the question
       if (voiceQuestionModeRef.current) {
         voiceQuestionModeRef.current = false;
         setVoiceQuestionMode(false);
@@ -402,52 +399,42 @@ export default function SelectorPortalPage() {
       if      (cmd === "focus")      speakTodayFocusRef.current();
       else if (cmd === "update")     speakLatestUpdateRef.current();
       else if (cmd === "assignment") speakAssignmentRef.current();
-      // If no command matched, continuous mode keeps listening automatically
+      // Unrecognised command — onend fires after this and restarts automatically
     };
 
-    // ⭐ KEY: onend fires when the session stops (silence timeout, stop(), or error).
-    //    Always restart unless NOVA is speaking, muted, or NWA owns the mic.
+    // ⭐ THE KEY — matches your pattern exactly:
+    //    onend fires after every phrase (continuous=false), after stop(), after errors.
+    //    If NOVA is not speaking and mic is not muted → always restart.
     rec.onend = () => {
       setIsListening(false);
-      if (mutedRef.current || isSpeakingRef.current || novaActiveRef.current) return;
-      setTimeout(() => {
-        if (mutedRef.current || isSpeakingRef.current || novaActiveRef.current) return;
-        try {
-          rec.start();
-        } catch {
-          // Synchronous throw — audio session still busy, retry in 500ms
-          setTimeout(() => {
-            if (!mutedRef.current && !isSpeakingRef.current && !novaActiveRef.current) {
-              try { rec.start(); } catch { /* give up this cycle */ }
-            }
-          }, 500);
-        }
-      }, 200);
+      if (!isSpeakingRef.current && !mutedRef.current && !novaActiveRef.current) {
+        setTimeout(() => startLoopRef.current?.(), 300);
+      }
     };
 
     rec.onerror = (e: any) => {
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-        // Mic permission denied — stop permanently
         setIsListening(false);
-        return;
+        return; // permanent — don't retry
       }
-      // All other errors (aborted, no-speech, network) → onend fires next and restarts
+      // aborted / no-speech / network → onend fires right after and restarts
     };
 
     recRef.current = rec;
   }, [canListen, lang]); // eslint-disable-line
 
-  // startListening: begin a session on the existing rec instance
+  // startListening: start one recognition session on the persistent instance
   const startListening = useCallback(() => {
     if (mutedRef.current || isSpeakingRef.current || novaActiveRef.current || !canListen) return;
     if (!recRef.current) initRec();
     try {
       recRef.current?.start();
     } catch {
-      // Already running (continuous=true) or threw — retry once
+      // start() threw synchronously (audio session not yet free after TTS).
+      // Retry once after a short gap.
       setTimeout(() => {
         if (!mutedRef.current && !isSpeakingRef.current && !novaActiveRef.current) {
-          try { recRef.current?.start(); } catch { /* ignore */ }
+          try { recRef.current?.start(); } catch { /* ignore — onend will retry */ }
         }
       }, 300);
     }
