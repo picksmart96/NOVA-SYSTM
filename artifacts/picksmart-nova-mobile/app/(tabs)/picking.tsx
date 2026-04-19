@@ -21,6 +21,8 @@ import colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import NovaOrb from "@/components/NovaOrb";
 import { useWakeWordRecognition } from "@/hooks/useSpeechRecognition";
+import { useBackgroundAudio } from "@/hooks/useBackgroundAudio";
+import { useForegroundService } from "@/hooks/useForegroundService";
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? "https://nova-warehouse-control.replit.app";
 const c = colors.dark;
@@ -104,6 +106,9 @@ export default function PickingScreen() {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [voiceError, setVoiceError]   = useState<string | null>(null);
   const voicePrefLoadedRef = useRef(false);
+
+  useBackgroundAudio();
+  useForegroundService(sessionActive && voiceEnabled, isES);
 
   // Load persisted voice preference for this user
   useEffect(() => {
