@@ -6,6 +6,11 @@ import {
   ExpoSpeechRecognitionModule,
 } from "expo-speech-recognition";
 
+const NETWORK_ERROR_MESSAGES: Record<"en" | "es", string> = {
+  en: "No internet connection. Check your Wi-Fi or mobile data, or enable on-device recognition.",
+  es: "Sin conexión a internet. Verifica tu Wi-Fi o datos móviles, o activa el reconocimiento sin conexión.",
+};
+
 export type SpeechMode = "wake" | "question";
 export type SpeechState = "off" | "starting" | "listening" | "processing";
 
@@ -76,12 +81,13 @@ export function useWakeWordRecognition({
   const [state, setState] = useState<SpeechState>("off");
   const [interimText, setInterimText] = useState("");
 
-  const modeRef      = useRef<SpeechMode>("wake");
-  const recRef       = useRef<SpeechRecognizer | null>(null);
-  const restartTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const enabledRef   = useRef(enabled);
-  const langRef      = useRef(language);
-  const mountedRef   = useRef(true);
+  const modeRef                   = useRef<SpeechMode>("wake");
+  const recRef                    = useRef<SpeechRecognizer | null>(null);
+  const restartTimer              = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enabledRef                = useRef(enabled);
+  const langRef                   = useRef(language);
+  const mountedRef                = useRef(true);
+  const networkFallbackAttempted  = useRef(false);
 
   enabledRef.current = enabled;
   langRef.current    = language;
@@ -100,7 +106,7 @@ export function useWakeWordRecognition({
     }
   }, []);
 
-  const startRec = useCallback((forceMode?: SpeechMode) => {
+  const startRec = useCallback((forceMode?: SpeechMode, onDeviceOnly = false) => {
     if (!checkIsSupported() || !enabledRef.current) return;
     if (restartTimer.current) clearTimeout(restartTimer.current);
     if (recRef.current) {
@@ -120,10 +126,17 @@ export function useWakeWordRecognition({
     rec.lang            = langRef.current === "es" ? "es-ES" : "en-US";
     rec.maxAlternatives = 1;
 
+    if (onDeviceOnly && Platform.OS === "android") {
+      (rec as unknown as { requiresOnDeviceRecognition: boolean }).requiresOnDeviceRecognition = true;
+    }
+
     if (mountedRef.current) setState("starting");
 
     rec.onstart = () => {
-      if (mountedRef.current) setState("listening");
+      if (mountedRef.current) {
+        setState("listening");
+        networkFallbackAttempted.current = false;
+      }
     };
 
     rec.onresult = (e) => {
@@ -172,6 +185,18 @@ export function useWakeWordRecognition({
       if (errCode === "not-allowed" || errCode === "service-not-allowed") {
         setState("off");
         onError?.("Microphone access denied. Please allow mic permission in your device settings.");
+        return;
+      }
+      if (errCode === "network" && Platform.OS === "android") {
+        if (!networkFallbackAttempted.current) {
+          networkFallbackAttempted.current = true;
+          restartTimer.current = setTimeout(() => startRec(currentMode, true), 500);
+        } else {
+          networkFallbackAttempted.current = false;
+          setState("off");
+          const lang = langRef.current === "es" ? "es" : "en";
+          onError?.(NETWORK_ERROR_MESSAGES[lang]);
+        }
         return;
       }
       restartTimer.current = setTimeout(() => startRec(), 800);
