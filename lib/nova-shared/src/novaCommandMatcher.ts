@@ -211,8 +211,9 @@ export function matchCommand(input = "") {
   // phrases always win over fuzzy matches from other commands. This prevents
   // e.g. "parar" (stop) from being swallowed by a fuzzy hit on "cargar"
   // (load_picks) just because levenshtein("parar","cargar") === 2.
-  // Multi-word phrases are intentionally excluded so that substring matching
-  // in the fuzzy pass can still override them (e.g. "ready to go" → "ready").
+  // Multi-word phrases are excluded from the first pass so that the best-match
+  // second pass can correctly pick the exact multi-word phrase (e.g. the exact
+  // "ready to go" phrase in resume beats a substring hit on "ready").
   for (const command of commands) {
     for (const phrase of command.phrases) {
       const normalized = normalizeText(phrase);
@@ -222,14 +223,69 @@ export function matchCommand(input = "") {
     }
   }
 
-  // Second pass: fuzzy / substring matches
+  // Second pass: fuzzy / substring matches — collect all candidates, return the
+  // one with the lowest ranking distance (ties broken by command-list order).
+  //
+  // Ranking distance rules:
+  //   • Exact match (text === phrase): 0
+  //   • Substring match (phrase appears in text at word boundaries): trailing chars
+  //     after the phrase's last valid occurrence — phrases spoken more recently
+  //     (closer to end of utterance) win, e.g. "correcto" beats "incorrecto" in
+  //     "incorrecto correcto" because "correcto" is the final word (0 trailing).
+  //   • Levenshtein (fuzzy spelling variant): the computed edit distance.
+  //
+  // This avoids first-match-wins errors such as "ready to go" returning "ready"
+  // (substring match on ready's "ready" phrase) instead of "resume" (exact phrase
+  // at distance 0).
+  let bestKey: string | null = null;
+  let bestDist = Infinity;
+
   for (const command of commands) {
     for (const phrase of command.phrases) {
       if (closeEnough(text, phrase)) {
-        return command.key;
+        const dist = rankingDist(text, normalizeText(phrase));
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestKey = command.key;
+        }
       }
     }
   }
 
-  return null;
+  return bestKey;
+}
+
+/**
+ * Ranking distance used in the best-match second pass of matchCommand.
+ *
+ * - Exact match   → 0
+ * - text contains phrase at word boundaries → trailing chars after the phrase's
+ *   LAST valid word-boundary occurrence. Preferring the latest occurrence means
+ *   the most recently spoken word wins when multiple command phrases appear in
+ *   the same utterance (e.g. "incorrecto correcto" → "correcto" trails 0 chars,
+ *   "incorrecto" trails 9 chars, so confirm beats deny).
+ * - Everything else → Levenshtein(text, phrase).
+ *
+ * `text` and `phrase` must already be normalised before calling this function.
+ */
+function rankingDist(text: string, phrase: string): number {
+  if (text === phrase) return 0;
+
+  // Find the last word-boundary occurrence of phrase inside text.
+  let lastValidPos = -1;
+  let start = 0;
+  while (true) {
+    const idx = text.indexOf(phrase, start);
+    if (idx === -1) break;
+    const before = idx === 0 ? " " : text[idx - 1];
+    const after =
+      idx + phrase.length === text.length ? " " : text[idx + phrase.length];
+    if (before === " " && after === " ") lastValidPos = idx;
+    start = idx + 1;
+  }
+  if (lastValidPos !== -1) {
+    return text.length - (lastValidPos + phrase.length);
+  }
+
+  return levenshtein(text, phrase);
 }

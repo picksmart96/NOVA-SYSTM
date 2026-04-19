@@ -177,8 +177,19 @@ describe("matchCommand — fuzzy mispronunciation variants", () => {
     expect(matchCommand("let's go")).toBe("resume");
   });
 
-  it('ready to go → ready (substring match wins over resume)', () => {
-    expect(matchCommand("ready to go")).toBe("ready");
+  it('ready to go → resume (best-match: exact phrase in resume beats "ready" substring from ready)', () => {
+    // Previously returned "ready" because the fuzzy pass used first-match-wins:
+    // ready's "ready" phrase matched via containsAsWords before resume's exact
+    // "ready to go" phrase was ever evaluated.
+    // With best-match, levenshtein("ready to go", "ready to go") == 0 < 5 ==
+    // levenshtein("ready to go", "ready"), so resume wins.
+    expect(matchCommand("ready to go")).toBe("resume");
+  });
+
+  it('nova ready to go → resume (best-match: exact phrase beats early substring hit)', () => {
+    // Same best-match scenario: resume has "nova ready to go" as an exact phrase
+    // (distance 0), while ready's "ready" fires via substring at distance 9.
+    expect(matchCommand("nova ready to go")).toBe("resume");
   });
 });
 
