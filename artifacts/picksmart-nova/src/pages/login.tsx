@@ -9,6 +9,7 @@ const ROLE_HOME: Record<AuthRole, string> = {
   trainer: "/trainer-portal",
   supervisor: "/supervisor",
   manager: "/supervisor",
+  director: "/command",
   owner: "/command",
 };
 

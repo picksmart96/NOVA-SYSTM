@@ -37,7 +37,8 @@ export function hasMinimumRole(
     trainer: 1,
     supervisor: 2,
     manager: 3,
-    owner: 4,
+    director: 4,
+    owner: 5,
   };
   if (!userRole) return false;
   return RANK[userRole] >= RANK[requiredRole];

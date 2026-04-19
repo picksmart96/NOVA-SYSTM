@@ -79,8 +79,8 @@ export default function AssignmentControlPage() {
       data: {
         assignmentNumber:  Math.floor(Math.random() * 900000) + 100000,
         title:             formData.title || `Training Run ${new Date().toLocaleDateString()}`,
-        selectorUserId:    formData.selectorUserId || null,
-        trainerUserId:     currentUser?.id ?? null,
+        selectorUserId:    formData.selectorUserId || undefined,
+        trainerUserId:     currentUser?.id ?? undefined,
         startAisle:        Number(formData.startAisle),
         endAisle:          Number(formData.endAisle),
         totalCases:        Number(formData.totalCases),
@@ -89,11 +89,7 @@ export default function AssignmentControlPage() {
         doorNumber:        Number(formData.doorNumber),
         goalTimeMinutes:   Number(formData.goalTimeMinutes),
         goalTimeSeconds:   0,
-        printerNumber:     Number(formData.printerNumber),
-        alphaLabelNumber:  Number(formData.alphaLabelNumber),
-        bravoLabelNumber:  Number(formData.bravoLabelNumber),
         voiceMode:         formData.voiceMode,
-        status:            "active",
       }
     }, {
       onSuccess: () => {

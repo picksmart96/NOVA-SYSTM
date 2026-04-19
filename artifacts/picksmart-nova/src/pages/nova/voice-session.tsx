@@ -193,7 +193,7 @@ export default function VoiceSessionPage() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // ── API helpers ────────────────────────────────────────────────────────────
-  const authHeaders = jwtToken ? { Authorization: `Bearer ${jwtToken}` } : {};
+  const authHeaders: Record<string, string> = jwtToken ? { Authorization: `Bearer ${jwtToken}` } : {};
 
   const logEvent = useCallback((
     eventType: string,
@@ -617,12 +617,13 @@ export default function VoiceSessionPage() {
   useEffect(() => { cmdLoopRef.current = startCmdLoop; }, [startCmdLoop]);
 
   useEffect(() => {
-    if (!ttsUnlocked) return;
+    if (!ttsUnlocked) return undefined;
     if (sessionState === "picking" && !isSpeaking) {
       const t = setTimeout(() => startCmdLoop(), 400);
       return () => { clearTimeout(t); stopCmdLoop(); };
     } else {
       stopCmdLoop();
+      return undefined;
     }
   }, [sessionState, isSpeaking, ttsUnlocked]); // eslint-disable-line
 
@@ -722,6 +723,7 @@ export default function VoiceSessionPage() {
         return () => clearTimeout(t);
       }
     }
+    return undefined;
   }, [sessionState, isSpeaking, ttsUnlocked]); // eslint-disable-line
 
   // ── Check code handler ────────────────────────────────────────────────────

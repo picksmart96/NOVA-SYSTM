@@ -128,7 +128,7 @@ export default function SelectorPortalPage() {
   const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window;
   const canListen =
     typeof window !== "undefined" &&
-    !!(window.SpeechRecognition || (window as any).webkitSpeechRecognition);
+    !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
   const speak = useCallback((text: string, onDone?: () => void) => {
     if (mutedRef.current || !canSpeak) { onDone?.(); return; }
@@ -164,7 +164,7 @@ export default function SelectorPortalPage() {
   const speakTodayFocus = useCallback(() => {
     let message = NOVA_TEXT.todayFocusHeader(lang);
     if (assignedAssignment) {
-      message += NOVA_TEXT.assignmentLine(assignedAssignment, lang);
+      message += NOVA_TEXT.assignmentLine({ ...assignedAssignment, assignmentNumber: Number(assignedAssignment.assignmentNumber) }, lang);
     }
     if (latestPost?.safetyTopic) {
       message += NOVA_TEXT.safetyPrefix(lang) + latestPost.safetyTopic + ". ";
@@ -204,7 +204,7 @@ export default function SelectorPortalPage() {
       speak(NOVA_TEXT.noAssignmentYet(lang));
       return;
     }
-    const msg = NOVA_TEXT.fullAssignment(assignedAssignment, lang);
+    const msg = NOVA_TEXT.fullAssignment({ ...assignedAssignment, assignmentNumber: Number(assignedAssignment.assignmentNumber) }, lang);
     setNovaStatus(NOVA_TEXT.speakingAssignment(lang));
     speak(msg, () => setNovaStatus(""));
   }, [assignedAssignment, speak, lang]);
@@ -239,11 +239,11 @@ export default function SelectorPortalPage() {
     setShowNovaHelp(true);
     try {
       const answer = await askNovaHelp(q, lang.startsWith("es") ? "es" : "en", novaChatHistory.current);
-      novaChatHistory.current = [
+      novaChatHistory.current = ([
         ...novaChatHistory.current,
-        { role: "user", content: q },
-        { role: "assistant", content: answer },
-      ].slice(-10); // keep last 5 exchanges
+        { role: "user" as const, content: q },
+        { role: "assistant" as const, content: answer },
+      ] as ChatMessage[]).slice(-10); // keep last 5 exchanges
       setNovaAnswer(answer);
       speak(answer);
     } catch {

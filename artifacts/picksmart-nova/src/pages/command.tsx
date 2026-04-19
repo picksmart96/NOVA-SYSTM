@@ -59,6 +59,7 @@ const COLOR: Record<string, { border: string; icon: string; text: string; hover:
 
 // ─── Quick Invite ─────────────────────────────────────────────────────────────
 function QuickInvite() {
+  const jwtToken = useAuthStore((s) => s.jwtToken);
   const [name,     setName]     = useState("");
   const [email,    setEmail]    = useState("");
   const [role,     setRole]     = useState("selector");
@@ -77,13 +78,7 @@ function QuickInvite() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(() => {
-            try {
-              const raw = localStorage.getItem("picksmart-auth-store");
-              const jwt = raw ? (JSON.parse(raw) as { state?: { jwtToken?: string } })?.state?.jwtToken : null;
-              return jwt ? { Authorization: `Bearer ${jwt}` } : {};
-            } catch { return {}; }
-          })(),
+          ...(jwtToken ? { Authorization: `Bearer ${jwtToken}` } : {}),
         },
         body: JSON.stringify({ fullName: name, email, role }),
       });
@@ -1167,6 +1162,7 @@ function NovaActivity() {
 // ─── Invite Activity Panel ────────────────────────────────────────────────────
 interface InviteAlert {
   id: string;
+  type: "invite_shared";
   message: string;
   createdAt: string;
   read: boolean;
@@ -1342,6 +1338,7 @@ function InviteActivity() {
 // ─── Customer Help Requests ───────────────────────────────────────────────────
 interface HelpAlert {
   id: string;
+  type: "help_request";
   message: string;
   createdAt: string;
   read: boolean;

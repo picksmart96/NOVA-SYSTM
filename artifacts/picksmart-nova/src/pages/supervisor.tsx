@@ -33,7 +33,7 @@ const WEEKLY_API = `${BASE_URL}api/social/weekly-reports`;
 export default function SupervisorPage() {
   const { t } = useTranslation();
   const [, navigate] = useLocation();
-  const { logout, accounts, removeAccount, banUser, unbanUser, currentUser } = useAuthStore();
+  const { logout, accounts, removeAccount, banUser, unbanUser, currentUser, jwtToken } = useAuthStore();
   const { trainerInviteRequests, novaSessions, stopNovaSession } = useAccessStore();
   const { selectors, sessions, assignments, removeSelector } = useTrainerStore();
   const { posts: supervisorPosts, addPost, deletePost } = useSupervisorPostStore();
@@ -98,13 +98,7 @@ export default function SupervisorPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(() => {
-            try {
-              const raw = localStorage.getItem("picksmart-auth-store");
-              const jwt = raw ? (JSON.parse(raw) as { state?: { jwtToken?: string } })?.state?.jwtToken : null;
-              return jwt ? { Authorization: `Bearer ${jwt}` } : {};
-            } catch { return {}; }
-          })(),
+          ...(jwtToken ? { Authorization: `Bearer ${jwtToken}` } : {}),
         },
         body: JSON.stringify({
           fullName: trainerName.trim(),

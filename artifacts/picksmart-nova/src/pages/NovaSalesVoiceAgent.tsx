@@ -432,7 +432,7 @@ export default function NovaSalesVoiceAgent() {
 
   const canListen = useMemo(() => {
     if (typeof window === "undefined") return false;
-    return !!(window.SpeechRecognition || (window as any).webkitSpeechRecognition);
+    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
   }, []);
 
   const canSpeak = useMemo(() => {

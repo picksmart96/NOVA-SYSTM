@@ -109,6 +109,7 @@ export function useHeadphones(): HeadphoneState {
       return () =>
         navigator.mediaDevices.removeEventListener("devicechange", refresh);
     }
+    return undefined;
   }, [refresh]);
 
   // Re-check when the tab regains focus (user may have connected BT headphones)

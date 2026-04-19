@@ -1999,9 +1999,7 @@ function RevenueTab() {
 
   async function exportPDF() {
     if (!fin) return;
-    // @ts-ignore
-    const jspdfMod = await import("jspdf");
-    const jsPDF = jspdfMod.jsPDF || jspdfMod.default?.jsPDF || jspdfMod.default;
+    const { jsPDF } = await import("jspdf");
     const doc = new jsPDF();
     doc.setFontSize(20); doc.text("NOVA Financial Report", 20, 20);
     doc.setFontSize(11);

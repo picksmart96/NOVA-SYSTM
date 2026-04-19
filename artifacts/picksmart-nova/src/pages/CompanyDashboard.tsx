@@ -183,7 +183,7 @@ function InviteCard({ card }: { card: RoleCard }) {
             >
               {shared
                 ? <><Check className="h-3.5 w-3.5" /> Sent</>
-                : navigator.share
+                : navigator.share != null
                   ? <><Share2 className="h-3.5 w-3.5" /> Share</>
                   : <><Mail className="h-3.5 w-3.5" /> Email</>
               }
