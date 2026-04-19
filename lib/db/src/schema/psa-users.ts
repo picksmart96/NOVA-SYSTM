@@ -18,6 +18,7 @@ export const psaUsers = pgTable("psa_users", {
   warehouseSlug: text("warehouse_slug"),
   isMaster: boolean("is_master").notNull().default(false),
   companyName: text("company_name"),
+  voiceEnabled: boolean("voice_enabled").notNull().default(true),
   trialEndsAt: timestamp("trial_ends_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

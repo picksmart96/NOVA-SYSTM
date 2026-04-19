@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import * as Speech from "expo-speech";
 import { useFocusEffect } from "expo-router";
@@ -89,7 +88,7 @@ function commandKeyToInput(key: string): string {
 
 export default function PickingScreen() {
   const insets = useSafeAreaInsets();
-  const { user, token, language } = useAuth();
+  const { user, token, language, voiceEnabled, updateVoiceEnabled } = useAuth();
   const isES = language === "es";
   const webTop = Platform.OS === "web" ? 67 : 0;
 
@@ -103,31 +102,10 @@ export default function PickingScreen() {
   const [checkInput, setCheckInput]   = useState("");
   const [sessionActive, setSessionActive] = useState(false);
   const [isSpeaking, setIsSpeaking]   = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [voiceError, setVoiceError]   = useState<string | null>(null);
-  const voicePrefLoadedRef = useRef(false);
 
   useBackgroundAudio();
   useForegroundService(sessionActive && voiceEnabled, isES);
-
-  // Load persisted voice preference for this user
-  useEffect(() => {
-    if (!user?.id) return;
-    const key = `nova_voice_${user.id}`;
-    AsyncStorage.getItem(key).then((val) => {
-      if (val !== null) {
-        setVoiceEnabled(val === "true");
-      }
-      voicePrefLoadedRef.current = true;
-    });
-  }, [user?.id]);
-
-  // Save voice preference whenever it changes (after initial load)
-  useEffect(() => {
-    if (!user?.id || !voicePrefLoadedRef.current) return;
-    const key = `nova_voice_${user.id}`;
-    AsyncStorage.setItem(key, String(voiceEnabled));
-  }, [voiceEnabled, user?.id]);
 
   const speak = useCallback((text: string, onDone?: () => void) => {
     if (!text) return;
@@ -252,7 +230,7 @@ export default function PickingScreen() {
       try {
         const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
         if (!granted) {
-          setVoiceEnabled(false);
+          updateVoiceEnabled(false);
           setVoiceError(
             isES
               ? "Permiso de micrófono denegado. Puedes usar los botones táctiles."
@@ -417,7 +395,7 @@ export default function PickingScreen() {
         <View style={styles.headerRight}>
           {isSupported && (
             <Pressable
-              onPress={() => { setVoiceEnabled(v => !v); setVoiceError(null); }}
+              onPress={() => { updateVoiceEnabled(!voiceEnabled); setVoiceError(null); }}
               style={[
                 styles.voiceToggleBtn,
                 { borderColor: voiceEnabled ? "rgba(124,58,237,0.5)" : "rgba(255,255,255,0.15)" },

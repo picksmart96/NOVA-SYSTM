@@ -113,6 +113,34 @@ router.get("/auth/me", requireAuth, async (req, res) => {
   }
 });
 
+// ── PATCH /api/auth/me — update own profile preferences ──────────────────────
+router.patch("/auth/me", requireAuth, async (req, res) => {
+  const { voiceEnabled } = req.body as { voiceEnabled?: boolean };
+
+  if (typeof voiceEnabled !== "boolean") {
+    res.status(400).json({ error: "voiceEnabled (boolean) required" });
+    return;
+  }
+
+  try {
+    const [updated] = await db
+      .update(psaUsers)
+      .set({ voiceEnabled, updatedAt: new Date() })
+      .where(eq(psaUsers.id, req.psaUser!.sub))
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    res.json({ user: safeUser(updated) });
+  } catch (err) {
+    logger.error({ err }, "[Auth] PATCH /me error");
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ── GET /api/auth/users ───────────────────────────────────────────────────────
 router.get("/auth/users", requireRole("supervisor"), async (req, res) => {
   try {
