@@ -363,7 +363,7 @@ describe("matchCommand — edge cases", () => {
     expect(matchCommand("ok")).toBeNull();
   });
 
-  it("'one' fuzzy-matches 'nope' (distance 2) → deny, not null", () => {
-    expect(matchCommand("one")).toBe("deny");
+  it("'one' does not match any command — short-phrase distance-1 cap prevents fuzzy collision with 'nope'", () => {
+    expect(matchCommand("one")).toBeNull();
   });
 });

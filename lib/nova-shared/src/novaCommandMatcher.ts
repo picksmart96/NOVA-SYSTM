@@ -55,11 +55,38 @@ export function closeEnough(input: string, target: string, maxDistance = 2) {
   if (!a || !b) return false;
   if (a === b) return true;
 
-  // Short targets (≤ 2 chars) must be exact — a distance of 2 on "no" would
-  // match digit words like "one", "oh", "ok", "dos", "un" causing false denies.
-  // The includes check is also skipped for short targets for the same reason:
-  // "hey nova".includes("no") would wrongly fire without this guard.
-  const effectiveMax = b.length <= 2 ? 0 : maxDistance;
+  // Short single-word targets use a tighter distance cap to prevent fuzzy
+  // collisions across unrelated commands as more language variants are added.
+  //
+  // Audit of all single-word phrases ≤ 5 chars (April 2026):
+  //   confirm : "yes"(3) "si"(2)
+  //   deny    : "no"(2) "nope"(4)
+  //   ready   : "ready"(5) "redy"(4) "reddy"(5) "listo"(5) "lista"(5)
+  //   load_picks: "carga"(5) "lo"(2) "low"(3) "mis"(3)
+  //   stop    : "stop"(4) "parar"(5)
+  //   resume  : "vamos"(5)
+  //   repeat  : "again"(5)
+  //
+  // Cross-command collisions at distance ≤ 2:
+  //   "si"(confirm) ↔ "no"(deny), "lo"(load_picks), "mis"(load_picks) — all
+  //     safe because ≤ 2-char rule already enforces exact-only for "si"/"no"/"lo".
+  //   "yes"(confirm) ↔ "mis"(load_picks)  → distance 2 — REAL COLLISION RISK
+  //     e.g. a fuzzy input "mes" would match confirm:yes (d=2) before
+  //     load_picks:mis (d=1) because confirm appears first in the list.
+  //
+  // Rule: single-word targets of ≤ 2 chars  → must be exact (effectiveMax = 0)
+  //        single-word targets of 3–5 chars → cap at distance 1 (effectiveMax ≤ 1)
+  //        multi-word phrases or longer words → use caller-supplied maxDistance
+  const isSingleWord = !b.includes(" ");
+  let effectiveMax: number;
+  if (b.length <= 2) {
+    effectiveMax = 0;
+  } else if (isSingleWord && b.length <= 5) {
+    effectiveMax = Math.min(maxDistance, 1);
+  } else {
+    effectiveMax = maxDistance;
+  }
+
   if (effectiveMax > 0 && (containsAsWords(a, b) || containsAsWords(b, a))) return true;
   // Only allow Levenshtein to match when the strings are close in length
   // (≤ 1 char apart). A length difference of 2+ means one word is a
