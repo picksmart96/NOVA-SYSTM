@@ -7,6 +7,10 @@
     ".": "./src/novaCommandMatcher.ts"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "devDependencies": {
+    "vitest": "^3.1.0"
   }
 }
