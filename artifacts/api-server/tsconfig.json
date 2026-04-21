@@ -6,7 +6,9 @@
     "types": ["node"],
 
     "strict": false,
-    "noImplicitAny": false
+    "noImplicitAny": false,
+
+    "esModuleInterop": true
   },
   "include": ["src"],
   "references": [
