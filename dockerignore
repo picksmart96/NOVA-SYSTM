@@ -1,0 +1,6 @@
+.git
+node_modules
+attached_assets
+artifacts/picksmart-nova/node_modules
+artifacts/picksmart-nova-mobile/node_modules
+artifacts/mockup-sandbox/node_modules
